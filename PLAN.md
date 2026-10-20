@@ -737,6 +737,57 @@ so a missing stylesheet cannot pass unnoticed again.
 
 ---
 
+### Task 10 — MVP readiness review (`DONE`)
+
+`MVP_READINESS_REVIEW.md` records the review of the platform against
+`README.md`, what is verified and what is not, and the risks.
+
+**Four defects found and fixed**, each in its own commit:
+
+- `6354f0d` — the assistant quoted the closest FAQ entry whenever anything
+  scored above a low threshold, so four of the six out-of-scope questions in
+  the review probe were answered with an unrelated answer and still labelled
+  as ARCH's published information. An entry is now only quoted on a genuine
+  match; below that the assistant says the information is not covered and
+  points at the team. The tokeniser also folds simple plurals so legitimate
+  questions still match.
+- `b0a9796` — restoring the session discarded the access token on _any_
+  failure, so a network blip signed the member out silently. The token is now
+  only discarded when the backend rejects it, and the reason is shown in the
+  member area.
+- `a958066` — the contact form stored every message but nothing could read
+  them. The operations workspace now has a **Messages** inbox, behind the
+  administrator role.
+- `821815a` — the public leaderboard returned the internal user id and each
+  climber's self-reported level, neither of which the page shows. The public
+  payload is now exactly what the page renders.
+
+**Also added**
+
+- `backend/scripts/probe_assistant.py`, `probe_permissions.py` and
+  `probe_leaderboard.py` — the probes the review used, so it can be repeated.
+- The page check now covers all 20 pages, including the newer ones.
+
+**Verification after the fixes**
+
+- Backend: `ruff check` and `ruff format --check` clean, `alembic check`
+  reports no drift, **129 tests pass**.
+- Frontend: `bun run lint` 0 errors, `bun run typecheck` clean,
+  `bun run test` → **52 tests pass**, `bun run build` succeeds.
+- The assistant probe answers 13 of 13 in-scope questions with the right
+  entry and refuses 6 of 6 out-of-scope ones.
+- The leaderboard probe confirms sends only, one point per grade step, the
+  right best grade and no extra fields.
+- The permission probe confirms every boundary: public endpoints answer
+  without a token, protected endpoints return 401, a customer gets 403 on
+  every staff and admin endpoint, a member of staff sees only their own
+  tasks, and an administrator sees everything.
+
+**Still open:** everything in §3 (decisions for ARCH), §4 (production
+requirements) and §5 (optional improvements) of the review.
+
+---
+
 ## 5. Decisions taken (and why)
 
 | Decision                                                                                 | Rationale                                                                                                                         |
