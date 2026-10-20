@@ -74,17 +74,17 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 
 ## 3. Roadmap
 
-| #   | Task                                                                                             | Status        |
-| --- | ------------------------------------------------------------------------------------------------ | ------------- |
-| 1   | Repository audit, restore missing entries, install dependencies, baseline build/test/lint        | `DONE`        |
-| 2   | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `DONE`        |
-| 3   | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract                          | `DONE`        |
-| 4   | Authentication, roles, client records and safety agreements                                      | `DONE`        |
-| 5   | Routes, route status, difficulty voting, leaderboard                                             | `DONE`        |
-| 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `DONE`        |
-| 7   | AI customer-support assistant with grounded fallback                                             | `DONE`        |
-| 8   | Shop/media polish, deployment configuration, environment documentation                           | `DONE`        |
-| 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `IN_PROGRESS` |
+| #   | Task                                                                                             | Status |
+| --- | ------------------------------------------------------------------------------------------------ | ------ |
+| 1   | Repository audit, restore missing entries, install dependencies, baseline build/test/lint        | `DONE` |
+| 2   | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `DONE` |
+| 3   | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract                          | `DONE` |
+| 4   | Authentication, roles, client records and safety agreements                                      | `DONE` |
+| 5   | Routes, route status, difficulty voting, leaderboard                                             | `DONE` |
+| 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `DONE` |
+| 7   | AI customer-support assistant with grounded fallback                                             | `DONE` |
+| 8   | Shop/media polish, deployment configuration, environment documentation                           | `DONE` |
+| 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `DONE` |
 
 > Task order note: Task 3 (the backend) was completed **before** Task 2 (the
 > frontend service layer) so that the frontend could be written against a real,
@@ -689,6 +689,52 @@ head` applies the new revision and `alembic check` reports no drift;
 - The shop has no checkout, and the catalogue is informational.
 - The placeholder photographs still need replacing with ARCH's real ones.
 
+### Task 9 — Final verification, local guide and handover (`DONE`)
+
+**Changes**
+
+- `LOCAL_DEVELOPMENT.md` — the guide to running and looking at the site on
+  this machine: the software and versions, the install commands, the
+  environment variables and how to configure them, the database setup, the
+  exact commands to start each service, the local addresses, what to look at
+  on every page, how to try each feature, the test accounts, the browser
+  check scripts, the production build, troubleshooting for the problems that
+  actually came up, and what needs an external service.
+- `DEPLOYMENT.md` was added in Task 8.
+
+**The documented setup was verified from nothing**
+
+A clean database was created in a temporary file, `alembic upgrade head` was
+run, and the seed was run twice. Both migrations applied, the seed was
+idempotent, and the content ended up as expected: 3 users, 6 routes, 3
+products, 12 FAQ entries, 6 rules, 6 services, 7 opening hours, and **0
+prices** — the price list stays empty because ARCH has not published one.
+
+**Final verification**
+
+- Backend: `ruff check` clean, `ruff format --check` clean, `alembic check`
+  reports no drift, **123 tests pass**.
+- Frontend: `bun run lint` 0 errors, `bun run typecheck` clean,
+  `bun run test` → **50 tests pass** across 5 files, `bun run build`
+  succeeds.
+- All seven browser checks pass against **both** the dev server (port 8080)
+  and the production build served from port 8090: every page loads without a
+  console error, a failed request or a hydration mismatch; the contact form
+  reaches the API; the member flow registers, signs the agreement, logs a
+  climb, edits the profile, changes the password and signs out; the voting
+  flow votes, changes the vote and withdraws it; the staff flow refuses a
+  customer, works a task and publishes a route and an event; and the assistant
+  answers from the published FAQ and admits what it does not know.
+- `bun run check:styles` confirms the production build is really styled.
+
+**The production preview CSS issue is fixed**
+
+Diagnosed, fixed and verified: `bun run build` now clears `.output` first
+(`scripts/clean-output.mjs`), so a rebuild can no longer leave a server
+bundle that references a stylesheet hash from an earlier build.
+`scripts/check-styles.mjs` reports the computed styles of a real page load,
+so a missing stylesheet cannot pass unnoticed again.
+
 ---
 
 ## 5. Decisions taken (and why)
@@ -711,17 +757,74 @@ head` applies the new revision and `alembic check` reports no drift;
 
 ---
 
-## 6. Open questions for ARCH
+## 6. Handover summary
+
+### What is built and verified
+
+| Area           | State                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| Public website | 19 pages, server-rendered and interactive, responsive, with per-page metadata                      |
+| Public content | Opening hours, prices, rules, services, courses, events, routes and the shop all read from the API |
+| Accounts       | Registration, sign-in, sign-out, profile, password change, sessions                                |
+| Client records | Own logbook, own statistics, own progress, own safety agreement                                    |
+| Climbing       | Route directory, route pages, difficulty voting, the leaderboard                                   |
+| Staff          | Own tasks with status controls and checklists                                                      |
+| Administration | Summary, member records, route management, task creation, event publishing                         |
+| Assistant      | Embedded in the site, grounded on the published FAQ, honest about its limits                       |
+| Backend        | FastAPI, SQLAlchemy 2.0, Alembic migrations, 123 tests                                             |
+| Frontend       | 50 tests, lint and typecheck clean, production build verified in a browser                         |
+
+### How to run it
+
+```bash
+bun install && cd backend && uv sync --extra dev && cd ..
+cp .env.example .env
+cd backend && uv run python -m app.seed --demo && cd ..
+cd backend && uv run uvicorn app.main:app --port 8000   # terminal 1
+bun run dev                                               # terminal 2
+```
+
+- Website: <http://localhost:8080>
+- API: <http://localhost:8000> · documentation: <http://localhost:8000/docs>
+
+Full instructions are in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) and
+[DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Known limitations
+
+- **PostgreSQL has never been run.** The models, the migrations and the tests
+  all run on SQLite; the SQLAlchemy layer abstracts the difference, but the
+  PostgreSQL path is documented rather than exercised.
+- **The deployment has not been performed.** The build produces a Cloudflare
+  Worker that has not been deployed.
+- **No rate limiting and no e-mail verification.** Both belong in the proxy in
+  front of the API, and both are called out in the deployment guide.
+- **Tokens cannot be revoked.** A token issued before a password change stays
+  valid until it expires.
+- **No file upload.** Media is referenced by URL.
+- **The shop has no checkout.** The catalogue is informational.
+- **The placeholders are still placeholders.** The prices are empty, the
+  opening hours say "to be confirmed", the rules are marked as drafts and the
+  photographs are generated artwork.
+- The live language-model path for the assistant has not been exercised
+  against a provider.
+
+### Open questions for ARCH
 
 1. Real opening hours, address, contact e-mail/phone, and social links (currently placeholders).
 2. Price list and membership tiers (currently placeholders, no invented figures).
 3. Course catalogue: names, schedule, price, instructor, capacity.
 4. Event calendar: recurring sessions, competitions, community events.
 5. Safety-agreement workflow: digital signature, upload of a signed PDF, or a simple status flag?
+   The site currently offers a digital signature and lets staff record a decision.
 6. Route voting rules: what a vote means, whether repeats are allowed, how a climber's level is expressed,
    how the displayed grade is derived, and the leaderboard scoring/reset rules.
+   The site currently uses one vote per person per route, a three-vote minimum
+   before a perceived grade appears, and a send-based score.
 7. Whether height/weight are genuinely required for voting (currently **not** collected).
 8. Staff shift model: simple assignments or full rostering with availability?
 9. Which FAQs and which facts the AI assistant may use.
 10. Whether e-commerce/checkout is in scope for the first release (currently a catalogue without checkout).
 11. Legal/privacy review of the customer-record and agreement data model.
+12. Whether self-registration should be open before e-mail verification exists.
+13. Where the route and product pictures should be stored, and who may publish them.

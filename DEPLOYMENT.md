@@ -2,11 +2,11 @@
 
 The ARCH platform is two deployables plus one database:
 
-| Piece | What it is | Where it runs |
-| --- | --- | --- |
-| **Website** | A TanStack Start application: server-rendered pages plus a small client bundle | A Cloudflare Worker (the Nitro build preset is `cloudflare-module`) |
-| **API** | A FastAPI service with the content, accounts, routes, votes and operations data | Any Python 3.11+ host |
-| **Database** | PostgreSQL | Managed PostgreSQL, or a container |
+| Piece        | What it is                                                                      | Where it runs                                                       |
+| ------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Website**  | A TanStack Start application: server-rendered pages plus a small client bundle  | A Cloudflare Worker (the Nitro build preset is `cloudflare-module`) |
+| **API**      | A FastAPI service with the content, accounts, routes, votes and operations data | Any Python 3.11+ host                                               |
+| **Database** | PostgreSQL                                                                      | Managed PostgreSQL, or a container                                  |
 
 The website and the API are deployed separately. The website only ever calls the
 API over HTTPS, and the API holds every secret.
@@ -17,26 +17,26 @@ API over HTTPS, and the API holds every secret.
 
 ### Frontend (build time)
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `VITE_API_BASE_URL` | yes | The public base URL of the API, for example `https://api.arch.vn`. Baked into the client bundle at build time, so it is public by definition. |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` | no | Only used by the generated Supabase integration scaffold, which the ARCH backend replaces. Leave them empty. |
+| Variable                                                                         | Required | Purpose                                                                                                                                       |
+| -------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_BASE_URL`                                                              | yes      | The public base URL of the API, for example `https://api.arch.vn`. Baked into the client bundle at build time, so it is public by definition. |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` | no       | Only used by the generated Supabase integration scaffold, which the ARCH backend replaces. Leave them empty.                                  |
 
 **No secret is ever put in a `VITE_` variable.** Those values are shipped to the
 browser. The API holds every credential.
 
 ### Backend (run time)
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | yes | SQLAlchemy connection string, for example `postgresql+psycopg://arch:<password>@<host>:5432/arch`. |
-| `ARCH_SECRET_KEY` | yes | Signs the access tokens. Must be unique per environment. The API **refuses to start** in production with the default value. |
-| `ARCH_ENVIRONMENT` | yes | `production` (or `prod`) switches on the production guards. `development` and `test` are the defaults. |
-| `ARCH_ACCESS_TOKEN_TTL_MINUTES` | no | How long an access token stays valid. Default `720`. |
-| `CORS_ORIGINS` | yes | Comma-separated browser origins allowed to call the API. A wildcard is rejected. Include the website's origin. |
-| `LLM_PROVIDER` | no | `groq`, `openai` or `google`. Leave empty to run the assistant from the knowledge base only. |
-| `LLM_API_KEY` | no | The provider key. Read on the server only. |
-| `LLM_MODEL` | no | The model name, for example `llama-3.3-70b-versatile`. |
+| Variable                        | Required | Purpose                                                                                                                     |
+| ------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                  | yes      | SQLAlchemy connection string, for example `postgresql+psycopg://arch:<password>@<host>:5432/arch`.                          |
+| `ARCH_SECRET_KEY`               | yes      | Signs the access tokens. Must be unique per environment. The API **refuses to start** in production with the default value. |
+| `ARCH_ENVIRONMENT`              | yes      | `production` (or `prod`) switches on the production guards. `development` and `test` are the defaults.                      |
+| `ARCH_ACCESS_TOKEN_TTL_MINUTES` | no       | How long an access token stays valid. Default `720`.                                                                        |
+| `CORS_ORIGINS`                  | yes      | Comma-separated browser origins allowed to call the API. A wildcard is rejected. Include the website's origin.              |
+| `LLM_PROVIDER`                  | no       | `groq`, `openai` or `google`. Leave empty to run the assistant from the knowledge base only.                                |
+| `LLM_API_KEY`                   | no       | The provider key. Read on the server only.                                                                                  |
+| `LLM_MODEL`                     | no       | The model name, for example `llama-3.3-70b-versatile`.                                                                      |
 
 A worked example is in [`.env.example`](.env.example).
 
