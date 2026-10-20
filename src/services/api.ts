@@ -32,6 +32,7 @@ import type {
   ApiService,
   ApiToken,
   ApiUser,
+  ApiVote,
   ApiVoteTally,
 } from "./types";
 
@@ -183,6 +184,7 @@ export const api = {
   faq: () => apiRequest<ApiFaqEntry[]>("/api/public/faq"),
   products: () => apiRequest<ApiCatalogProduct[]>("/api/public/products"),
   routes: () => apiRequest<ApiRouteSummary[]>("/api/public/routes"),
+  route: (id: number | string) => apiRequest<ApiRouteSummary>(`/api/public/routes/${id}`),
   product: (id: number | string) => apiRequest<ApiCatalogProduct>(`/api/public/products/${id}`),
 
   submitContactMessage: (body: { name: string; email: string; subject: string; message: string }) =>
@@ -242,4 +244,13 @@ export const memberApi = {
     climbed_on?: string;
     notes?: string;
   }) => apiRequest<ApiAchievement>("/api/me/logbook", { method: "POST", body }),
+
+  myVote: (routeId: number | string) =>
+    apiRequest<ApiVote | null>(`/api/me/routes/${routeId}/vote`),
+
+  castVote: (routeId: number | string, body: { value: string; comment?: string }) =>
+    apiRequest<ApiVote>(`/api/me/routes/${routeId}/vote`, { method: "POST", body }),
+
+  withdrawVote: (routeId: number | string) =>
+    apiRequest<void>(`/api/me/routes/${routeId}/vote`, { method: "DELETE" }),
 };

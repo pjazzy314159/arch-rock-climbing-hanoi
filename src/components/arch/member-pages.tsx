@@ -888,6 +888,26 @@ export function BetaPage({ selectedId }: { selectedId?: string | undefined }) {
 }
 
 export function ProgressPage() {
+  const { status } = useSession();
+  const signedIn = status === "authenticated";
+  const logbook = useQuery({ ...myLogbookQuery, enabled: signedIn });
+
+  const entries = logbook.data?.data ?? [];
+  const sends = entries.filter((entry) => entry.result === "Sent");
+  const projects = entries.filter((entry) => entry.result === "Project");
+  const sessions = new Set(entries.map((entry) => entry.date)).size;
+
+  const byGrade = new Map<string, number>();
+  for (const entry of sends) {
+    byGrade.set(entry.grade, (byGrade.get(entry.grade) ?? 0) + 1);
+  }
+  const bars = Array.from(byGrade.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+  let bestGrade: string | null = null;
+  for (const entry of sends) {
+    if (!bestGrade || entry.grade.localeCompare(bestGrade) > 0) bestGrade = entry.grade;
+  }
+
   return (
     <MemberShell>
       <PageHeading
@@ -895,59 +915,50 @@ export function ProgressPage() {
         title="Look how far you’ve come."
         description="Progress isn’t always a number. But sometimes it’s nice to see one."
       />
-      <p className="muted-note">
-        This chart is illustrative for now. Your own climbing history appears here once the
-        achievements and leaderboard are connected.
-      </p>
-      <div className="metric-grid">
-        <Metric label="Total sends" value="42" detail="Across 18 sessions" />
-        <Metric label="Highest grade" value="V5" detail="Up from V3 in August" />
-        <Metric label="This month" value="8" detail="Successful sends" />
-        <Metric label="Consistency" value="3 weeks" detail="Keep the rhythm" />
-      </div>
-      <section className="progress-chart">
-        <div className="section-title">
-          <h2>Sends by grade</h2>
-          <span className="sample-badge">SAMPLE HISTORY</span>
-        </div>
-        <div className="chart-bars">
-          {[
-            { g: "V0", n: 9 },
-            { g: "V1", n: 12 },
-            { g: "V2", n: 10 },
-            { g: "V3", n: 6 },
-            { g: "V4", n: 4 },
-            { g: "V5", n: 1 },
-          ].map((d) => (
-            <div className="chart-column" key={d.g}>
-              <span>{d.n}</span>
-              <div className="chart-bar" style={{ height: `${d.n * 15}px` }} />
-              <strong>{d.g}</strong>
+      {!signedIn ? (
+        <SignInPrompt what="your progress" />
+      ) : logbook.isPending ? (
+        <MemberLoading />
+      ) : logbook.data?.error ? (
+        <MemberError message={logbook.data.error} />
+      ) : entries.length === 0 ? (
+        <EmptyNotice
+          title="Nothing logged yet."
+          description="Log your first climb and your progress will start building here."
+        />
+      ) : (
+        <>
+          <div className="metric-grid">
+            <Metric
+              label="Total sends"
+              value={sends.length}
+              detail={`Across ${sessions} sessions`}
+            />
+            <Metric label="Highest grade" value={bestGrade ?? "—"} detail="Your personal best" />
+            <Metric label="Projects" value={projects.length} detail="Still open" />
+            <Metric label="Sessions" value={sessions} detail="Days you have climbed" />
+          </div>
+          <section className="progress-chart">
+            <div className="section-title">
+              <h2>Sends by grade</h2>
+              <span className="sample-badge">YOUR LOGBOOK</span>
             </div>
-          ))}
-        </div>
-      </section>
-      <div className="milestones">
-        <h2>Little milestones. Big feelings.</h2>
-        <div>
-          <span className="milestone-icon">
-            <Check />
-          </span>
-          <div>
-            <strong>First V5 send</strong>
-            <p>October 8, 2026 · A new personal best.</p>
-          </div>
-        </div>
-        <div>
-          <span className="milestone-icon">
-            <Mountain />
-          </span>
-          <div>
-            <strong>10 sessions on the wall</strong>
-            <p>September 12, 2026 · Building the habit.</p>
-          </div>
-        </div>
-      </div>
+            {bars.length === 0 ? (
+              <p className="muted-note">No sends logged yet.</p>
+            ) : (
+              <div className="chart-bars">
+                {bars.map(([grade, count]) => (
+                  <div className="chart-column" key={grade}>
+                    <span>{count}</span>
+                    <div className="chart-bar" style={{ height: `${count * 15}px` }} />
+                    <strong>{grade}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </MemberShell>
   );
 }

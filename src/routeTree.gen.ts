@@ -15,6 +15,7 @@ import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as GymRouteImport } from './routes/gym'
+import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as MemberRouteImport } from './routes/member'
 import { Route as RoutesRouteImport } from './routes/routes'
 import { Route as ShopRouteImport } from './routes/shop'
@@ -25,6 +26,7 @@ import { Route as MemberBetaRouteImport } from './routes/member_.beta'
 import { Route as MemberLogbookRouteImport } from './routes/member_.logbook'
 import { Route as MemberProfileRouteImport } from './routes/member_.profile'
 import { Route as MemberProgressRouteImport } from './routes/member_.progress'
+import { Route as RoutesRouteIdRouteImport } from './routes/routes_.$routeId'
 import { Route as ShopProductIdRouteImport } from './routes/shop_.$productId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -55,6 +57,11 @@ const EventsRoute = EventsRouteImport.update({
 const GymRoute = GymRouteImport.update({
   id: '/gym',
   path: '/gym',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LeaderboardRoute = LeaderboardRouteImport.update({
+  id: '/leaderboard',
+  path: '/leaderboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MemberRoute = MemberRouteImport.update({
@@ -107,6 +114,11 @@ const MemberProgressRoute = MemberProgressRouteImport.update({
   path: '/member/progress',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RoutesRouteIdRoute = RoutesRouteIdRouteImport.update({
+  id: '/routes_/$routeId',
+  path: '/routes/$routeId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShopProductIdRoute = ShopProductIdRouteImport.update({
   id: '/shop_/$productId',
   path: '/shop/$productId',
@@ -120,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/courses': typeof CoursesRoute
   '/events': typeof EventsRoute
   '/gym': typeof GymRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/member': typeof MemberRoute
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
@@ -130,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/member/logbook': typeof MemberLogbookRoute
   '/member/profile': typeof MemberProfileRoute
   '/member/progress': typeof MemberProgressRoute
+  '/routes/$routeId': typeof RoutesRouteIdRoute
   '/shop/$productId': typeof ShopProductIdRoute
 }
 export interface FileRoutesByTo {
@@ -139,6 +153,7 @@ export interface FileRoutesByTo {
   '/courses': typeof CoursesRoute
   '/events': typeof EventsRoute
   '/gym': typeof GymRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/member': typeof MemberRoute
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
@@ -149,6 +164,7 @@ export interface FileRoutesByTo {
   '/member/logbook': typeof MemberLogbookRoute
   '/member/profile': typeof MemberProfileRoute
   '/member/progress': typeof MemberProgressRoute
+  '/routes/$routeId': typeof RoutesRouteIdRoute
   '/shop/$productId': typeof ShopProductIdRoute
 }
 export interface FileRoutesById {
@@ -159,6 +175,7 @@ export interface FileRoutesById {
   '/courses': typeof CoursesRoute
   '/events': typeof EventsRoute
   '/gym': typeof GymRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/member': typeof MemberRoute
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
@@ -169,6 +186,7 @@ export interface FileRoutesById {
   '/member_/logbook': typeof MemberLogbookRoute
   '/member_/profile': typeof MemberProfileRoute
   '/member_/progress': typeof MemberProgressRoute
+  '/routes_/$routeId': typeof RoutesRouteIdRoute
   '/shop_/$productId': typeof ShopProductIdRoute
 }
 export interface FileRouteTypes {
@@ -180,6 +198,7 @@ export interface FileRouteTypes {
     | '/courses'
     | '/events'
     | '/gym'
+    | '/leaderboard'
     | '/member'
     | '/routes'
     | '/shop'
@@ -190,6 +209,7 @@ export interface FileRouteTypes {
     | '/member/logbook'
     | '/member/profile'
     | '/member/progress'
+    | '/routes/$routeId'
     | '/shop/$productId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -199,6 +219,7 @@ export interface FileRouteTypes {
     | '/courses'
     | '/events'
     | '/gym'
+    | '/leaderboard'
     | '/member'
     | '/routes'
     | '/shop'
@@ -209,6 +230,7 @@ export interface FileRouteTypes {
     | '/member/logbook'
     | '/member/profile'
     | '/member/progress'
+    | '/routes/$routeId'
     | '/shop/$productId'
   id:
     | '__root__'
@@ -218,6 +240,7 @@ export interface FileRouteTypes {
     | '/courses'
     | '/events'
     | '/gym'
+    | '/leaderboard'
     | '/member'
     | '/routes'
     | '/shop'
@@ -228,6 +251,7 @@ export interface FileRouteTypes {
     | '/member_/logbook'
     | '/member_/profile'
     | '/member_/progress'
+    | '/routes_/$routeId'
     | '/shop_/$productId'
   fileRoutesById: FileRoutesById
 }
@@ -238,6 +262,7 @@ export interface RootRouteChildren {
   CoursesRoute: typeof CoursesRoute
   EventsRoute: typeof EventsRoute
   GymRoute: typeof GymRoute
+  LeaderboardRoute: typeof LeaderboardRoute
   MemberRoute: typeof MemberRoute
   RoutesRoute: typeof RoutesRoute
   ShopRoute: typeof ShopRoute
@@ -248,6 +273,7 @@ export interface RootRouteChildren {
   MemberLogbookRoute: typeof MemberLogbookRoute
   MemberProfileRoute: typeof MemberProfileRoute
   MemberProgressRoute: typeof MemberProgressRoute
+  RoutesRouteIdRoute: typeof RoutesRouteIdRoute
   ShopProductIdRoute: typeof ShopProductIdRoute
 }
 
@@ -293,6 +319,13 @@ declare module '@tanstack/react-router' {
       path: '/gym'
       fullPath: '/gym'
       preLoaderRoute: typeof GymRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leaderboard': {
+      id: '/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/leaderboard'
+      preLoaderRoute: typeof LeaderboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/member': {
@@ -365,6 +398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MemberProgressRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/routes_/$routeId': {
+      id: '/routes_/$routeId'
+      path: '/routes/$routeId'
+      fullPath: '/routes/$routeId'
+      preLoaderRoute: typeof RoutesRouteIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/shop_/$productId': {
       id: '/shop_/$productId'
       path: '/shop/$productId'
@@ -382,6 +422,7 @@ const rootRouteChildren: RootRouteChildren = {
   CoursesRoute: CoursesRoute,
   EventsRoute: EventsRoute,
   GymRoute: GymRoute,
+  LeaderboardRoute: LeaderboardRoute,
   MemberRoute: MemberRoute,
   RoutesRoute: RoutesRoute,
   ShopRoute: ShopRoute,
@@ -392,6 +433,7 @@ const rootRouteChildren: RootRouteChildren = {
   MemberLogbookRoute: MemberLogbookRoute,
   MemberProfileRoute: MemberProfileRoute,
   MemberProgressRoute: MemberProgressRoute,
+  RoutesRouteIdRoute: RoutesRouteIdRoute,
   ShopProductIdRoute: ShopProductIdRoute,
 }
 export const routeTree = rootRouteImport

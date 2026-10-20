@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import auth_headers, login
+from tests.conftest import auth_headers, login, make_user
 
 
 def test_logbook_requires_authentication(client: TestClient) -> None:
@@ -163,6 +163,65 @@ def test_a_vote_can_be_withdrawn(client: TestClient, customer, route) -> None:
     response = client.delete(f"/api/me/routes/{route.id}/vote", headers=auth_headers(token))
     assert response.status_code == 204
     assert client.get(f"/api/me/routes/{route.id}/tally").json()["total"] == 0
+
+
+def test_a_perceived_grade_needs_three_votes(
+    client: TestClient, db, route, customer, other_customer
+) -> None:
+    """The perceived grade only appears once the community has voted enough."""
+    voters = [customer, other_customer]
+    for index in range(2):
+        extra = make_user(db, f"voter{index}@example.com")
+        voters.append(extra)
+
+    def cast(voter, value):
+        token = login(client, voter.email)
+        response = client.post(
+            f"/api/me/routes/{route.id}/vote",
+            json={"value": value},
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 200, response.text
+
+    cast(voters[0], "harder")
+    tally = client.get(f"/api/me/routes/{route.id}/tally").json()
+    assert tally["total"] == 1
+    assert tally["perceived_grade"] is None, "one vote is not enough to move the grade"
+
+    cast(voters[1], "harder")
+    tally = client.get(f"/api/me/routes/{route.id}/tally").json()
+    assert tally["total"] == 2
+    assert tally["perceived_grade"] is None, "two votes are not enough to move the grade"
+
+    # A split vote: one each way and one on the grade. Three votes are enough
+    # to publish a perceived grade, but a split does not move it.
+    cast(voters[2], "as_set")
+    cast(voters[1], "easier")
+    tally = client.get(f"/api/me/routes/{route.id}/tally").json()
+    assert tally["total"] == 3
+    assert tally["official_grade"] == route.grade
+    assert tally["perceived_grade"] == route.grade, "a split vote does not move the grade"
+
+    # A clear majority of "harder" votes does move the perceived grade, and the
+    # official grade is still reported unchanged.
+    cast(voters[1], "harder")
+    tally = client.get(f"/api/me/routes/{route.id}/tally").json()
+    assert tally["perceived_grade"] == "V4"
+    assert tally["official_grade"] == "V3"
+
+
+def test_the_public_route_list_carries_the_vote_summary(
+    client: TestClient, customer, route
+) -> None:
+    token = login(client, customer.email)
+    client.post(
+        f"/api/me/routes/{route.id}/vote", json={"value": "harder"}, headers=auth_headers(token)
+    )
+    listed = client.get("/api/public/routes").json()
+    entry = next(item for item in listed if item["id"] == route.id)
+    assert entry["vote_count"] == 1
+    assert entry["harder_votes"] == 1
+    assert entry["grade"] == route.grade
 
 
 def test_the_leaderboard_lists_climbers_with_sends(

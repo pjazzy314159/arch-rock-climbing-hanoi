@@ -1,4 +1,4 @@
-# ARCH Climbing Gym Platform — Implementation Plan
+﻿# ARCH Climbing Gym Platform — Implementation Plan
 
 Source of truth for implementation progress. Statuses: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`.
 
@@ -80,8 +80,8 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 | 2   | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `DONE`        |
 | 3   | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract                          | `DONE`        |
 | 4   | Authentication, roles, client records and safety agreements                                      | `DONE`        |
-| 5   | Routes, route status, difficulty voting, leaderboard                                             | `IN_PROGRESS` |
-| 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `TODO`        |
+| 5   | Routes, route status, difficulty voting, leaderboard                                             | `DONE`        |
+| 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `IN_PROGRESS` |
 | 7   | AI customer-support assistant with grounded fallback                                             | `TODO`        |
 | 8   | Shop/media polish, deployment configuration, environment documentation                           | `TODO`        |
 | 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `TODO`        |
@@ -457,6 +457,75 @@ appeared. The message now lives outside the form.
   real with the voting and leaderboard work (Task 5).
 - The administration workspace is still a preview; the staff tools arrive with
   the operations work (Task 6).
+
+### Task 5 — Route difficulty voting and the leaderboard (`DONE`)
+
+**Changes**
+
+- `src/components/arch/route-pages.tsx` — a route detail page showing the
+  official grade next to the community's perceived grade, the vote
+  distribution, and the voting control. An anonymous visitor is asked to sign
+  in; a signed-in member can vote, change their vote and withdraw it.
+- `src/routes/routes_.$routeId.tsx` — the route page (`/routes/:routeId`).
+- `src/components/arch/route-pages.tsx` — the leaderboard page.
+- `src/routes/leaderboard.tsx` — the leaderboard route, with the loader
+  prefetching the data.
+- `src/services/api.ts` — `api.route`, `memberApi.myVote`, `memberApi.castVote`
+  and `memberApi.withdrawVote`.
+- `src/services/types.ts` — the vote, tally and leaderboard wire types.
+- `src/components/arch/shared.tsx` — the route card now links to the route
+  page, shows the vote count and the perceived grade when the community
+  disagrees with the official grade. The navigation gained **Leaderboard**.
+- `src/components/arch/member-pages.tsx` — "My progress" now shows the
+  member's own logbook: sends by grade, total sends, best grade, projects and
+  the number of sessions. It is no longer the sample chart.
+- `src/styles.css` — the route detail layout, the grade block, the vote bars,
+  the vote panel and the leaderboard rank. The navigation was tightened so ten
+  items fit on one line.
+- Backend tests: the perceived grade needs three votes, a split vote does not
+  move the grade, a clear majority does, and the official grade is never
+  changed.
+- `scripts/check-voting.mjs` — a browser check of the whole voting flow.
+
+**The rules, as implemented**
+
+- One active vote per person per route; voting again replaces it, and it can
+  be withdrawn.
+- The official grade belongs to the gym. The community's perceived grade is
+  shown next to it, never instead of it.
+- A perceived grade is only published once a route has at least three votes,
+  and it only moves when at least half of the votes point the same way. It
+  never moves more than one grade step.
+- The leaderboard counts logged sends only, scores a send at one point per
+  grade step, and breaks ties by number of sends, then best grade, then the
+  date of the first send.
+- Height and weight are still **not** collected.
+
+**A bug found and fixed**
+
+The leaderboard used a plain query while its loader prefetched the data, so
+the server rendered the table and the client rendered the empty state: a
+hydration mismatch. It now uses a suspense query, like the other content
+pages, so both render the same first frame.
+
+**Verification**
+
+- Backend: `ruff check` and `ruff format --check` clean; **123 tests pass**.
+- Frontend: `bun run lint` 0 errors; `bun run typecheck` clean; `bun run test`
+  → **38 passing** (12 routing, 13 service mapping, 13 session).
+- `bun run build` succeeds; the production build is correctly styled.
+- `node scripts/check-voting.mjs` against the dev server and the production
+  build: an anonymous visitor is asked to sign in; a vote is recorded; the
+  vote can be changed; it can be withdrawn; the leaderboard lists the
+  climbers. No browser errors.
+- `node scripts/check-pages.mjs` → all 17 pages clean on both servers.
+
+**Open items**
+
+- Route management (creating, editing and archiving routes) is already on the
+  backend but has no staff interface yet; it arrives with the operations work
+  (Task 6).
+- The route beta is still illustrative content.
 
 ---
 

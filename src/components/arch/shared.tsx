@@ -26,6 +26,7 @@ const nav = [
   { to: "/gym", label: "The Gym" },
   { to: "/tour", label: "360° Tour" },
   { to: "/routes", label: "Routes" },
+  { to: "/leaderboard", label: "Leaderboard" },
   { to: "/courses", label: "Courses" },
   { to: "/events", label: "Events" },
   { to: "/visit", label: "Visit" },
@@ -175,8 +176,8 @@ export function PageHeading({
 export function RouteCard({ route }: { route: ClimbRoute }) {
   return (
     <Link
-      to="/member/beta"
-      search={{ route: route.id }}
+      to="/routes/$routeId"
+      params={{ routeId: route.id }}
       className={`route-card hold-${route.color}`}
     >
       <div className="route-card-top">
@@ -200,8 +201,14 @@ export function RouteCard({ route }: { route: ClimbRoute }) {
       </div>
       <div className="route-meta">
         <span>Set by {route.setter}</span>
-        <span>{route.sends} sends</span>
+        <span>
+          {route.sends} sends
+          {route.voteCount > 0 && ` · ${route.voteCount} vote${route.voteCount === 1 ? "" : "s"}`}
+        </span>
       </div>
+      {route.perceivedGrade && route.perceivedGrade !== route.grade && (
+        <div className="route-perceived">Climbers say {route.perceivedGrade}</div>
+      )}
     </Link>
   );
 }

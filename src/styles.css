@@ -190,20 +190,21 @@
 .desktop-nav {
   display: none;
   align-items: center;
-  gap: 1.75rem;
+  gap: 1.15rem;
   margin-left: auto;
 }
 
 .desktop-nav a {
   position: relative;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   text-decoration: none;
   color: var(--color-muted-foreground);
   transition: color 0.2s ease;
   padding: 0.35rem 0;
+  white-space: nowrap;
 }
 
 .desktop-nav a:hover,
@@ -739,6 +740,149 @@
     grid-template-columns: 1fr 1fr;
     gap: 4rem;
   }
+}
+
+/* ==========================================================================
+   Route detail and voting
+   ========================================================================== */
+
+.route-perceived {
+  padding: 0 1rem 0.9rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-hold-yellow);
+}
+
+.route-detail {
+  display: grid;
+  gap: 2rem;
+  align-items: start;
+}
+
+.route-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  min-width: 0;
+}
+
+.grade-block {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.grade-block > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.grade-block span {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.grade-block strong {
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-foreground);
+}
+
+.grade-block > div:last-child strong {
+  color: var(--color-primary);
+}
+
+.grade-block small {
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+}
+
+.vote-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.vote-bars > div {
+  display: grid;
+  grid-template-columns: 5rem 1fr 2rem;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.vote-bars span {
+  color: var(--color-muted-foreground);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.vote-bar {
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.06);
+  overflow: hidden;
+}
+
+.vote-bar > div {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--color-primary);
+}
+
+.vote-bars strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.vote-panel {
+  padding: 1.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.vote-panel h2 {
+  font-size: 1.5rem;
+}
+
+.vote-panel > p {
+  margin: 0.6rem 0 1.25rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
+.vote-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.leaderboard-rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+  color: var(--color-primary);
 }
 
 /* ==========================================================================

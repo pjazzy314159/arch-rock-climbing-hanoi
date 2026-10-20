@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Wire types: the exact JSON the ARCH backend returns.
  *
  * The frontend works with the camelCase shapes in `src/services/arch.ts`; the
@@ -120,6 +120,15 @@ export type ApiRouteSummary = {
   harder_votes: number;
   perceived_grade: string | null;
   is_fresh: boolean;
+};
+
+/** A member's difficulty vote for a route. */
+export type ApiVote = {
+  id: number;
+  route_id: number;
+  value: "easier" | "as_set" | "harder";
+  comment: string | null;
+  created_at: string;
 };
 
 export type ApiVoteTally = {

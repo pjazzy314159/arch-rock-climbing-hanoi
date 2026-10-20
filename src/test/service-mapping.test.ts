@@ -61,6 +61,18 @@ describe("route mapping", () => {
     expect(route.perceivedGrade).toBe("V4");
     expect(route.voteCount).toBe(4);
   });
+
+  it("carries the vote counts the route directory shows", () => {
+    const route = toClimbRoute({
+      ...apiRoute,
+      easier_votes: 1,
+      as_set_votes: 2,
+      harder_votes: 3,
+      vote_count: 6,
+    });
+    expect(route.voteCount).toBe(6);
+    expect(route.perceivedGrade).toBe("V3");
+  });
 });
 
 describe("product mapping", () => {
@@ -142,6 +154,20 @@ describe("vote tally mapping", () => {
     expect(tally.officialGrade).toBe("V3");
     expect(tally.perceivedGrade).toBe("V3");
     expect(tally.total).toBe(4);
+  });
+
+  it("keeps a missing perceived grade as nothing rather than a guess", () => {
+    const tally = toVoteTally({
+      route_id: 7,
+      total: 1,
+      easier: 0,
+      as_set: 1,
+      harder: 0,
+      perceived_grade: null,
+      official_grade: "V3",
+    });
+    expect(tally.perceivedGrade).toBeNull();
+    expect(tally.officialGrade).toBe("V3");
   });
 });
 
