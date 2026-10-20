@@ -134,6 +134,88 @@ def test_the_assistant_says_so_when_it_does_not_know(client: TestClient, db) -> 
     assert "don't have approved information" in payload["answer"].lower()
 
 
+def test_a_loosely_related_question_is_not_answered_with_an_unrelated_answer(
+    client: TestClient, db
+) -> None:
+    """A question that only shares a keyword must not get a confident answer.
+
+    "Can I bring my dog?" shares the word "bring" with the published answer
+    about what to wear. Quoting that answer would put a wrong, confident
+    statement in front of the visitor.
+    """
+    db.add(
+        FaqEntry(
+            question="What should I wear and bring?",
+            answer="Comfortable clothes you can move in, a water bottle and flat footwear.",
+            category="Visiting",
+            keywords="wear clothes bring equipment shoes rental",
+            is_published=True,
+        )
+    )
+    db.commit()
+
+    response = client.post(
+        "/api/assistant/chat",
+        json={"question": "Can I bring my dog?"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["mode"] == "not_covered", payload
+    assert payload["sources"] == []
+    assert "water bottle" not in payload["answer"].lower()
+    assert "don't have approved information" in payload["answer"].lower()
+    # It may still point at what it does have, and it must point at the team.
+    assert "what should i wear and bring" in payload["answer"].lower()
+    assert "contact page" in payload["answer"].lower()
+
+
+def test_the_assistant_answers_a_question_the_knowledge_base_covers(client: TestClient, db) -> None:
+    db.add(
+        FaqEntry(
+            question="Do I need climbing experience to visit?",
+            answer="No. Complete beginners are welcome.",
+            category="Visiting",
+            keywords="beginner first time experience needed novice",
+            is_published=True,
+        )
+    )
+    db.commit()
+
+    response = client.post(
+        "/api/assistant/chat",
+        json={"question": "Do I need climbing experience to visit?"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "knowledge_base"
+    assert payload["answer"] == "No. Complete beginners are welcome."
+    assert payload["sources"][0]["question"] == "Do I need climbing experience to visit?"
+
+
+def test_a_question_is_matched_even_when_it_is_asked_in_the_plural(client: TestClient, db) -> None:
+    """ "courses" and "beginners" have to reach the entry that says "course"."""
+    db.add(
+        FaqEntry(
+            question="Do you run courses?",
+            answer="Yes, ARCH runs introductory courses.",
+            category="Courses",
+            keywords="course class coaching learn beginner training",
+            is_published=True,
+        )
+    )
+    db.commit()
+
+    response = client.post(
+        "/api/assistant/chat",
+        json={"question": "Do you have courses for beginners?"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "knowledge_base", payload
+    assert payload["sources"][0]["question"] == "Do you run courses?"
+
+
 def test_the_assistant_never_invents_a_price(client: TestClient, db) -> None:
     db.add(
         FaqEntry(

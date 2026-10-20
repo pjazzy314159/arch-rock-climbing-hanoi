@@ -84,12 +84,29 @@ class RetrievedEntry:
     score: float
 
 
+def _stem(token: str) -> str:
+    """Reduce a word to a simple stem so plurals match their singular.
+
+    This is deliberately conservative: it only folds the endings that appear
+    in the published questions ("courses" -> "course", "shoes" -> "shoe",
+    "beginners" -> "beginner"). It never guesses at a root word, so it cannot
+    make two unrelated words look alike.
+    """
+    if len(token) > 4 and token.endswith("ies"):
+        return token[:-3] + "y"
+    if len(token) > 4 and token.endswith("es") and token[-3:-2] in {"s", "x", "z"}:
+        return token[:-2]
+    if len(token) > 3 and token.endswith("s") and not token.endswith("ss"):
+        return token[:-1]
+    return token
+
+
 def tokenize(text: str) -> list[str]:
     """Split text into lowercase tokens with stop words removed."""
     if not text:
         return []
     tokens = _TOKEN_PATTERN.findall(text.lower())
-    return [token for token in tokens if token not in _STOP_WORDS and len(token) > 1]
+    return [_stem(token) for token in tokens if token not in _STOP_WORDS and len(token) > 1]
 
 
 def score_entry(question_tokens: set[str], entry: FaqEntry) -> float:
@@ -264,23 +281,20 @@ async def answer_question(settings: Settings, question: str, entries: list[FaqEn
             }
 
     if context:
-        # We have related information but no confident answer. Return the closest
-        # entry's answer and label it as coming from the knowledge base.
+        # There is related information, but nothing that actually answers the
+        # question. Quoting the closest entry here would put a confident,
+        # unrelated answer in front of a visitor — for example answering
+        # "can I bring my dog?" with the answer to "what should I wear?".
+        # The question is not covered, so say so and point at the team.
         best = context_entries[0]
         return {
             "answer": (
-                f"{best.entry.answer}\n\n"
-                "If that doesn't cover your question, the ARCH team can help — "
-                "use the contact page on this site."
+                f'The closest thing I have published is "{best.entry.question}" '
+                f"({best.entry.category}).\n\n"
+                f"{NOT_COVERED_TEMPLATE}\n\n{SCOPE_TEMPLATE.format(topics=_topics(entries))}"
             ),
-            "mode": "knowledge_base",
-            "sources": [
-                {
-                    "id": best.entry.id,
-                    "question": best.entry.question,
-                    "category": best.entry.category,
-                }
-            ],
+            "mode": "not_covered",
+            "sources": [],
             "provider": None,
             "model": None,
             "created_at": now,
