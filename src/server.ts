@@ -1,4 +1,9 @@
-import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
+import {
+  createStartHandler,
+  defaultStreamHandler,
+  type RequestHandler,
+} from "@tanstack/react-start/server";
+import type { Register } from "@tanstack/react-router";
 
 import { consumeLastCapturedError, describeError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -8,22 +13,28 @@ const handler = createStartHandler(defaultStreamHandler);
 /**
  * TanStack Start server entry.
  *
- * Wraps the framework handler so an unexpected SSR failure renders a small
- * static error page instead of leaking a stack trace to the browser. The real
- * error is still written to the server log.
+ * The framework's default entry is wrapped so that an unexpected SSR failure
+ * renders a small static error page instead of a stack trace. The real error is
+ * still written to the server log.
  */
-export default {
-  async fetch(request: Request): Promise<Response> {
-    try {
-      return await handler(request);
-    } catch (error) {
-      const captured = consumeLastCapturedError() ?? error;
-      console.error(`[arch] Server render failed for ${request.url}: ${describeError(captured)}`);
+export type ServerEntry = { fetch: RequestHandler<Register> };
 
-      return new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
-    }
-  },
-};
+export function createServerEntry(entry: ServerEntry): ServerEntry {
+  return {
+    async fetch(...args) {
+      try {
+        return await entry.fetch(...args);
+      } catch (error) {
+        const captured = consumeLastCapturedError() ?? error;
+        console.error(`[arch] Server render failed: ${describeError(captured)}`);
+
+        return new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+    },
+  };
+}
+
+export default createServerEntry({ fetch: handler });

@@ -77,10 +77,9 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 | #   | Task                                                                                             | Status |
 | --- | ------------------------------------------------------------------------------------------------ | ------ |
 | 1   | Repository audit, restore missing entries, install dependencies, baseline build/test/lint        | `DONE` |
-| 2   | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `TODO` |
+| 2   | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `DONE` |
 | 3   | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract                          | `DONE` |
-| 4   | Authentication, roles, client records and safety agreements                                      | `TODO` |
-| 5   | Routes, route status, difficulty voting, leaderboard                                             | `TODO` |
+| 4   | Authentication, roles, client records and safety agreements                                      | `TODO` |     | 5   | Routes, route status, difficulty voting, leaderboard | `TODO` |
 | 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `TODO` |
 | 7   | AI customer-support assistant with grounded fallback                                             | `TODO` |
 | 8   | Shop/media polish, deployment configuration, environment documentation                           | `TODO` |
@@ -224,6 +223,92 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 
 ---
 
+### Task 2 — Frontend foundation and API integration (`DONE`)
+
+**Changes**
+
+- `src/services/types.ts` — wire types: the exact JSON the backend returns.
+- `src/services/api.ts` — the only module that talks to the backend. Typed
+  endpoints, `ApiError` / `ApiUnavailableError`, and an access-token store
+  (`localStorage` plus memory). No backend secret is ever handled here.
+- `src/services/arch.ts` — rewritten as the content service. Every call
+  returns a `Resource<T>` that says whether the data came from the API or from
+  the sample fallback, and why. Mapping from wire format to UI shape lives here.
+- `src/components/arch/data-state.tsx` — `SampleDataBanner`, `EmptyNotice` and
+  `RouteLoading`: the loading, empty, error and backend-unavailable states.
+- `src/components/arch/content-pages.tsx` — new `/visit`, `/courses` and
+  `/events` pages.
+- `src/routes/visit.tsx`, `src/routes/courses.tsx`, `src/routes/events.tsx` —
+  new routes, each with a loader and a pending state.
+- `src/hooks/use-hydrated.ts` — used to stop a form from performing a native
+  submit before React has hydrated.
+- `src/components/arch/shared.tsx` — nav extended with Courses, Events and
+  Visit; a `ServiceIcon` registry; the footer now reports whether the site is
+  live or showing sample data.
+- `src/components/arch/public-pages.tsx` — the gym page renders the published
+  services, the route directory and the shoe shop read live data and label
+  their source, and the contact form posts to `POST /api/public/contact`.
+- `src/routes/__root.tsx` — the root loader checks the service once per
+  session so the footer is accurate on the first render.
+- `src/styles.css` — styling for the new sections (hours table, price groups,
+  rule list, course cards, event list, data banner, loading state).
+- `scripts/check-pages.mjs`, `scripts/check-contact-form.mjs`,
+  `scripts/preview-build.mjs` — browser checks and a local preview of the
+  production build.
+
+**Public content now presented**
+
+Opening hours, prices, gym rules, services, courses, events, the route
+directory, the shoe catalogue and the contact form. Where ARCH has not
+confirmed something the page says so explicitly instead of showing a guess:
+prices and courses are empty until they are published, and the seeded rules
+are marked `DRAFT`.
+
+**Two real bugs found and fixed**
+
+- **The site was never interactive.** `src/client.tsx` (created in Task 1)
+  overrode the framework's default client entry but only called
+  `hydrateStart()`; it never mounted the app. The site was server-rendered
+  only: the mobile menu, the route filters and every form were dead. The
+  official TanStack Start example has no `src/client.tsx` at all — the
+  framework's default entry calls `hydrateRoot(document, <StartClient />)`.
+  The file was removed so the default is used, and `src/server.ts` was
+  rewritten to the framework's `ServerEntry` contract while keeping the
+  friendly error page.
+- **The contact form did a native GET submit** if it was clicked before
+  hydration, reloading the page with the message in the URL. The submit
+  button is now disabled until React has hydrated (`useHydrated`).
+
+**Verification**
+
+- `bun run lint` → 0 errors. `bun run typecheck` → clean. `bun run test` → 23
+  passing (12 routing + 11 new service-mapping tests).
+- `bun run build` → succeeds; the client bundle now contains `hydrateRoot`.
+- `node scripts/check-pages.mjs` against the **dev server** (port 8080) → all
+  15 pages load with no console errors, no failed requests and no hydration
+  errors.
+- `node scripts/check-pages.mjs` against the **production build** served by
+  `scripts/preview-build.mjs` (port 8090) → all 15 pages clean.
+- `node scripts/check-contact-form.mjs` → the form is filled in a real browser
+  and submitted; the API returns 201 and the page shows the confirmation.
+- With the backend stopped, every page falls back to the sample data and says
+  so in a visible banner; the footer reads "Sample data".
+- With the backend running, the pages read live data; the footer reads
+  "Live from ARCH".
+- No server secret appears in the client bundle (checked in
+  `.output/public/assets/*.js`).
+
+**Known limitations**
+
+- `vite preview` does not work for this project: the build targets the
+  Cloudflare Worker preset and the preview plugin looks for a `dist/server`
+  layout. `scripts/preview-build.mjs` serves the built Worker locally
+  instead; the deployed target is `npx wrangler --cwd .output/server deploy`.
+- The CORS origin list has to include the origin the frontend is served
+  from. The default now covers ports 5173, 8080 and 8090.
+
+---
+
 ## 5. Decisions taken (and why)
 
 | Decision                                                                                 | Rationale                                                                                                                         |
@@ -237,6 +322,9 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 | The role is read from the database on every request, never from the token                | A stale or tampered token claim must not be able to grant access.                                                                 |
 | The seed runs the Alembic migrations instead of `create_all`                             | Keeps the schema and the recorded migration revision from drifting apart.                                                         |
 | Prices, courses and events are seeded empty; rules are seeded as _drafts_                | ARCH has not supplied these yet, so the site must show a labelled placeholder rather than invented numbers.                       |
+| The service layer returns a `Resource<T>` that names its data source                     | Sample data must never be presented as live information; the banner and the badges read the same field.                           |
+| Reads never throw, writes do                                                             | A page must stay browsable when the backend is down, but a message that failed to send has to say so.                             |
+| Removed `src/client.tsx`                                                                 | The framework's default client entry is the only one that mounts the app; the file added in Task 1 silently disabled hydration.   |
 | AI provider credentials stay server-side; no provider configured → grounded FAQ fallback | The brief forbids exposing keys and forbids pretending a fallback is live AI.                                                     |
 
 ---

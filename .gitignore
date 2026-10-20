@@ -44,6 +44,7 @@ var/
 # Python backend
 backend/.venv/
 backend/arch_dev.db
+arch_dev.db
 backend/var/
 __pycache__/
 *.py[cod]

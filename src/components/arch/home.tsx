@@ -12,6 +12,7 @@ import {
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { routeQuery } from "@/services/arch";
+import { SampleDataBanner } from "./data-state";
 import { RouteCard, TextLink } from "./shared";
 import gymPhoto from "@/assets/arch-gym.jpg";
 import shoePhoto from "@/assets/climbing-shoes.jpg";
@@ -101,8 +102,9 @@ export function Home() {
           </div>
           <TextLink to="/routes">Explore all routes</TextLink>
         </div>
+        <SampleDataBanner resource={routes} />
         <div className="route-grid">
-          {routes.slice(0, 3).map((r) => (
+          {routes.data.slice(0, 3).map((r) => (
             <RouteCard key={r.id} route={r} />
           ))}
         </div>

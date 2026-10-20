@@ -31,6 +31,11 @@ export default defineConfig({
         strict: false,
         allow: [realProjectRoot, __dirname],
       },
+      watch: {
+        // The Python backend has its own toolchain; watching its virtual
+        // environment only causes pointless reloads.
+        ignored: ["**/backend/.venv/**", "**/backend/var/**", "**/var/**"],
+      },
     },
   },
 });

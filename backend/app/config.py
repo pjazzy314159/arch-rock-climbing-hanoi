@@ -52,7 +52,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ARCH_ACCESS_TOKEN_TTL_MINUTES", "ACCESS_TOKEN_TTL_MINUTES"),
     )
     cors_origins: str = Field(
-        default="http://localhost:5173,http://localhost:8080",
+        default="http://localhost:5173,http://localhost:8080,http://localhost:8090",
         validation_alias=AliasChoices("CORS_ORIGINS", "ARCH_CORS_ORIGINS"),
     )
 

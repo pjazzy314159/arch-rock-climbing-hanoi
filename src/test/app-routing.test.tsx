@@ -12,7 +12,7 @@ describe("App routing", () => {
     ["/tour", "/tour"],
     ["/routes", "/routes"],
     ["/shop", "/shop"],
-    ["/shop/arch-edge", "/shop_/$productId"],
+    ["/shop/ARC-EDG-01", "/shop_/$productId"],
     ["/contact", "/contact"],
     ["/member", "/member"],
     ["/member/logbook", "/member_/logbook"],

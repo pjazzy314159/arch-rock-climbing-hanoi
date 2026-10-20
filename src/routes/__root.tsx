@@ -11,6 +11,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import { Header, Footer } from "@/components/arch/shared";
+import { serviceStatusQuery } from "@/services/arch";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -75,6 +76,11 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  // Check that the ARCH service is reachable once per session, so the footer
+  // can state honestly whether the site is showing live or sample data.
+  loader: async ({ context }) => {
+    await context.queryClient.ensureQueryData(serviceStatusQuery);
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+﻿import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -17,7 +17,9 @@ import {
   Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { PageHeading, RouteCard, TextLink } from "./shared";
+import { SampleDataBanner } from "./data-state";
 import { memberQuery, routeQuery, logbookQuery, adminQuery, type LogEntry } from "@/services/arch";
 const memberNav = [
   { to: "/member", label: "Overview", icon: LayoutDashboard },
@@ -63,7 +65,7 @@ export function MemberShell({ children, admin = false }: { children: ReactNode; 
             No sign-in or access protection.
             <br />
             All records are sample data.
-          </p>
+          </p>{" "}
           {admin ? (
             <Link to="/member">
               Member preview <ArrowUpRight size={14} />
@@ -81,19 +83,21 @@ export function MemberShell({ children, admin = false }: { children: ReactNode; 
 }
 export function MemberPage() {
   const { data: member } = useSuspenseQuery(memberQuery);
+  const summary = member.data;
   const { data: routes } = useSuspenseQuery(routeQuery);
   return (
     <MemberShell>
       <PageHeading
         eyebrow="BACK ON THE WALL"
-        title={`Hey, ${member.displayName.split(" ")[0]}.`}
+        title={`Hey, ${summary.displayName.split(" ")[0]}.`}
         description="Every session is a step forward. Make this one count."
       />
+      <SampleDataBanner resource={member} />
       <div className="metric-grid">
-        <Metric label="Total sends" value={member.totalSends} detail="+8 this month" />
-        <Metric label="Sessions" value={member.sessions} detail="3 this week" />
-        <Metric label="Highest grade" value={member.bestGrade} detail="Your personal best" />
-        <Metric label="Active projects" value={member.activeProjects} detail="Keep showing up" />
+        <Metric label="Total sends" value={summary.totalSends} detail="+8 this month" />
+        <Metric label="Sessions" value={summary.sessions} detail="3 this week" />
+        <Metric label="Highest grade" value={summary.bestGrade} detail="Your personal best" />
+        <Metric label="Active projects" value={summary.activeProjects} detail="Keep showing up" />
       </div>
       <div className="section-title">
         <h2>Your next session</h2>
@@ -116,7 +120,7 @@ export function MemberPage() {
         <TextLink to="/routes">All routes</TextLink>
       </div>
       <div className="route-grid member-route-grid">
-        {routes.slice(0, 2).map((r) => (
+        {routes.data.slice(0, 2).map((r) => (
           <RouteCard route={r} key={r.id} />
         ))}
       </div>
@@ -143,9 +147,10 @@ function Metric({
 export function LogbookPage() {
   const { data: initial } = useSuspenseQuery(logbookQuery);
   const { data: routes } = useSuspenseQuery(routeQuery);
-  const [entries, setEntries] = useState<LogEntry[]>(initial);
+  const [entries, setEntries] = useState<LogEntry[]>(initial.data);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("All climbs");
+  const hydrated = useHydrated();
   return (
     <MemberShell>
       <PageHeading
@@ -223,7 +228,7 @@ export function LogbookPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const f = new FormData(e.currentTarget);
-                const route = routes.find((r) => r.id === f.get("route"));
+                const route = routes.data.find((r) => r.id === f.get("route"));
                 if (!route) return;
                 setEntries([
                   {
@@ -243,7 +248,7 @@ export function LogbookPage() {
               <label>
                 Route
                 <select name="route" autoFocus>
-                  {routes.map((r) => (
+                  {routes.data.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name} · {r.grade}
                     </option>
@@ -278,7 +283,7 @@ export function LogbookPage() {
                 Notes
                 <textarea name="notes" rows={3} placeholder="What did you learn?" />
               </label>
-              <Button type="submit">
+              <Button type="submit" disabled={!hydrated}>
                 <Check />
                 Save preview entry
               </Button>
@@ -291,8 +296,8 @@ export function LogbookPage() {
 }
 export function BetaPage({ selectedId }: { selectedId?: string | undefined }) {
   const { data: routes } = useSuspenseQuery(routeQuery);
-  const [id, setId] = useState(selectedId || routes[0]?.id || "");
-  const route = routes.find((r) => r.id === id);
+  const [id, setId] = useState(selectedId || routes.data[0]?.id || "");
+  const route = routes.data.find((r) => r.id === id);
   const [show, setShow] = useState(false);
   return (
     <MemberShell>
@@ -310,7 +315,7 @@ export function BetaPage({ selectedId }: { selectedId?: string | undefined }) {
             setShow(false);
           }}
         >
-          {routes.map((r) => (
+          {routes.data.map((r) => (
             <option key={r.id} value={r.id}>
               {r.name} · {r.grade}
             </option>
@@ -427,11 +432,12 @@ export function AdminPage() {
         title="The gym, at a glance."
         description="A read-only operations preview. No production records or administrative actions."
       />
+      <SampleDataBanner resource={summary} />
       <div className="metric-grid">
-        <Metric label="Sample members" value={summary.members} detail="Illustrative total" />
-        <Metric label="Check-ins today" value={summary.checkIns} detail="Sample activity" />
-        <Metric label="Active routes" value={summary.activeRoutes} detail="Across all walls" />
-        <Metric label="Shop products" value={summary.products} detail="Sample inventory" />
+        <Metric label="Sample members" value={summary.data.members} detail="Illustrative total" />
+        <Metric label="Check-ins today" value={summary.data.checkIns} detail="Sample activity" />
+        <Metric label="Active routes" value={summary.data.activeRoutes} detail="Across all walls" />
+        <Metric label="Shop products" value={summary.data.products} detail="Sample inventory" />
       </div>
       <div className="admin-toolbar">
         <div className="category-tabs">
@@ -474,7 +480,7 @@ export function AdminPage() {
           </thead>
           <tbody>
             {tab === "Routes"
-              ? routes
+              ? routes.data
                   .filter((r) => r.name.toLowerCase().includes(q.toLowerCase()))
                   .map((r) => (
                     <tr key={r.id}>

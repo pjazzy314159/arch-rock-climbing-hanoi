@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -14,16 +14,25 @@ import {
   ChevronRight,
   Search,
   Mountain,
-  Users,
-  Dumbbell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PageHeading, RouteCard, TextLink } from "./shared";
-import { productQuery, routeQuery, formatPrice, type Product } from "@/services/arch";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { api, ApiError, ApiUnavailableError } from "@/services/api";
+import { PageHeading, RouteCard, ServiceIcon, TextLink } from "./shared";
+import { EmptyNotice, SampleDataBanner } from "./data-state";
+import {
+  productQuery,
+  routeQuery,
+  serviceQuery,
+  formatPrice,
+  type DataSource,
+  type Product,
+} from "@/services/arch";
 import gymPhoto from "@/assets/arch-gym.jpg";
 import shoePhoto from "@/assets/climbing-shoes.jpg";
 
 export function GymPage() {
+  const { data: services } = useSuspenseQuery(serviceQuery);
   return (
     <main className="page-main">
       <PageHeading
@@ -31,6 +40,7 @@ export function GymPage() {
         title="A space to find your next move."
         description="Built for climbing. Made for connection. Welcome to ARCH."
       />
+      <SampleDataBanner resource={services} />
       <img
         className="gym-banner"
         src={gymPhoto}
@@ -39,30 +49,13 @@ export function GymPage() {
         alt="Industrial bouldering gym with colorful holds and community seating"
       />
       <div className="info-grid">
-        <div>
-          <Mountain />
-          <h3>Walls for every climber</h3>
-          <p>
-            From approachable slabs to powerful overhangs. Find your flow on a variety of wall
-            angles and climbing styles.
-          </p>
-        </div>
-        <div>
-          <Users />
-          <h3>Your people are here</h3>
-          <p>
-            Share a beta, celebrate a send, or take your first step. Our community makes every
-            session a little better.
-          </p>
-        </div>
-        <div>
-          <Dumbbell />
-          <h3>Room to grow</h3>
-          <p>
-            Warm-up areas, a training zone, and fresh route setting keep your sessions challenging
-            and rewarding.
-          </p>
-        </div>
+        {services.data.map((service) => (
+          <div key={service.title}>
+            <ServiceIcon name={service.icon} />
+            <h3>{service.title}</h3>
+            <p>{service.summary}</p>
+          </div>
+        ))}
       </div>
       <section className="split-band">
         <div>
@@ -72,7 +65,7 @@ export function GymPage() {
             Comfortable clothes, a water bottle, and a willingness to try. Climbing shoes can be
             rented at reception. Our team will help you get started with a safety introduction.
           </p>
-          <TextLink to="/contact">Plan your visit</TextLink>
+          <TextLink to="/visit">Plan your visit</TextLink>
         </div>
         <div className="visit-facts">
           <h3>Good to know</h3>
@@ -188,13 +181,16 @@ export function RoutesPage() {
   const [zone, setZone] = useState("All walls");
   const [query, setQuery] = useState("");
   const [fresh, setFresh] = useState(false);
-  const filtered = routes.filter(
+  const list = routes.data;
+  const filtered = list.filter(
     (r) =>
       (grade === "All grades" || r.grade === grade) &&
       (zone === "All walls" || r.zone === zone) &&
       (!fresh || r.fresh) &&
       `${r.name} ${r.style}`.toLowerCase().includes(query.toLowerCase()),
   );
+  const grades = ["All grades", ...Array.from(new Set(list.map((r) => r.grade))).sort()];
+  const zones = ["All walls", ...Array.from(new Set(list.map((r) => r.zone))).sort()];
   return (
     <main className="page-main">
       <PageHeading
@@ -202,8 +198,11 @@ export function RoutesPage() {
         title="Find your next challenge."
         description="Balance, power, or a little problem-solving. There’s a route with your name on it."
       >
-        <span className="sample-badge">SAMPLE ROUTES</span>
+        <span className="sample-badge">
+          {routes.source === "api" ? "LIVE ROUTES" : "SAMPLE ROUTES"}
+        </span>
       </PageHeading>
+      <SampleDataBanner resource={routes} />
       <div className="filter-bar">
         <label className="search-field">
           <Search size={18} />
@@ -215,12 +214,12 @@ export function RoutesPage() {
           />
         </label>
         <select aria-label="Filter grade" value={grade} onChange={(e) => setGrade(e.target.value)}>
-          {["All grades", "V0", "V1", "V3", "V4", "V5", "V6"].map((g) => (
+          {grades.map((g) => (
             <option key={g}>{g}</option>
           ))}
         </select>
         <select aria-label="Filter wall" value={zone} onChange={(e) => setZone(e.target.value)}>
-          {["All walls", "The Main Wall", "The Slab", "The Cave"].map((z) => (
+          {zones.map((z) => (
             <option key={z}>{z}</option>
           ))}
         </select>
@@ -230,14 +229,24 @@ export function RoutesPage() {
         </label>
       </div>
       <div className="result-count">
-        {filtered.length} routes <span>Sample collection · October 2026</span>
+        {filtered.length} routes{" "}
+        <span>
+          {routes.source === "api" ? "Live from ARCH" : "Sample collection · October 2026"}
+        </span>
       </div>
-      <div className="route-grid">
-        {filtered.map((r) => (
-          <RouteCard route={r} key={r.id} />
-        ))}
-      </div>
-      {filtered.length === 0 && (
+      {list.length === 0 ? (
+        <EmptyNotice
+          title="No routes are published yet."
+          description="ARCH has not published the current route list. It will appear here as soon as the setters publish it."
+        />
+      ) : (
+        <div className="route-grid">
+          {filtered.map((r) => (
+            <RouteCard route={r} key={r.id} />
+          ))}
+        </div>
+      )}
+      {list.length > 0 && filtered.length === 0 && (
         <div className="empty-state">
           <Mountain />
           <h3>No routes match this search.</h3>
@@ -284,6 +293,8 @@ function ProductCard({ product }: { product: Product }) {
 export function ShopPage() {
   const { data: products } = useSuspenseQuery(productQuery);
   const [category, setCategory] = useState("All shoes");
+  const list = products.data;
+  const categories = ["All shoes", ...Array.from(new Set(list.map((p) => p.category)))];
   return (
     <main className="page-main">
       <PageHeading
@@ -291,10 +302,15 @@ export function ShopPage() {
         title="Every great move starts with a good fit."
         description="A considered selection for your first climb, your next project, and everything between."
       >
-        <span className="sample-badge">SAMPLE CATALOG · NO CHECKOUT</span>
+        <span className="sample-badge">
+          {products.source === "api"
+            ? "LIVE CATALOG · NO CHECKOUT"
+            : "SAMPLE CATALOG · NO CHECKOUT"}
+        </span>
       </PageHeading>
+      <SampleDataBanner resource={products} />
       <div className="category-tabs">
-        {["All shoes", "Beginner", "All-round", "Performance"].map((c) => (
+        {categories.map((c) => (
           <Button
             variant={category === c ? "default" : "ghost"}
             key={c}
@@ -304,13 +320,20 @@ export function ShopPage() {
           </Button>
         ))}
       </div>
-      <div className="product-grid">
-        {products
-          .filter((p) => category === "All shoes" || p.category === category)
-          .map((p) => (
-            <ProductCard product={p} key={p.id} />
-          ))}
-      </div>
+      {list.length === 0 ? (
+        <EmptyNotice
+          title="The shoe shop is being set up."
+          description="ARCH has not published the current collection yet. It will appear here as soon as it is ready."
+        />
+      ) : (
+        <div className="product-grid">
+          {list
+            .filter((p) => category === "All shoes" || p.category === category)
+            .map((p) => (
+              <ProductCard product={p} key={p.id} />
+            ))}
+        </div>
+      )}
       <div className="shop-note">
         <FootnoteIcon />
         <div>
@@ -325,7 +348,13 @@ export function ShopPage() {
 function FootnoteIcon() {
   return <Mountain size={26} />;
 }
-export function ProductPage({ product }: { product: Product }) {
+export function ProductPage({
+  product,
+  source = "sample",
+}: {
+  product: Product;
+  source?: DataSource;
+}) {
   const [size, setSize] = useState("");
   const [selected, setSelected] = useState(false);
   return (
@@ -349,7 +378,9 @@ export function ProductPage({ product }: { product: Product }) {
           <h1>{product.name}</h1>
           <div className="product-price">{formatPrice(product.price)}</div>
           <p>{product.description}</p>
-          <span className="sample-badge">SAMPLE PRODUCT · NO PAYMENTS</span>
+          <span className="sample-badge">
+            {source === "api" ? "LIVE PRODUCT · NO CHECKOUT" : "SAMPLE PRODUCT · NO PAYMENTS"}
+          </span>
           <fieldset className="size-selector">
             <legend>EU size {size && `— ${size}`}</legend>
             {["36", "37", "38", "39", "40", "41", "42", "43", "44"].map((s) => (
@@ -403,8 +434,53 @@ export function ProductPage({ product }: { product: Product }) {
   );
 }
 
+type ContactState =
+  | { status: "idle" }
+  | { status: "sending" }
+  | { status: "sent" }
+  | { status: "failed"; message: string };
+
 export function ContactPage() {
-  const [sent, setSent] = useState(false);
+  const [state, setState] = useState<ContactState>({ status: "idle" });
+  const hydrated = useHydrated();
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    setState({ status: "sending" });
+    try {
+      await api.submitContactMessage({
+        name: String(data.get("name") ?? ""),
+        email: String(data.get("email") ?? ""),
+        subject: String(data.get("subject") ?? "General"),
+        message: String(data.get("message") ?? ""),
+      });
+      form.reset();
+      setState({ status: "sent" });
+    } catch (error) {
+      if (error instanceof ApiUnavailableError) {
+        setState({
+          status: "failed",
+          message:
+            "The ARCH service is not reachable right now, so your message was not sent. Please try again later or contact the gym directly.",
+        });
+        return;
+      }
+      if (error instanceof ApiError) {
+        setState({
+          status: "failed",
+          message: `${error.message} Your message was not sent.`,
+        });
+        return;
+      }
+      setState({
+        status: "failed",
+        message: "Your message could not be sent. Please try again.",
+      });
+    }
+  }
+
   return (
     <main className="page-main">
       <PageHeading
@@ -449,15 +525,8 @@ export function ContactPage() {
             alt="The climbing walls and community space"
           />
         </div>
-        <form
-          className="contact-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setSent(true);
-          }}
-        >
+        <form className="contact-form" onSubmit={handleSubmit}>
           <h2>Drop us a message.</h2>
-          <span className="sample-badge">PREVIEW FORM · NOT SENT</span>
           <label>
             Your name
             <input required name="name" autoComplete="name" placeholder="Name" />
@@ -485,12 +554,18 @@ export function ContactPage() {
             Message
             <textarea required name="message" rows={4} placeholder="Tell us a little more…" />
           </label>
-          <Button type="submit" size="lg">
-            Preview message <ArrowUpRight />
+          <Button type="submit" size="lg" disabled={!hydrated || state.status === "sending"}>
+            {state.status === "sending" ? "Sending…" : "Send message"}
+            <ArrowUpRight />
           </Button>
-          {sent && (
+          {state.status === "sent" && (
             <p className="feedback" role="status">
-              Your message passed validation. This preview does not send or store messages.
+              Thanks — your message reached the ARCH team. They will get back to you.
+            </p>
+          )}
+          {state.status === "failed" && (
+            <p className="feedback error" role="alert">
+              {state.message}
             </p>
           )}
         </form>

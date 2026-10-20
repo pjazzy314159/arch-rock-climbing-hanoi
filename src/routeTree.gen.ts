@@ -12,11 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as CoursesRouteImport } from './routes/courses'
+import { Route as EventsRouteImport } from './routes/events'
 import { Route as GymRouteImport } from './routes/gym'
 import { Route as MemberRouteImport } from './routes/member'
 import { Route as RoutesRouteImport } from './routes/routes'
 import { Route as ShopRouteImport } from './routes/shop'
 import { Route as TourRouteImport } from './routes/tour'
+import { Route as VisitRouteImport } from './routes/visit'
 import { Route as MemberBetaRouteImport } from './routes/member_.beta'
 import { Route as MemberLogbookRouteImport } from './routes/member_.logbook'
 import { Route as MemberProgressRouteImport } from './routes/member_.progress'
@@ -35,6 +38,16 @@ const AdminRoute = AdminRouteImport.update({
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesRoute = CoursesRouteImport.update({
+  id: '/courses',
+  path: '/courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventsRoute = EventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GymRoute = GymRouteImport.update({
@@ -62,6 +75,11 @@ const TourRoute = TourRouteImport.update({
   path: '/tour',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VisitRoute = VisitRouteImport.update({
+  id: '/visit',
+  path: '/visit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MemberBetaRoute = MemberBetaRouteImport.update({
   id: '/member_/beta',
   path: '/member/beta',
@@ -87,11 +105,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/contact': typeof ContactRoute
+  '/courses': typeof CoursesRoute
+  '/events': typeof EventsRoute
   '/gym': typeof GymRoute
   '/member': typeof MemberRoute
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
   '/tour': typeof TourRoute
+  '/visit': typeof VisitRoute
   '/member/beta': typeof MemberBetaRoute
   '/member/logbook': typeof MemberLogbookRoute
   '/member/progress': typeof MemberProgressRoute
@@ -101,11 +122,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/contact': typeof ContactRoute
+  '/courses': typeof CoursesRoute
+  '/events': typeof EventsRoute
   '/gym': typeof GymRoute
   '/member': typeof MemberRoute
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
   '/tour': typeof TourRoute
+  '/visit': typeof VisitRoute
   '/member/beta': typeof MemberBetaRoute
   '/member/logbook': typeof MemberLogbookRoute
   '/member/progress': typeof MemberProgressRoute
@@ -116,11 +140,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/contact': typeof ContactRoute
+  '/courses': typeof CoursesRoute
+  '/events': typeof EventsRoute
   '/gym': typeof GymRoute
   '/member': typeof MemberRoute
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
   '/tour': typeof TourRoute
+  '/visit': typeof VisitRoute
   '/member_/beta': typeof MemberBetaRoute
   '/member_/logbook': typeof MemberLogbookRoute
   '/member_/progress': typeof MemberProgressRoute
@@ -132,11 +159,14 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/contact'
+    | '/courses'
+    | '/events'
     | '/gym'
     | '/member'
     | '/routes'
     | '/shop'
     | '/tour'
+    | '/visit'
     | '/member/beta'
     | '/member/logbook'
     | '/member/progress'
@@ -146,11 +176,14 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/contact'
+    | '/courses'
+    | '/events'
     | '/gym'
     | '/member'
     | '/routes'
     | '/shop'
     | '/tour'
+    | '/visit'
     | '/member/beta'
     | '/member/logbook'
     | '/member/progress'
@@ -160,11 +193,14 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/contact'
+    | '/courses'
+    | '/events'
     | '/gym'
     | '/member'
     | '/routes'
     | '/shop'
     | '/tour'
+    | '/visit'
     | '/member_/beta'
     | '/member_/logbook'
     | '/member_/progress'
@@ -175,11 +211,14 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   ContactRoute: typeof ContactRoute
+  CoursesRoute: typeof CoursesRoute
+  EventsRoute: typeof EventsRoute
   GymRoute: typeof GymRoute
   MemberRoute: typeof MemberRoute
   RoutesRoute: typeof RoutesRoute
   ShopRoute: typeof ShopRoute
   TourRoute: typeof TourRoute
+  VisitRoute: typeof VisitRoute
   MemberBetaRoute: typeof MemberBetaRoute
   MemberLogbookRoute: typeof MemberLogbookRoute
   MemberProgressRoute: typeof MemberProgressRoute
@@ -207,6 +246,20 @@ declare module '@tanstack/react-router' {
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/courses': {
+      id: '/courses'
+      path: '/courses'
+      fullPath: '/courses'
+      preLoaderRoute: typeof CoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/events': {
+      id: '/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof EventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gym': {
@@ -244,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TourRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/visit': {
+      id: '/visit'
+      path: '/visit'
+      fullPath: '/visit'
+      preLoaderRoute: typeof VisitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/member_/beta': {
       id: '/member_/beta'
       path: '/member/beta'
@@ -279,11 +339,14 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   ContactRoute: ContactRoute,
+  CoursesRoute: CoursesRoute,
+  EventsRoute: EventsRoute,
   GymRoute: GymRoute,
   MemberRoute: MemberRoute,
   RoutesRoute: RoutesRoute,
   ShopRoute: ShopRoute,
   TourRoute: TourRoute,
+  VisitRoute: VisitRoute,
   MemberBetaRoute: MemberBetaRoute,
   MemberLogbookRoute: MemberLogbookRoute,
   MemberProgressRoute: MemberProgressRoute,

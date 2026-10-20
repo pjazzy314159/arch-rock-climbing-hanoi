@@ -13,6 +13,9 @@
     "test": "node scripts/run-tests.mjs",
     "test:watch": "node scripts/run-tests.mjs --watch",
     "screenshot": "node scripts/screenshot.mjs",
+    "check:pages": "node scripts/check-pages.mjs",
+    "check:contact": "node scripts/check-contact-form.mjs",
+    "preview:build": "node scripts/preview-build.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "overrides": {
