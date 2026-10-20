@@ -144,12 +144,10 @@ export type ApiVoteTally = {
 
 export type ApiLeaderboardEntry = {
   rank: number;
-  user_id: number;
   display_name: string;
   total_sends: number;
   best_grade: string | null;
   score: number;
-  climbing_level: number;
 };
 
 export type ApiAssistantStatus = {

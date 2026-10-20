@@ -109,10 +109,16 @@ class AchievementOut(ORMModel):
 
 
 class LeaderboardEntry(BaseModel):
+    """A climber's place on the public leaderboard.
+
+    Only what the page shows is published. The internal user id is not
+    included, and neither is the climber's self-reported level, because the
+    brief asks not to publish personal information on a public leaderboard
+    until ARCH has confirmed that it belongs there.
+    """
+
     rank: int
-    user_id: int
     display_name: str
     total_sends: int
     best_grade: str | None
     score: int
-    climbing_level: int

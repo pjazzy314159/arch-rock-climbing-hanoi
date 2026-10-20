@@ -291,12 +291,10 @@ def leaderboard(limit: int = 20, db: Session = Depends(get_db)) -> list[Leaderbo
         entries.append(
             LeaderboardEntry(
                 rank=rank,
-                user_id=row.user_id,
                 display_name=row.display_name,
                 total_sends=row.total_sends,
                 best_grade=row.best_grade,
                 score=row.score,
-                climbing_level=row.climbing_level,
             )
         )
         if len(entries) >= max(1, min(limit, 100)):

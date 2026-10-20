@@ -328,8 +328,8 @@ export function LeaderboardPage() {
               </tr>
             </thead>
             <tbody>
-              {data?.data?.map((entry) => (
-                <tr key={entry.userId}>
+              {data?.data?.map((entry, index) => (
+                <tr key={`${entry.rank}-${entry.displayName}-${index}`}>
                   <td>
                     <span className="leaderboard-rank">
                       {entry.rank === 1 ? <Trophy size={16} /> : `#${entry.rank}`}

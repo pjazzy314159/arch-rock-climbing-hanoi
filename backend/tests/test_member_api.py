@@ -242,5 +242,21 @@ def test_the_leaderboard_lists_climbers_with_sends(
     assert entries[0]["rank"] == 1
 
 
+def test_the_public_leaderboard_publishes_only_what_the_page_shows(
+    client: TestClient, customer
+) -> None:
+    """The brief asks not to publish personal information on a public board."""
+    token = login(client, customer.email)
+    client.post(
+        "/api/me/logbook",
+        json={"route_name": "A", "grade": "V4", "result": "sent"},
+        headers=auth_headers(token),
+    )
+    entry = client.get("/api/me/leaderboard").json()[0]
+    assert set(entry) == {"rank", "display_name", "total_sends", "best_grade", "score"}
+    assert "user_id" not in entry
+    assert "climbing_level" not in entry
+
+
 def test_the_leaderboard_is_public(client: TestClient, customer) -> None:
     assert client.get("/api/me/leaderboard").status_code == 200

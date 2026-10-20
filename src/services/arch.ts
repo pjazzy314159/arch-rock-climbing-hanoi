@@ -181,12 +181,10 @@ export type FaqEntry = {
 
 export type LeaderboardEntry = {
   rank: number;
-  userId: number;
   displayName: string;
   totalSends: number;
   bestGrade: string | null;
   score: number;
-  climbingLevel: number;
 };
 
 export type VoteTally = {
@@ -608,12 +606,10 @@ export function toFaqEntry(entry: ApiFaqEntry): FaqEntry {
 export function toLeaderboardEntry(entry: ApiLeaderboardEntry): LeaderboardEntry {
   return {
     rank: entry.rank,
-    userId: entry.user_id,
     displayName: entry.display_name,
     totalSends: entry.total_sends,
     bestGrade: entry.best_grade,
     score: entry.score,
-    climbingLevel: entry.climbing_level,
   };
 }
 
