@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ARCH">
+  <rect width="64" height="64" rx="12" fill="#0d0e0d" />
+  <path
+    d="M12 50 L26 20 L34 36 L40 26 L52 50 Z"
+    fill="none"
+    stroke="#c8f542"
+    stroke-width="4"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+</svg>

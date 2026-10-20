@@ -86,7 +86,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Find your next move at ARCH Rock Climbing Hanoi." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-
     ],
     links: [
       {
@@ -96,7 +95,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap",
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -125,9 +127,13 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <a href="#main-content" className="skip-link">Skip to content</a>
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
       <Header />
-      <div id="main-content"><Outlet /></div>
+      <div id="main-content">
+        <Outlet />
+      </div>
       <Footer />
     </QueryClientProvider>
   );
