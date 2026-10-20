@@ -36,6 +36,7 @@ dist-ssr
 # These two are tracked on purpose.
 !/.gitignore
 !/.env.example
+!/.prettierignore
 
 # Local artefacts produced by the development tooling.
 var/

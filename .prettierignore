@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-ssr
+.output
+.vinxi
+.tanstack
+.wrangler
+var
+pnpm-lock.yaml
+package-lock.json
+bun.lock
+routeTree.gen.ts
+
+# The Python backend has its own formatter (ruff) and its own conventions.
+backend

@@ -11,16 +11,16 @@ in a second commit). Working tree was clean before any changes.
 
 ### Stack (frontend — keep as-is)
 
-| Concern | Choice |
-| --- | --- |
-| Framework | TanStack Start 1.168.60 (React 19.2, SSR + file-based routing) |
-| Build | Vite 8.1.5 via `@lovable.dev/vite-tanstack-config` 2.26.5, Nitro/Cloudflare output |
-| Routing | TanStack Router 1.170.41, file-based `src/routes/*.tsx` |
-| Data | TanStack Query 5.101.4 |
-| Styling | Tailwind CSS 4.2.1 + a hand-written `src/styles.css` design layer |
-| UI kit | shadcn-style components in `src/components/ui/*` (Radix + CVA) |
+| Concern         | Choice                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Framework       | TanStack Start 1.168.60 (React 19.2, SSR + file-based routing)                                                           |
+| Build           | Vite 8.1.5 via `@lovable.dev/vite-tanstack-config` 2.26.5, Nitro/Cloudflare output                                       |
+| Routing         | TanStack Router 1.170.41, file-based `src/routes/*.tsx`                                                                  |
+| Data            | TanStack Query 5.101.4                                                                                                   |
+| Styling         | Tailwind CSS 4.2.1 + a hand-written `src/styles.css` design layer                                                        |
+| UI kit          | shadcn-style components in `src/components/ui/*` (Radix + CVA)                                                           |
 | Package manager | Bun (`bun.lock`, lockfile v1). Bun was **not installed**; installed via `npm i -g bun` (1.4.3) to preserve the lockfile. |
-| Tests | Vitest 4.1.10 + Testing Library, one routing test file |
+| Tests           | Vitest 4.1.10 + Testing Library, one routing test file                                                                   |
 
 ### Critical gaps found in the import
 
@@ -43,14 +43,14 @@ in a second commit). Working tree was clean before any changes.
 
 ### Existing features (all mock / no persistence)
 
-| Area | State |
-| --- | --- |
-| Public pages | `/`, `/gym`, `/tour`, `/routes`, `/shop`, `/shop/:productId`, `/contact` — complete UI, mock content, clearly labelled as samples |
-| Route directory | Filtering by grade/wall/search/fresh, mock routes |
-| Member area | `/member`, `/member/logbook`, `/member/beta`, `/member/progress` — mock, no auth, explicitly "no sign-in or access protection" |
-| Admin | `/admin` — read-only mock dashboard |
-| Navigation | Sticky header, mobile menu, footer, skip link, 404 page, error boundary |
-| SEO | Per-route `head()` metadata, sitemap/robots support in the Start plugin |
+| Area            | State                                                                                                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Public pages    | `/`, `/gym`, `/tour`, `/routes`, `/shop`, `/shop/:productId`, `/contact` — complete UI, mock content, clearly labelled as samples |
+| Route directory | Filtering by grade/wall/search/fresh, mock routes                                                                                 |
+| Member area     | `/member`, `/member/logbook`, `/member/beta`, `/member/progress` — mock, no auth, explicitly "no sign-in or access protection"    |
+| Admin           | `/admin` — read-only mock dashboard                                                                                               |
+| Navigation      | Sticky header, mobile menu, footer, skip link, 404 page, error boundary                                                           |
+| SEO             | Per-route `head()` metadata, sitemap/robots support in the Start plugin                                                           |
 
 ### No backend existed
 
@@ -74,17 +74,22 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 
 ## 3. Roadmap
 
-| # | Task | Status |
-| --- | --- | --- |
-| 1 | Repository audit, restore missing entries, install dependencies, baseline build/test/lint | `DONE` |
-| 2 | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `IN_PROGRESS` |
-| 3 | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract | `TODO` |
-| 4 | Authentication, roles, client records and safety agreements | `TODO` |
-| 5 | Routes, route status, difficulty voting, leaderboard | `TODO` |
-| 6 | Staff/admin: task assignment, checklists, schedules, events | `TODO` |
-| 7 | AI customer-support assistant with grounded fallback | `TODO` |
-| 8 | Shop/media polish, deployment configuration, environment documentation | `TODO` |
-| 9 | Final verification, `LOCAL_DEVELOPMENT.md`, handover | `TODO` |
+| #   | Task                                                                                             | Status |
+| --- | ------------------------------------------------------------------------------------------------ | ------ |
+| 1   | Repository audit, restore missing entries, install dependencies, baseline build/test/lint        | `DONE` |
+| 2   | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `TODO` |
+| 3   | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract                          | `DONE` |
+| 4   | Authentication, roles, client records and safety agreements                                      | `TODO` |
+| 5   | Routes, route status, difficulty voting, leaderboard                                             | `TODO` |
+| 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `TODO` |
+| 7   | AI customer-support assistant with grounded fallback                                             | `TODO` |
+| 8   | Shop/media polish, deployment configuration, environment documentation                           | `TODO` |
+| 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `TODO` |
+
+> Task order note: Task 3 (the backend) was completed **before** Task 2 (the
+> frontend service layer) so that the frontend could be written against a real,
+> running API contract instead of a guessed one. The task numbering is kept
+> for traceability.
 
 ---
 
@@ -125,17 +130,114 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 
 ---
 
+### Task 3 — FastAPI backend, data model and API contract (`DONE`)
+
+**Changes** (all new, under `backend/`)
+
+- `app/config.py` — pydantic-settings configuration. All secrets come from
+  environment variables; the app refuses to start in production with the
+  default `ARCH_SECRET_KEY`, and rejects a wildcard `CORS_ORIGINS`.
+- `app/db.py` — SQLAlchemy 2.0 engine, session factory, `Base`.
+- `app/models/` — `users` (roles, safety agreements), `content` (gym record,
+  opening hours, prices, services, courses, events, rules, FAQ, contact
+  messages, content revisions), `climbing` (routes, votes, achievements),
+  `staff` (tasks, checklist items, shifts), `commerce` (products).
+- `app/schemas/` — Pydantic request/response models for every endpoint.
+- `app/security.py` — bcrypt hashing, JWT issuing/verification, dummy hash for
+  constant-time login.
+- `app/deps.py` — `get_current_user`, `get_optional_user` and role guards.
+  Authorisation reads the role from the **database**, never from the token.
+- `app/services/climbing.py` — grade arithmetic, vote tallying, leaderboard
+  scoring and ranking, all with explicit, testable rules.
+- `app/services/assistant.py` — knowledge-base retrieval, optional grounded
+  model call, and an explicit "not covered" fallback.
+- `app/api/` — `public`, `auth`, `member`, `staff`, `admin`, `assistant`.
+- `app/main.py` — application, CORS, `/api/health`, validation error handler.
+- `app/seed.py` — runs the Alembic migrations, then seeds the gym record,
+  facility descriptions, draft rules and the FAQ. `--demo` adds clearly
+  labelled sample routes, products, climbs, votes and accounts. `--reset` rolls
+  the schema back first.
+- `migrations/` — Alembic environment plus the initial revision
+  `c41ce9aba698` covering every table.
+- `tests/` — 114 tests.
+- `backend/README.md` — configuration, endpoint table, business rules, security
+  notes and known gaps.
+
+**Verification**
+
+- `uv run ruff check .` → clean. `uv run ruff format --check .` → 42 files
+  already formatted.
+- `uv run pytest` → **114 passed**.
+- `uv run alembic upgrade head` on an empty database → applies cleanly;
+  `uv run alembic current` → `c41ce9aba698 (head)`; `uv run alembic check` →
+  "No new upgrade operations detected" (models and migration agree);
+  `uv run alembic downgrade base` → clean rollback, then re-upgrade.
+- `uv run python -m app.seed --reset --demo` → schema created through Alembic
+  and seeded; running it twice does not duplicate rows.
+- Live API smoke test against `http://localhost:8000`: `/api/health`,
+  `/api/public/*`, `/api/auth/login` (demo customer), `/api/me/dashboard`,
+  `/api/me/agreement`, `/api/me/leaderboard`, `/api/assistant/chat` all
+  returned the expected payloads.
+
+**Security review — issues found and fixed**
+
+- The production secret-key check only matched the exact string
+  `"production"`. → now case-insensitive and also matches `"prod"`, and it is
+  covered by a test that uses the environment variable.
+- `CORS_ORIGINS=*` would have been combined with credentialed requests. →
+  a wildcard is now rejected at start-up.
+- Passwords longer than bcrypt's 72-byte limit were silently truncated. →
+  they are now rejected, measured in UTF-8 bytes.
+- The login endpoint returned faster for an unknown address than for a known
+  one, which allowed account enumeration by timing. → the password check now
+  always runs, against a dummy hash when the address is unknown, and both
+  cases return the same message.
+- `POST /api/staff/tasks/{id}/checklist` used a _response_ schema as its
+  request body, so a client had to send `id`, `task_id`, `done_at`… → it now
+  takes a `ChecklistItemIn` body.
+- The demo seed could create accounts with well-known development passwords in
+  a production environment. → it refuses to run when `ARCH_ENVIRONMENT` is a
+  production environment.
+- The seed used `create_all`, which could create the schema without recording
+  the Alembic revision, leaving the database in a state where a later
+  `alembic upgrade head` failed. → the seed now runs the migrations itself.
+- Demo accounts used `@arch.local` addresses, which the API correctly
+  rejects (`.local` is a reserved domain) — signing in with them returned 422. → the demo addresses now use `example.com`.
+
+**Known gaps (documented in `backend/README.md`, deployment responsibilities)**
+
+- No rate limiting on sign-in or the contact form — must come from the
+  reverse proxy.
+- No e-mail verification on self-registration.
+- No token revocation; sign-out is client-side only.
+- No audit log of privileged actions (`ContentRevision` exists but is unused).
+- Only the V-scale grade format is scored; other grade systems are ignored by
+  the leaderboard.
+
+**Open items**
+
+- The frontend still reads only from the mock adapter — wiring it to this API
+  is Task 2.
+- The `drizzle/` directory from the Lovable import is still inert; it is left
+  untouched rather than deleted, because removing it is not required by any
+  task.
+
+---
+
 ## 5. Decisions taken (and why)
 
-| Decision | Rationale |
-| --- | --- |
-| Keep TanStack Start + Tailwind v4 + TanStack Router | Existing Lovable stack; the brief says not to migrate without cause. |
-| New Python/FastAPI backend in `backend/` | The brief and README both prefer FastAPI + PostgreSQL. The existing Supabase scaffold has no tables and is not a working backend. |
-| SQLAlchemy 2.0 + Alembic, PostgreSQL target with SQLite dev fallback | No PostgreSQL server exists in this environment; the same models/migrations run on both. |
-| Frontend talks to the backend through `src/services/api.ts` | Keeps mock data isolated behind one replaceable boundary; the existing UI does not need rewriting. |
-| Keep the mock adapter as an explicit offline fallback | The site must still render when the backend is not running, and mock data must stay clearly labelled. |
-| Passwords hashed with `bcrypt`; JWT access tokens issued by the backend | Required by the brief; avoids adding a JS auth dependency to the frontend. |
-| AI provider credentials stay server-side; no provider configured → grounded FAQ fallback | The brief forbids exposing keys and forbids pretending a fallback is live AI. |
+| Decision                                                                                 | Rationale                                                                                                                         |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Keep TanStack Start + Tailwind v4 + TanStack Router                                      | Existing Lovable stack; the brief says not to migrate without cause.                                                              |
+| New Python/FastAPI backend in `backend/`                                                 | The brief and README both prefer FastAPI + PostgreSQL. The existing Supabase scaffold has no tables and is not a working backend. |
+| SQLAlchemy 2.0 + Alembic, PostgreSQL target with SQLite dev fallback                     | No PostgreSQL server exists in this environment; the same models/migrations run on both.                                          |
+| Frontend talks to the backend through `src/services/api.ts`                              | Keeps mock data isolated behind one replaceable boundary; the existing UI does not need rewriting.                                |
+| Keep the mock adapter as an explicit offline fallback                                    | The site must still render when the backend is not running, and mock data must stay clearly labelled.                             |
+| Passwords hashed with `bcrypt`; JWT access tokens issued by the backend                  | Required by the brief; avoids adding a JS auth dependency to the frontend.                                                        |
+| The role is read from the database on every request, never from the token                | A stale or tampered token claim must not be able to grant access.                                                                 |
+| The seed runs the Alembic migrations instead of `create_all`                             | Keeps the schema and the recorded migration revision from drifting apart.                                                         |
+| Prices, courses and events are seeded empty; rules are seeded as _drafts_                | ARCH has not supplied these yet, so the site must show a labelled placeholder rather than invented numbers.                       |
+| AI provider credentials stay server-side; no provider configured → grounded FAQ fallback | The brief forbids exposing keys and forbids pretending a fallback is live AI.                                                     |
 
 ---
 
