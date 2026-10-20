@@ -1060,6 +1060,57 @@
   margin-top: 1rem;
 }
 
+/* The contact inbox */
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.message-card {
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.message-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.message-head strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.message-head a {
+  font-size: 0.8rem;
+  color: var(--color-primary);
+}
+
+.message-meta {
+  display: flex;
+  gap: 0.9rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.message-body {
+  margin-top: 0.75rem;
+  color: var(--color-foreground);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
 /* ==========================================================================
    Route detail and voting
    ========================================================================== */

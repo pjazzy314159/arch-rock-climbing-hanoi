@@ -23,6 +23,7 @@ import type {
   ApiAssistantStatus,
   ApiCatalogProduct,
   ApiChecklistItem,
+  ApiContactMessage,
   ApiCourse,
   ApiDashboard,
   ApiEvent,
@@ -331,6 +332,16 @@ export const adminApi = {
 
   agreements: (status?: string) =>
     apiRequest<ApiAgreement[]>(`/api/admin/agreements${status ? `?status=${status}` : ""}`),
+
+  contactMessages: (includeHandled = false) =>
+    apiRequest<ApiContactMessage[]>(
+      `/api/admin/contact${includeHandled ? "?include_handled=true" : ""}`,
+    ),
+
+  markContactMessage: (messageId: number, handled: boolean) =>
+    apiRequest<ApiContactMessage>(`/api/admin/contact/${messageId}?handled=${handled}`, {
+      method: "PATCH",
+    }),
 
   votes: (routeId?: number) =>
     apiRequest<

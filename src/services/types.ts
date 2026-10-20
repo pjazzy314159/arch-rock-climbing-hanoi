@@ -169,6 +169,17 @@ export type ApiAssistantAnswer = {
   disclaimer: string;
 };
 
+/** A message sent through the public contact form. */
+export type ApiContactMessage = {
+  id: number;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  handled: boolean;
+  created_at: string;
+};
+
 /** A checklist entry on a staff task. */
 export type ApiChecklistItem = {
   id: number;

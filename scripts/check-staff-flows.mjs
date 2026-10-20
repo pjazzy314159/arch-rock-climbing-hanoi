@@ -132,6 +132,28 @@ await page.locator('.content-block button[type="submit"]').click();
 await page.waitForTimeout(2000);
 console.log("event published:", await page.locator(`text=${eventTitle}`).first().isVisible());
 
+// Messages: an enquiry sent through the contact form has to arrive.
+step("the contact inbox");
+await page.goto(`${baseUrl}/contact`, { waitUntil: "networkidle", timeout: 60_000 });
+const enquiry = `Browser enquiry ${Date.now()}`;
+await page.fill('input[name="name"]', "Browser Visitor");
+await page.fill('input[name="email"]', "browser-visitor@example.com");
+await page.fill('textarea[name="message"]', enquiry);
+await page.click('button[type="submit"]');
+await page.waitForTimeout(1500);
+
+await page.goto(`${baseUrl}/admin`, { waitUntil: "networkidle", timeout: 60_000 });
+await page.waitForTimeout(1200);
+await page.click('.category-tabs button:has-text("Messages")');
+await page.waitForTimeout(1500);
+console.log("enquiry received:", await page.locator(`text=${enquiry}`).first().isVisible());
+const markButton = page.locator('button:has-text("Mark as handled")').first();
+if (await markButton.count()) {
+  await markButton.click();
+  await page.waitForTimeout(1500);
+}
+console.log("enquiry marked handled:", (await page.locator(`text=${enquiry}`).count()) === 0);
+
 await page.screenshot({ path: "var/screenshots/admin-operations.png", fullPage: true });
 await browser.close();
 

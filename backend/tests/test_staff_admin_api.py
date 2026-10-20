@@ -252,3 +252,50 @@ def test_task_status_values_are_validated(client: TestClient, db, staff) -> None
         headers=auth_headers(token),
     )
     assert response.status_code == 422
+
+
+def test_a_contact_message_can_be_read_and_handled(client: TestClient, admin, customer) -> None:
+    """What the contact form collects has to be readable by the gym."""
+    sent = client.post(
+        "/api/public/contact",
+        json={
+            "name": "Interested Visitor",
+            "email": "visitor@example.com",
+            "subject": "My first visit",
+            "message": "I would like to come and try it out.",
+        },
+    )
+    assert sent.status_code == 201
+    message_id = sent.json()["id"]
+
+    token = login(client, admin.email)
+    listed = client.get("/api/admin/contact", headers=auth_headers(token))
+    assert listed.status_code == 200
+    messages = listed.json()
+    assert len(messages) == 1
+    assert messages[0]["email"] == "visitor@example.com"
+    assert messages[0]["handled"] is False
+
+    updated = client.patch(
+        f"/api/admin/contact/{message_id}?handled=true", headers=auth_headers(token)
+    )
+    assert updated.status_code == 200
+    assert updated.json()["handled"] is True
+
+    remaining = client.get("/api/admin/contact", headers=auth_headers(token)).json()
+    assert remaining == []
+
+
+def test_a_contact_message_is_not_visible_to_a_customer(client: TestClient, customer) -> None:
+    client.post(
+        "/api/public/contact",
+        json={
+            "name": "Interested Visitor",
+            "email": "visitor@example.com",
+            "subject": "General",
+            "message": "A private enquiry.",
+        },
+    )
+    token = login(client, customer.email)
+    response = client.get("/api/admin/contact", headers=auth_headers(token))
+    assert response.status_code == 403

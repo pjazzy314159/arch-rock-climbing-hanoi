@@ -18,6 +18,7 @@ from app.models import (
     Achievement,
     AgreementStatus,
     ClimbRoute,
+    ContactMessage,
     Course,
     Event,
     Product,
@@ -34,6 +35,7 @@ from app.schemas import (
     AdminSummaryOut,
     AgreementOut,
     AgreementUpdateIn,
+    ContactMessageOut,
     EventCreateIn,
     EventOut,
     RouteCreateIn,
@@ -124,6 +126,41 @@ def list_members(
         payload.total_sends = sends
         members.append(payload)
     return members
+
+
+@router.get("/contact", response_model=list[ContactMessageOut])
+def list_contact_messages(
+    include_handled: bool = Query(default=False),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[ContactMessageOut]:
+    """The enquiries sent through the contact form.
+
+    The form has always stored the message; without this the gym could never
+    read what it received.
+    """
+    statement = select(ContactMessage)
+    if not include_handled:
+        statement = statement.where(ContactMessage.handled.is_(False))
+    messages = db.scalars(statement.order_by(ContactMessage.created_at.desc())).all()
+    return [ContactMessageOut.model_validate(message) for message in messages]
+
+
+@router.patch("/contact/{message_id}", response_model=ContactMessageOut)
+def update_contact_message(
+    message_id: int,
+    handled: bool = True,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ContactMessageOut:
+    """Mark an enquiry as handled, or put it back in the inbox."""
+    message = db.get(ContactMessage, message_id)
+    if message is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+    message.handled = handled
+    db.commit()
+    db.refresh(message)
+    return ContactMessageOut.model_validate(message)
 
 
 @router.get("/routes", response_model=list[RouteSummary])

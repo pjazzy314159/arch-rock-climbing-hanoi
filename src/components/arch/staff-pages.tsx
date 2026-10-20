@@ -388,7 +388,77 @@ export function StaffTasksPage() {
 /* Administration                                                             */
 /* -------------------------------------------------------------------------- */
 
-type AdminTab = "Members" | "Routes" | "Tasks" | "Events";
+type AdminTab = "Members" | "Routes" | "Tasks" | "Events" | "Messages";
+
+function MessagesTab() {
+  const queryClient = useQueryClient();
+  const hydrated = useHydrated();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const messages = useQuery({
+    queryKey: ["admin", "contact"],
+    queryFn: () => adminApi.contactMessages(),
+  });
+
+  async function markHandled(id: number, handled: boolean) {
+    setPending(true);
+    setError(null);
+    try {
+      await adminApi.markContactMessage(id, handled);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "contact"] });
+    } catch (caught) {
+      setError(errorMessage(caught, "The message could not be updated."));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const list = messages.data ?? [];
+
+  return (
+    <>
+      {list.length === 0 ? (
+        <EmptyNotice
+          title="No enquiries waiting."
+          description="Messages sent through the contact form arrive here."
+        />
+      ) : (
+        <div className="message-list">
+          {list.map((message) => (
+            <article className="message-card" key={message.id}>
+              <div className="message-head">
+                <div>
+                  <strong>{message.name}</strong>
+                  <a href={`mailto:${message.email}`}>{message.email}</a>
+                </div>
+                <div className="message-meta">
+                  <span>{message.subject}</span>
+                  <span>{message.created_at.slice(0, 10)}</span>
+                </div>
+              </div>
+              <p className="message-body">{message.message}</p>
+              <div className="task-actions">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!hydrated || pending}
+                  onClick={() => markHandled(message.id, true)}
+                >
+                  <Check size={14} /> Mark as handled
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+      {error && (
+        <p className="feedback error" role="alert">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
 
 function MembersTab({ members }: { members: ApiAdminMember[] }) {
   const [search, setSearch] = useState("");
@@ -826,15 +896,17 @@ export function AdminDashboardPage() {
 
           <div className="admin-toolbar">
             <div className="category-tabs">
-              {(["Members", "Routes", "Tasks", "Events"] as AdminTab[]).map((option) => (
-                <Button
-                  key={option}
-                  variant={tab === option ? "default" : "ghost"}
-                  onClick={() => setTab(option)}
-                >
-                  {option}
-                </Button>
-              ))}
+              {(["Members", "Routes", "Tasks", "Events", "Messages"] as AdminTab[]).map(
+                (option) => (
+                  <Button
+                    key={option}
+                    variant={tab === option ? "default" : "ghost"}
+                    onClick={() => setTab(option)}
+                  >
+                    {option}
+                  </Button>
+                ),
+              )}
             </div>
           </div>
 
@@ -856,6 +928,7 @@ export function AdminDashboardPage() {
               <TasksTab tasks={tasks.data ?? []} />
             ))}
           {tab === "Events" && <EventsTab />}
+          {tab === "Messages" && <MessagesTab />}
         </>
       )}
       <p className="muted-note">
