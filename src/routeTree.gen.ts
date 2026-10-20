@@ -20,6 +20,7 @@ import { Route as MemberRouteImport } from './routes/member'
 import { Route as RoutesRouteImport } from './routes/routes'
 import { Route as ShopRouteImport } from './routes/shop'
 import { Route as SigninRouteImport } from './routes/signin'
+import { Route as StaffRouteImport } from './routes/staff'
 import { Route as TourRouteImport } from './routes/tour'
 import { Route as VisitRouteImport } from './routes/visit'
 import { Route as MemberBetaRouteImport } from './routes/member_.beta'
@@ -84,6 +85,11 @@ const SigninRoute = SigninRouteImport.update({
   path: '/signin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StaffRoute = StaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TourRoute = TourRouteImport.update({
   id: '/tour',
   path: '/tour',
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
   '/signin': typeof SigninRoute
+  '/staff': typeof StaffRoute
   '/tour': typeof TourRoute
   '/visit': typeof VisitRoute
   '/member/beta': typeof MemberBetaRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
   '/signin': typeof SigninRoute
+  '/staff': typeof StaffRoute
   '/tour': typeof TourRoute
   '/visit': typeof VisitRoute
   '/member/beta': typeof MemberBetaRoute
@@ -180,6 +188,7 @@ export interface FileRoutesById {
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
   '/signin': typeof SigninRoute
+  '/staff': typeof StaffRoute
   '/tour': typeof TourRoute
   '/visit': typeof VisitRoute
   '/member_/beta': typeof MemberBetaRoute
@@ -203,6 +212,7 @@ export interface FileRouteTypes {
     | '/routes'
     | '/shop'
     | '/signin'
+    | '/staff'
     | '/tour'
     | '/visit'
     | '/member/beta'
@@ -224,6 +234,7 @@ export interface FileRouteTypes {
     | '/routes'
     | '/shop'
     | '/signin'
+    | '/staff'
     | '/tour'
     | '/visit'
     | '/member/beta'
@@ -245,6 +256,7 @@ export interface FileRouteTypes {
     | '/routes'
     | '/shop'
     | '/signin'
+    | '/staff'
     | '/tour'
     | '/visit'
     | '/member_/beta'
@@ -267,6 +279,7 @@ export interface RootRouteChildren {
   RoutesRoute: typeof RoutesRoute
   ShopRoute: typeof ShopRoute
   SigninRoute: typeof SigninRoute
+  StaffRoute: typeof StaffRoute
   TourRoute: typeof TourRoute
   VisitRoute: typeof VisitRoute
   MemberBetaRoute: typeof MemberBetaRoute
@@ -356,6 +369,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SigninRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/staff': {
+      id: '/staff'
+      path: '/staff'
+      fullPath: '/staff'
+      preLoaderRoute: typeof StaffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tour': {
       id: '/tour'
       path: '/tour'
@@ -427,6 +447,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoutesRoute: RoutesRoute,
   ShopRoute: ShopRoute,
   SigninRoute: SigninRoute,
+  StaffRoute: StaffRoute,
   TourRoute: TourRoute,
   VisitRoute: VisitRoute,
   MemberBetaRoute: MemberBetaRoute,

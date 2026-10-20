@@ -165,6 +165,11 @@ export function MemberShell({ children, admin = false }: { children: ReactNode; 
                 Signed in as {user.email}. Your records are shown from the ARCH database and are
                 visible only to you.
               </p>
+              {(user.role === "staff" || user.role === "admin") && (
+                <Link to="/staff">
+                  Staff tools <ArrowUpRight size={14} />
+                </Link>
+              )}
               <Button variant="outline" size="sm" onClick={signOut}>
                 <LogOut size={14} /> Sign out
               </Button>

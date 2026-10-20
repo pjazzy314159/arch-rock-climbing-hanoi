@@ -7,6 +7,9 @@
  * but renders without its stylesheet. Cleaning first makes every build
  * self-contained and repeatable.
  *
+ * `.tanstack` is deliberately left alone: it is the router generator's
+ * scratch space and the development server needs it while it is running.
+ *
  * Usage: node scripts/clean-output.mjs
  */
 import { rm } from "node:fs/promises";
@@ -15,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
-for (const directory of [".output", "dist", ".nitro", ".tanstack"]) {
+for (const directory of [".output", "dist", ".nitro"]) {
   const target = path.join(repoRoot, directory);
   await rm(target, { recursive: true, force: true });
   console.log(`removed ${directory}/`);

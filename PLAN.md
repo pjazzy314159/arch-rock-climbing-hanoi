@@ -81,8 +81,8 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 | 3   | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract                          | `DONE`        |
 | 4   | Authentication, roles, client records and safety agreements                                      | `DONE`        |
 | 5   | Routes, route status, difficulty voting, leaderboard                                             | `DONE`        |
-| 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `IN_PROGRESS` |
-| 7   | AI customer-support assistant with grounded fallback                                             | `TODO`        |
+| 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `DONE`        |
+| 7   | AI customer-support assistant with grounded fallback                                             | `IN_PROGRESS` |
 | 8   | Shop/media polish, deployment configuration, environment documentation                           | `TODO`        |
 | 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `TODO`        |
 
@@ -526,6 +526,73 @@ pages, so both render the same first frame.
   backend but has no staff interface yet; it arrives with the operations work
   (Task 6).
 - The route beta is still illustrative content.
+
+### Task 6 — Staff and administration (`DONE`)
+
+**Changes**
+
+- `src/components/arch/staff-pages.tsx` — the staff and operations
+  workspaces.
+  - **My tasks** (`/staff`): the tasks assigned to the signed-in member of
+    staff, each with its status control and its checklist. A member can move a
+    task between _to do_, _in progress_ and _done_, add checklist items and
+    tick them off.
+  - **Operations** (`/admin`): the real summary (members, staff, active and
+    archived routes, open tasks, upcoming events, pending agreements), the
+    member records with their agreement status and send count, the route list
+    with an archive/activate control and a form to publish a new route, the
+    task list with a form to create work, and the event list with a form to
+    publish an event.
+  - A `PermissionDenied` panel is shown when the account does not hold the
+    role the page needs.
+- `src/routes/staff.tsx` and `src/routes/admin.tsx` — the two routes. The
+  administration page now shows real data instead of the sample preview.
+- `src/services/api.ts` — `staffApi` (my tasks, task status, checklist items,
+  shifts) and `adminApi` (summary, members, routes, task creation, events,
+  agreements, votes).
+- `src/services/types.ts` — the task, checklist, shift, summary and member
+  record wire types.
+- `src/components/arch/member-pages.tsx` — a member of staff or an
+  administrator gets a link to the staff tools from their member sidebar.
+- `src/styles.css` — the task card, the checklist and the task actions.
+- `scripts/check-staff-flows.mjs` — a browser check of the staff and
+  administration flows, including the permission refusals.
+- `src/test/staff-api.test.ts` — tests for the request shapes and the way a
+  refusal is reported.
+
+**Permissions**
+
+- The backend decides, not the frontend: `/api/staff/*` needs a staff or
+  administrator role, `/api/admin/*` needs an administrator, and a member of
+  staff may only see and change the tasks assigned to them.
+- The frontend never asks for data the account may not have, so a customer
+  opening `/staff` is not even sent a request that would be refused. The
+  browser check confirms that no request is refused.
+- An administrator cannot assign a task to a customer, and the backend
+  refuses it.
+
+**Verification**
+
+- Backend: `ruff check` and `ruff format --check` clean; **123 tests pass**.
+- Frontend: `bun run lint` 0 errors; `bun run typecheck` clean; `bun run test`
+  → **45 passing** (12 routing, 13 service mapping, 13 session, 7 staff API).
+- `bun run build` succeeds; the production build is correctly styled.
+- `node scripts/check-staff-flows.mjs` against the dev server and the
+  production build: a customer is refused on both the staff and the
+  administration pages; a member of staff sees their task, moves it to _in
+  progress_, adds a checklist item and ticks it; an administrator sees the
+  summary and the member records, publishes a route and an event, and sees
+  the task list. No browser errors.
+- `node scripts/check-pages.mjs` → all 19 pages clean on both servers.
+
+**Open items**
+
+- Shifts are on the backend but have no interface yet; the staff workspace
+  covers tasks and checklists.
+- Assigning a task to a specific member of staff from the interface is not
+  built yet; the API supports it and the backend test covers it.
+- The agreement queue (approving agreements on the member's behalf) is not in
+  the interface; the API supports it.
 
 ---
 

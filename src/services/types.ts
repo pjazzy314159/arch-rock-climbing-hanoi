@@ -168,6 +168,71 @@ export type ApiAssistantAnswer = {
   disclaimer: string;
 };
 
+/** A checklist entry on a staff task. */
+export type ApiChecklistItem = {
+  id: number;
+  task_id: number;
+  label: string;
+  position: number;
+  is_done: boolean;
+  done_at: string | null;
+  done_by_id: number | null;
+};
+
+/** A task assigned to a member of staff. */
+export type ApiTask = {
+  id: number;
+  title: string;
+  description: string;
+  status: "todo" | "in_progress" | "done" | "cancelled";
+  priority: "low" | "normal" | "high";
+  due_at: string | null;
+  completed_at: string | null;
+  assignee_id: number | null;
+  assignee_name: string | null;
+  created_by_id: number | null;
+  event_id: number | null;
+  created_at: string;
+  checklist: ApiChecklistItem[];
+};
+
+/** A scheduled shift for a member of staff. */
+export type ApiShift = {
+  id: number;
+  staff_id: number;
+  staff_name: string | null;
+  starts_at: string;
+  ends_at: string;
+  role: string;
+  notes: string;
+};
+
+/** The headline numbers of the operations dashboard. */
+export type ApiAdminSummary = {
+  members: number;
+  staff: number;
+  active_routes: number;
+  archived_routes: number;
+  upcoming_events: number;
+  open_tasks: number;
+  pending_agreements: number;
+  products: number;
+};
+
+/** A customer record, as the administrator sees it. */
+export type ApiAdminMember = {
+  id: number;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  membership_tier: string | null;
+  membership_status: string | null;
+  joined_on: string | null;
+  agreement_status: string | null;
+  total_sends: number;
+};
+
 /** A member account, as the backend returns it. */
 export type ApiUser = {
   id: number;

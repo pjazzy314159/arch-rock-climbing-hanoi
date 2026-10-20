@@ -16,10 +16,13 @@
 
 import type {
   ApiAchievement,
+  ApiAdminMember,
+  ApiAdminSummary,
   ApiAgreement,
   ApiAssistantAnswer,
   ApiAssistantStatus,
   ApiCatalogProduct,
+  ApiChecklistItem,
   ApiCourse,
   ApiDashboard,
   ApiEvent,
@@ -30,6 +33,8 @@ import type {
   ApiRouteSummary,
   ApiRule,
   ApiService,
+  ApiShift,
+  ApiTask,
   ApiToken,
   ApiUser,
   ApiVote,
@@ -253,4 +258,89 @@ export const memberApi = {
 
   withdrawVote: (routeId: number | string) =>
     apiRequest<void>(`/api/me/routes/${routeId}/vote`, { method: "DELETE" }),
+};
+
+/** The endpoints a member of staff uses for their own work. */
+export const staffApi = {
+  myTasks: (all = false) => apiRequest<ApiTask[]>(`/api/staff/tasks${all ? "?all=true" : ""}`),
+
+  updateTask: (taskId: number, body: { status?: string; title?: string; description?: string }) =>
+    apiRequest<ApiTask>(`/api/staff/tasks/${taskId}`, { method: "PATCH", body }),
+
+  updateTaskStatus: (taskId: number, status: string) =>
+    apiRequest<ApiTask>(`/api/staff/tasks/${taskId}/status`, { method: "POST", body: { status } }),
+
+  addChecklistItem: (taskId: number, label: string) =>
+    apiRequest<ApiChecklistItem>(`/api/staff/tasks/${taskId}/checklist`, {
+      method: "POST",
+      body: { label },
+    }),
+
+  updateChecklistItem: (itemId: number, body: { is_done: boolean; label?: string }) =>
+    apiRequest<ApiChecklistItem>(`/api/staff/checklist/${itemId}`, { method: "PATCH", body }),
+
+  shifts: () => apiRequest<ApiShift[]>("/api/staff/shifts"),
+};
+
+/** The endpoints only an administrator may use. */
+export const adminApi = {
+  summary: () => apiRequest<ApiAdminSummary>("/api/admin/summary"),
+
+  members: (search?: string) =>
+    apiRequest<ApiAdminMember[]>(
+      `/api/admin/members${search ? `?search=${encodeURIComponent(search)}` : ""}`,
+    ),
+
+  routes: (status?: string) =>
+    apiRequest<ApiRouteSummary[]>(`/api/admin/routes${status ? `?status=${status}` : ""}`),
+
+  createRoute: (body: {
+    name: string;
+    grade: string;
+    zone?: string;
+    color?: string;
+    style?: string;
+    setter?: string;
+    status?: string;
+  }) => apiRequest<ApiRouteSummary>("/api/admin/routes", { method: "POST", body }),
+
+  updateRoute: (routeId: number, body: Record<string, unknown>) =>
+    apiRequest<ApiRouteSummary>(`/api/admin/routes/${routeId}`, { method: "PATCH", body }),
+
+  tasks: () => apiRequest<ApiTask[]>("/api/admin/tasks"),
+
+  createTask: (body: {
+    title: string;
+    description?: string;
+    assignee_id?: number | null;
+    priority?: string;
+    due_at?: string | null;
+  }) => apiRequest<ApiTask>("/api/staff/tasks", { method: "POST", body }),
+
+  events: () => apiRequest<ApiEvent[]>("/api/admin/events"),
+
+  createEvent: (body: {
+    title: string;
+    starts_at: string;
+    description?: string;
+    location?: string;
+    capacity?: number | null;
+    is_public?: boolean;
+  }) => apiRequest<ApiEvent>("/api/admin/events", { method: "POST", body }),
+
+  agreements: (status?: string) =>
+    apiRequest<ApiAgreement[]>(`/api/admin/agreements${status ? `?status=${status}` : ""}`),
+
+  votes: (routeId?: number) =>
+    apiRequest<
+      {
+        id: number;
+        route_id: number;
+        user_id: number;
+        user_name: string;
+        value: string;
+        voter_level: number;
+        created_at: string;
+      }[]
+    >(`/api/admin/votes${routeId ? `?route_id=${routeId}` : ""}`),
 };

@@ -18,6 +18,7 @@
     "check:contact": "node scripts/check-contact-form.mjs",
     "check:member": "node scripts/check-member-flows.mjs",
     "check:voting": "node scripts/check-voting.mjs",
+    "check:staff": "node scripts/check-staff-flows.mjs",
     "check:styles": "node scripts/check-styles.mjs",
     "preview:build": "node scripts/preview-build.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
