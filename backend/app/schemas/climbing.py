@@ -21,6 +21,7 @@ class RouteOut(ORMModel):
     status: RouteStatus
     set_at: date | None = None
     beta: str | None = None
+    image_url: str | None = None
 
 
 class RouteSummary(RouteOut):
@@ -44,6 +45,7 @@ class RouteCreateIn(BaseModel):
     setter: str = Field(default="", max_length=80)
     set_at: date | None = None
     beta: str | None = Field(default=None, max_length=4000)
+    image_url: str | None = Field(default=None, max_length=400)
     status: RouteStatus = RouteStatus.ACTIVE
 
 
@@ -56,6 +58,7 @@ class RouteUpdateIn(BaseModel):
     setter: str | None = Field(default=None, max_length=80)
     set_at: date | None = None
     beta: str | None = Field(default=None, max_length=4000)
+    image_url: str | None = Field(default=None, max_length=400)
     status: RouteStatus | None = None
 
 

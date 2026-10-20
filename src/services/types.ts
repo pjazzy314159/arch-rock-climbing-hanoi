@@ -113,6 +113,7 @@ export type ApiRouteSummary = {
   status: string;
   set_at: string | null;
   beta: string | null;
+  image_url: string | null;
   sends: number;
   vote_count: number;
   easier_votes: number;

@@ -301,6 +301,7 @@ export const adminApi = {
     color?: string;
     style?: string;
     setter?: string;
+    image_url?: string;
     status?: string;
   }) => apiRequest<ApiRouteSummary>("/api/admin/routes", { method: "POST", body }),
 

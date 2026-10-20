@@ -65,10 +65,6 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="", validation_alias=AliasChoices("LLM_MODEL", "ARCH_LLM_MODEL"))
     llm_timeout_seconds: float = 20.0
 
-    media_root: str = Field(
-        default="./var/media", validation_alias=AliasChoices("ARCH_MEDIA_ROOT", "MEDIA_ROOT")
-    )
-
     @field_validator("secret_key")
     @classmethod
     def _reject_default_secret_in_production(cls, value: str, info) -> str:
@@ -92,11 +88,6 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
-
-    @property
-    def media_path(self) -> Path:
-        path = Path(self.media_root)
-        return path if path.is_absolute() else (Path.cwd() / path).resolve()
 
     @property
     def llm_enabled(self) -> bool:

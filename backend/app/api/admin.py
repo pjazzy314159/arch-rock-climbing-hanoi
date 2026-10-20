@@ -172,6 +172,7 @@ def create_route(
         setter=payload.setter.strip(),
         set_at=payload.set_at,
         beta=(payload.beta or "").strip() or None,
+        image_url=(payload.image_url or "").strip() or None,
         status=payload.status,
         created_by_id=user.id,
     )
@@ -209,6 +210,8 @@ def update_route(
         route.set_at = payload.set_at
     if payload.beta is not None:
         route.beta = payload.beta.strip() or None
+    if payload.image_url is not None:
+        route.image_url = payload.image_url.strip() or None
     if payload.status is not None:
         route.status = payload.status
         route.archived_at = datetime.now(UTC) if payload.status is RouteStatus.ARCHIVED else None

@@ -110,6 +110,7 @@ export function RouteDetailPage({ routeId }: { routeId: string }) {
     sends: found.sends,
     voteCount: found.vote_count,
     perceivedGrade: found.perceived_grade,
+    imageUrl: found.image_url ?? null,
   };
   const tallies = tally.data?.data as ApiVoteTally | undefined;
   const myVoteValue = myVote.data?.value ?? null;

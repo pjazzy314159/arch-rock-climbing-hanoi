@@ -83,8 +83,8 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 | 5   | Routes, route status, difficulty voting, leaderboard                                             | `DONE`        |
 | 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `DONE`        |
 | 7   | AI customer-support assistant with grounded fallback                                             | `DONE`        |
-| 8   | Shop/media polish, deployment configuration, environment documentation                           | `IN_PROGRESS` |
-| 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `TODO`        |
+| 8   | Shop/media polish, deployment configuration, environment documentation                           | `DONE`        |
+| 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `IN_PROGRESS` |
 
 > Task order note: Task 3 (the backend) was completed **before** Task 2 (the
 > frontend service layer) so that the frontend could be written against a real,
@@ -646,6 +646,48 @@ pages, so both render the same first frame.
   unit-tested; the HTTP call to a provider is not.
 - The assistant does not yet suggest the published FAQ pages when a question
   is close but not an exact match.
+
+### Task 8 — Media references and deployment configuration (`DONE`)
+
+**Changes**
+
+- Media is handled as a **reference**, never as a file in a database row.
+  `ClimbRoute` gained an `image_url` column (migration
+  `6f911594d8db`), the administration route form takes a picture link, the
+  route card and the route page show the picture when one is published, and the
+  shop shows the product's own picture. The picture itself lives wherever the
+  media store keeps it; the database only holds the link.
+- `backend/app/config.py` — the unused `media_root` setting was removed, so
+  every environment variable in `.env.example` now does something.
+- `DEPLOYMENT.md` — the deployment guide: the two deployables and the
+  database, every environment variable for each with what it is for, the
+  migration and seed commands, the build and deploy commands, a go-live
+  checklist, and an honest list of what has not been exercised here.
+
+**Why no upload endpoint**
+
+An upload endpoint needs a storage backend, file-type and size validation, a
+scan step and a serving story, and none of that is confirmed by ARCH. A media
+_reference_ is the part the brief asks for ("do not store large media files
+directly in database rows") and it can be used today. The upload endpoint is
+recorded as a gap rather than half-built.
+
+**Verification**
+
+- Backend: `ruff check` and `ruff format --check` clean; `alembic upgrade
+head` applies the new revision and `alembic check` reports no drift;
+  **123 tests pass**.
+- Frontend: `bun run lint` 0 errors; `bun run typecheck` clean; `bun run test`
+  → **50 passing**.
+- `bun run build` succeeds and the production build is correctly styled.
+- All six browser checks (pages, contact form, member flows, voting, staff
+  flows, assistant) pass against the production build.
+
+**Open items**
+
+- No file upload: media is referenced by URL.
+- The shop has no checkout, and the catalogue is informational.
+- The placeholder photographs still need replacing with ARCH's real ones.
 
 ---
 

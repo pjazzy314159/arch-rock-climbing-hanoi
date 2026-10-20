@@ -272,8 +272,8 @@ function ProductCard({ product }: { product: Product }) {
     <Link to="/shop/$productId" params={{ productId: product.id }} className="product-card">
       <div className="product-image">
         <img
-          src={shoePhoto}
-          alt={`${product.name} climbing shoe — illustrative image`}
+          src={product.imageUrl ?? shoePhoto}
+          alt={`${product.name} climbing shoe`}
           width={1024}
           height={1024}
           loading="lazy"
@@ -366,10 +366,10 @@ export function ProductPage({
       </div>
       <div className="product-detail">
         <img
-          src={shoePhoto}
+          src={product.imageUrl ?? shoePhoto}
           width={1024}
           height={1024}
-          alt={`${product.name} illustrative climbing shoe`}
+          alt={`${product.name} climbing shoe`}
         />
         <div>
           <span className="eyebrow">

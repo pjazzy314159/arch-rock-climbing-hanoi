@@ -48,6 +48,7 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["B008"]
 
 [tool.ruff.lint.per-file-ignores]
-# Alembic revisions are generated files; long lines there are not hand-written.
-"migrations/versions/*" = ["E501"]
+# Alembic revisions are generated files; long lines and their import order are
+# not hand-written.
+"migrations/versions/*" = ["E501", "I001"]
 "migrations/env.py" = ["I001"]

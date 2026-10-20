@@ -186,10 +186,16 @@ export function RouteCard({ route }: { route: ClimbRoute }) {
         {route.fresh && <span className="fresh-tag">NEW SET</span>}
       </div>
       <div className="route-card-art" aria-hidden="true">
-        <span className="hold hold-one" />
-        <span className="hold hold-two" />
-        <span className="hold hold-three" />
-        <span className="hold hold-four" />
+        {route.imageUrl ? (
+          <img className="route-photo" src={route.imageUrl} alt="" loading="lazy" />
+        ) : (
+          <>
+            <span className="hold hold-one" />
+            <span className="hold hold-two" />
+            <span className="hold hold-three" />
+            <span className="hold hold-four" />
+          </>
+        )}
         <span className="route-grade-art">{route.grade}</span>
       </div>
       <div className="route-card-bottom">

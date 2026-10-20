@@ -26,6 +26,7 @@ const apiRoute = {
   status: "active",
   set_at: "2026-10-14",
   beta: null,
+  image_url: null,
   sends: 12,
   vote_count: 4,
   easier_votes: 1,
@@ -72,6 +73,13 @@ describe("route mapping", () => {
     });
     expect(route.voteCount).toBe(6);
     expect(route.perceivedGrade).toBe("V3");
+  });
+
+  it("carries a published picture when there is one", () => {
+    expect(toClimbRoute(apiRoute).imageUrl).toBeNull();
+    expect(toClimbRoute({ ...apiRoute, image_url: "https://example.com/route.jpg" }).imageUrl).toBe(
+      "https://example.com/route.jpg",
+    );
   });
 });
 

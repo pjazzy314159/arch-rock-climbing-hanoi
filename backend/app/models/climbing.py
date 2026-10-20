@@ -65,6 +65,9 @@ class ClimbRoute(Base, TimestampMixin):
     set_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     beta: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: A reference to a picture of the route, not the picture itself. The file
+    #: lives in the media store, so no large binary ever sits in a database row.
+    image_url: Mapped[str | None] = mapped_column(String(400), nullable=True)
     created_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

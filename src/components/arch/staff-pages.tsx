@@ -454,6 +454,7 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
   const [grade, setGrade] = useState("");
   const [zone, setZone] = useState("The Main Wall");
   const [setter, setSetter] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
 
   async function createRoute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -465,10 +466,12 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
         grade: grade.trim().toUpperCase(),
         zone: zone.trim(),
         setter: setter.trim(),
+        ...(imageUrl.trim() ? { image_url: imageUrl.trim() } : {}),
       });
       setName("");
       setGrade("");
       setSetter("");
+      setImageUrl("");
       await queryClient.invalidateQueries({ queryKey: ["admin", "routes"] });
       await queryClient.invalidateQueries({ queryKey: ["arch", "routes"] });
     } catch (caught) {
@@ -576,6 +579,19 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
               <input value={setter} onChange={(event) => setSetter(event.target.value)} />
             </label>
           </div>
+          <label>
+            Picture <span className="label-hint">optional</span>
+            <input
+              type="url"
+              value={imageUrl}
+              placeholder="https://…"
+              onChange={(event) => setImageUrl(event.target.value)}
+            />
+          </label>
+          <p className="auth-note">
+            A link to a picture that is already published somewhere. The picture itself is never
+            uploaded into the database.
+          </p>
           {error && (
             <p className="feedback error" role="alert">
               {error}

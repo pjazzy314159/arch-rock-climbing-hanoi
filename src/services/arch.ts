@@ -50,6 +50,8 @@ export type ClimbRoute = {
   sends: number;
   voteCount: number;
   perceivedGrade: string | null;
+  /** A reference to a picture of the route, if the setters published one. */
+  imageUrl: string | null;
 };
 
 export type Product = {
@@ -62,6 +64,8 @@ export type Product = {
   fit: string;
   description: string;
   stock: number;
+  /** A reference to a picture of the shoe, if the shop published one. */
+  imageUrl: string | null;
 };
 
 export type LogEntry = {
@@ -243,6 +247,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 24,
     voteCount: 0,
     perceivedGrade: null,
+    imageUrl: null,
   },
   {
     id: "r2",
@@ -257,6 +262,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 12,
     voteCount: 0,
     perceivedGrade: null,
+    imageUrl: null,
   },
   {
     id: "r3",
@@ -271,6 +277,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 68,
     voteCount: 0,
     perceivedGrade: null,
+    imageUrl: null,
   },
   {
     id: "r4",
@@ -285,6 +292,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 19,
     voteCount: 0,
     perceivedGrade: null,
+    imageUrl: null,
   },
   {
     id: "r5",
@@ -299,6 +307,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 7,
     voteCount: 0,
     perceivedGrade: null,
+    imageUrl: null,
   },
   {
     id: "r6",
@@ -313,6 +322,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 91,
     voteCount: 0,
     perceivedGrade: null,
+    imageUrl: null,
   },
 ];
 
@@ -328,6 +338,7 @@ export const mockProducts: Product[] = [
     description:
       "A precise, downturned shoe for steep terrain and small footholds. A dual-strap closure keeps the fit secure, while a sensitive midsole brings you closer to every move.",
     stock: 8,
+    imageUrl: null,
   },
   {
     id: "ARC-FLW-01",
@@ -340,6 +351,7 @@ export const mockProducts: Product[] = [
     description:
       "Comfort meets precision. A versatile climbing shoe for longer sessions, developing technique and finding your flow on any wall.",
     stock: 12,
+    imageUrl: null,
   },
   {
     id: "ARC-STA-01",
@@ -352,6 +364,7 @@ export const mockProducts: Product[] = [
     description:
       "An easy-wearing, supportive shoe for your first moves. A neutral profile and forgiving fit let you focus on the climb.",
     stock: 4,
+    imageUrl: null,
   },
 ];
 
@@ -475,6 +488,7 @@ export function toClimbRoute(route: ApiRouteSummary): ClimbRoute {
     sends: route.sends,
     voteCount: route.vote_count,
     perceivedGrade: route.perceived_grade,
+    imageUrl: route.image_url ?? null,
   };
 }
 
@@ -489,6 +503,7 @@ export function toProduct(product: ApiCatalogProduct): Product {
     fit: product.fit,
     description: product.description,
     stock: product.stock,
+    imageUrl: product.image_url ?? null,
   };
 }
 
