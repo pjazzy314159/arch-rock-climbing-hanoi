@@ -15,10 +15,13 @@
  */
 
 import type {
+  ApiAchievement,
+  ApiAgreement,
   ApiAssistantAnswer,
   ApiAssistantStatus,
   ApiCatalogProduct,
   ApiCourse,
+  ApiDashboard,
   ApiEvent,
   ApiFaqEntry,
   ApiGym,
@@ -27,6 +30,8 @@ import type {
   ApiRouteSummary,
   ApiRule,
   ApiService,
+  ApiToken,
+  ApiUser,
   ApiVoteTally,
 } from "./types";
 
@@ -169,7 +174,6 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
 export const api = {
   health: () => apiRequest<{ status: string; database: string }>("/api/health"),
-
   gym: () => apiRequest<ApiGym>("/api/public/gym"),
   prices: () => apiRequest<ApiPrice[]>("/api/public/prices"),
   services: () => apiRequest<ApiService[]>("/api/public/services"),
@@ -198,4 +202,44 @@ export const api = {
       method: "POST",
       body: { question },
     }),
+};
+
+/**
+ * The account endpoints.
+ *
+ * `register` and `login` are sent without the access token on purpose: there
+ * is no session yet when they are called.
+ */
+export const authApi = {
+  register: (body: { email: string; full_name: string; password: string; phone?: string }) =>
+    apiRequest<ApiToken>("/api/auth/register", { method: "POST", body, auth: false }),
+
+  login: (body: { email: string; password: string }) =>
+    apiRequest<ApiToken>("/api/auth/login", { method: "POST", body, auth: false }),
+
+  me: () => apiRequest<ApiUser>("/api/auth/me"),
+
+  updateMe: (body: { full_name?: string; phone?: string | null; climbing_level?: number }) =>
+    apiRequest<ApiUser>("/api/auth/me", { method: "PATCH", body }),
+
+  changePassword: (body: { current_password: string; new_password: string }) =>
+    apiRequest<{ detail: string }>("/api/auth/password", { method: "POST", body }),
+};
+
+/** The endpoints that need a signed-in member. */
+export const memberApi = {
+  dashboard: () => apiRequest<ApiDashboard>("/api/me/dashboard"),
+  logbook: () => apiRequest<ApiAchievement[]>("/api/me/logbook"),
+  agreement: () => apiRequest<ApiAgreement>("/api/me/agreement"),
+  signAgreement: (body: { signed_name: string; accepted: boolean }) =>
+    apiRequest<ApiAgreement>("/api/me/agreement/signature", { method: "POST", body }),
+  logClimb: (body: {
+    route_id?: number | null;
+    route_name: string;
+    grade: string;
+    result: "sent" | "project";
+    attempts: number;
+    climbed_on?: string;
+    notes?: string;
+  }) => apiRequest<ApiAchievement>("/api/me/logbook", { method: "POST", body }),
 };

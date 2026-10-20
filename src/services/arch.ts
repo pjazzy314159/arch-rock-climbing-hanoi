@@ -14,10 +14,13 @@
  * empty and the page says so.
  */
 
-import { api, ApiError, ApiUnavailableError } from "./api";
+import { api, ApiError, ApiUnavailableError, memberApi } from "./api";
 import type {
+  ApiAgreement,
+  ApiAchievement,
   ApiCatalogProduct,
   ApiCourse,
+  ApiDashboard,
   ApiEvent,
   ApiFaqEntry,
   ApiGym,
@@ -190,6 +193,24 @@ export type VoteTally = {
   harder: number;
   perceivedGrade: string | null;
   officialGrade: string;
+};
+
+export type Agreement = {
+  id: number;
+  version: string;
+  status: "pending" | "signed" | "waived" | "expired";
+  method: string | null;
+  signedAt: string | null;
+  signedName: string | null;
+  notes: string | null;
+};
+
+export type MemberDashboard = {
+  totalSends: number;
+  totalSessions: number;
+  bestGrade: string | null;
+  activeProjects: number;
+  agreementStatus: string | null;
 };
 
 /** Where a piece of data came from. */
@@ -627,6 +648,39 @@ async function load<T>(
   }
 }
 
+/**
+ * Run a read that needs a signed-in member.
+ *
+ * Unlike `load`, this never substitutes sample data: a member's own records
+ * are either shown or the reason they could not be shown is reported. A 401
+ * means "sign in", a 403 means "not permitted".
+ */
+async function loadAuthenticated<T>(
+  subject: string,
+  fetcher: () => Promise<T>,
+): Promise<Resource<T | null>> {
+  try {
+    const data = await fetcher();
+    return { data, source: "api" };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return {
+        data: null,
+        source: "sample",
+        error: `${subject} are only available once you sign in.`,
+      };
+    }
+    if (error instanceof ApiError && error.status === 403) {
+      return {
+        data: null,
+        source: "sample",
+        error: `You do not have permission to see ${subject}.`,
+      };
+    }
+    return { data: null, source: "sample", error: describeFailure(error, subject) };
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Service                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -737,6 +791,48 @@ export const archService = {
    */
   getServiceStatus: (): Promise<Resource<boolean>> =>
     load("The service status", async () => (await api.health()).status === "ok", false),
+
+  /* --- the signed-in member's own records -------------------------------- */
+
+  getMyDashboard: (): Promise<Resource<MemberDashboard | null>> =>
+    loadAuthenticated("Your statistics", async () => {
+      const dashboard: ApiDashboard = await memberApi.dashboard();
+      return {
+        totalSends: dashboard.total_sends,
+        totalSessions: dashboard.total_sessions,
+        bestGrade: dashboard.best_grade,
+        activeProjects: dashboard.active_projects,
+        agreementStatus: dashboard.agreement_status,
+      };
+    }),
+
+  getMyLogbook: (): Promise<Resource<LogEntry[] | null>> =>
+    loadAuthenticated("Your logbook", async () => {
+      const entries: ApiAchievement[] = await memberApi.logbook();
+      return entries.map((entry) => ({
+        id: String(entry.id),
+        route: entry.route_name,
+        grade: entry.grade,
+        date: entry.climbed_on,
+        result: entry.result === "sent" ? "Sent" : "Project",
+        attempts: entry.attempts,
+        notes: entry.notes ?? "",
+      }));
+    }),
+
+  getMyAgreement: (): Promise<Resource<Agreement | null>> =>
+    loadAuthenticated("Your safety agreement", async () => {
+      const agreement: ApiAgreement = await memberApi.agreement();
+      return {
+        id: agreement.id,
+        version: agreement.version,
+        status: agreement.status,
+        method: agreement.method,
+        signedAt: agreement.signed_at,
+        signedName: agreement.signed_name,
+        notes: agreement.notes,
+      };
+    }),
 };
 
 export const formatPrice = (price: number) =>
@@ -761,4 +857,16 @@ export const leaderboardQuery = {
 export const serviceStatusQuery = {
   queryKey: ["arch", "service-status"],
   queryFn: archService.getServiceStatus,
+};
+export const myDashboardQuery = {
+  queryKey: ["member", "dashboard"],
+  queryFn: archService.getMyDashboard,
+};
+export const myLogbookQuery = {
+  queryKey: ["member", "logbook"],
+  queryFn: archService.getMyLogbook,
+};
+export const myAgreementQuery = {
+  queryKey: ["member", "agreement"],
+  queryFn: archService.getMyAgreement,
 };

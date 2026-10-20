@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { Header, Footer } from "@/components/arch/shared";
 import { serviceStatusQuery } from "@/services/arch";
+import { SessionProvider } from "@/services/session";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -132,15 +133,17 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <a href="#main-content" className="skip-link">
-        Skip to content
-      </a>
-      <Header />
-      <div id="main-content">
-        <Outlet />
-      </div>
-      <Footer />
+      <SessionProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
+        <Header />
+        <div id="main-content">
+          <Outlet />
+        </div>
+        <Footer />
+      </SessionProvider>
     </QueryClientProvider>
   );
 }

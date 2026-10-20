@@ -158,3 +158,59 @@ export type ApiAssistantAnswer = {
   created_at: string;
   disclaimer: string;
 };
+
+/** A member account, as the backend returns it. */
+export type ApiUser = {
+  id: number;
+  email: string;
+  full_name: string;
+  role: "customer" | "staff" | "admin";
+  is_active: boolean;
+  phone: string | null;
+  membership_tier: string | null;
+  membership_status: string | null;
+  joined_on: string | null;
+  climbing_level: number;
+};
+
+export type ApiToken = {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: ApiUser;
+};
+
+/** A customer's safety agreement record. */
+export type ApiAgreement = {
+  id: number;
+  user_id: number;
+  version: string;
+  status: "pending" | "signed" | "waived" | "expired";
+  method: string | null;
+  signed_at: string | null;
+  signed_name: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+/** The signed-in member's climbing statistics. */
+export type ApiDashboard = {
+  total_sends: number;
+  total_sessions: number;
+  best_grade: string | null;
+  active_projects: number;
+  agreement_status: string | null;
+};
+
+/** A climb recorded in the signed-in member's logbook. */
+export type ApiAchievement = {
+  id: number;
+  route_id: number | null;
+  route_name: string;
+  grade: string;
+  result: "sent" | "project";
+  attempts: number;
+  climbed_on: string;
+  notes: string | null;
+  created_at: string;
+};

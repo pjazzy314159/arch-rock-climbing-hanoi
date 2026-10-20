@@ -35,6 +35,15 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class PasswordChangeIn(BaseModel):
+    """Payload for changing the signed-in user's own password."""
+
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_BYTES)
+
+    _check_password_bytes = field_validator("new_password")(_validate_password_bytes)
+
+
 class UserOut(ORMModel):
     id: int
     email: str

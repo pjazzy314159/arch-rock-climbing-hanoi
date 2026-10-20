@@ -44,5 +44,13 @@ export default tseslint.config(
       "prefer-const": "off",
     },
   },
+  {
+    // Service modules export hooks and helpers next to their provider, which
+    // the fast-refresh rule cannot account for. They are not component files.
+    files: ["src/services/**/*.{ts,tsx}"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
   eslintPluginPrettier,
 );

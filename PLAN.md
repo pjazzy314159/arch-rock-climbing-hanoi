@@ -79,7 +79,8 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 | 1   | Repository audit, restore missing entries, install dependencies, baseline build/test/lint        | `DONE`        |
 | 2   | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `DONE`        |
 | 3   | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract                          | `DONE`        |
-| 4   | Authentication, roles, client records and safety agreements                                      | `IN_PROGRESS` |     | 5   | Routes, route status, difficulty voting, leaderboard | `TODO` |
+| 4   | Authentication, roles, client records and safety agreements                                      | `DONE`        |
+| 5   | Routes, route status, difficulty voting, leaderboard                                             | `IN_PROGRESS` |
 | 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `TODO`        |
 | 7   | AI customer-support assistant with grounded fallback                                             | `TODO`        |
 | 8   | Shop/media polish, deployment configuration, environment documentation                           | `TODO`        |
@@ -367,6 +368,95 @@ Two things have to be settled with ARCH first: the exact safety-agreement
 workflow (digital signature versus document upload versus a staff-confirmed
 status) and whether self-registration should be open before e-mail
 verification exists.
+
+### Task 4 — Authentication, roles, client records and safety agreements (`DONE`)
+
+**Changes**
+
+- `src/services/session.tsx` — the session: the member's own access token and
+  profile, `signIn`, `register`, `signOut` and `refresh`. The status starts as
+  `loading` on the server _and_ on the first client render, so hydration agrees.
+  A token the backend rejects is discarded, and the member's cached records are
+  cleared on sign-in and sign-out so one member's data can never be left on
+  screen for the next.
+- `src/services/api.ts` — `authApi` (register, login, me, update me, change
+  password) and `memberApi` (dashboard, logbook, agreement, sign agreement, log
+  a climb). Register and login are sent without a token, because there is no
+  session yet.
+- `src/services/types.ts` — the account, agreement, dashboard and achievement
+  wire types.
+- `src/services/arch.ts` — `getMyDashboard`, `getMyLogbook` and `getMyAgreement`.
+  These use a separate loader that **never** substitutes sample data: a 401
+  means "sign in", a 403 means "not permitted".
+- `src/components/arch/signin.tsx` and `src/routes/signin.tsx` — sign in and
+  registration, with the states for sending, wrong credentials, a duplicate
+  account and a backend that cannot be reached.
+- `src/components/arch/member-pages.tsx` — the member area is now session
+  aware: the sidebar shows the signed-in member and a sign-out button, and an
+  anonymous visitor gets a prompt to sign in instead of somebody else's
+  records. The overview, the logbook and the safety agreement read the
+  member's own data from the backend.
+- `src/components/arch/member-pages.tsx` — a new `ProfilePage`: edit name,
+  phone and climbing level, and change the password.
+- `src/routes/member_.profile.tsx` — the profile route.
+- `src/components/arch/shared.tsx` — the header button becomes "Sign in" or
+  "My climbing space" depending on the session.
+- `src/routes/__root.tsx` — the session provider wraps the app.
+- `src/styles.css` — styling for the sign-in card, the agreement panel and the
+  profile summary.
+- Backend: `POST /api/auth/password` (change your own password, current
+  password required) with `PasswordChangeIn` and seven tests.
+- `scripts/check-member-flows.mjs` — a browser check of the whole member flow.
+- `scripts/screenshot-member.mjs` — screenshots of the member area.
+
+**States handled**
+
+Loading (a placeholder while the member's own records are fetched), empty (a
+logbook with no climbs), error (a message from the backend), unauthenticated
+(a prompt to sign in) and permission-denied (a 403 from the backend).
+
+**Data protection**
+
+- Only the name, an optional phone number and the climbing level are collected.
+  The phone number is never sent when it is left blank, and it is never shown
+  publicly.
+- The member's records are fetched through the member's own token and are
+  never cached across accounts.
+- Every endpoint involved is protected on the backend: `/api/me/*` requires a
+  signed-in member and checks ownership, and the role is read from the
+  database on every request.
+
+**A bug found and fixed**
+
+The agreement confirmation message was rendered inside the form, which signing
+replaces with the "signed" state — so the confirmation vanished the moment it
+appeared. The message now lives outside the form.
+
+**Verification**
+
+- Backend: `ruff check` and `ruff format --check` clean; **121 tests pass**
+  (114 before, plus 7 for the password change).
+- Frontend: `bun run lint` 0 errors; `bun run typecheck` clean; `bun run test`
+  → **36 passing** (12 routing, 11 service mapping, 13 session).
+- `bun run build` succeeds.
+- `node scripts/check-member-flows.mjs` against the **dev server** and against
+  the **production build**: an anonymous visitor sees a prompt; registration
+  signs the member in; the agreement starts pending and can be signed; an empty
+  logbook shows the empty state and a logged climb appears; the profile saves;
+  a wrong current password is refused and the right one changes it; signing
+  out hides the records again. No browser errors.
+- `node scripts/check-pages.mjs` → all 15 pages clean on both servers.
+- `node scripts/check-styles.mjs` → the production build is correctly styled.
+
+**Open items**
+
+- A token issued before a password change stays valid; there is no revocation.
+  This is a known limitation of the JWT approach and is listed in the backend
+  README.
+- The route beta and the progress chart are still sample content; they become
+  real with the voting and leaderboard work (Task 5).
+- The administration workspace is still a preview; the staff tools arrive with
+  the operations work (Task 6).
 
 ---
 

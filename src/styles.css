@@ -742,6 +742,196 @@
 }
 
 /* ==========================================================================
+   Sign in, agreement and profile
+   ========================================================================== */
+
+.auth-card {
+  max-width: 34rem;
+  padding: 1.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.auth-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-muted-foreground);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.auth-tab:hover {
+  color: var(--color-foreground);
+}
+
+.auth-tab-active {
+  background: rgb(200 245 66 / 0.12);
+  border-color: var(--color-hold-lime);
+  color: var(--color-primary);
+}
+
+.auth-form,
+.profile-form,
+.agreement-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.auth-form label,
+.profile-form label,
+.agreement-form label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  width: 100%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.agreement-form .check-filter {
+  flex-direction: row;
+  align-items: center;
+  width: auto;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-foreground);
+  cursor: pointer;
+}
+
+.auth-form input,
+.profile-form input,
+.profile-form select,
+.agreement-form input {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-size: 0.95rem;
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  width: 100%;
+}
+
+.auth-form input:focus,
+.profile-form input:focus,
+.profile-form select:focus,
+.agreement-form input:focus {
+  outline: none;
+  border-color: var(--color-ring);
+}
+
+.label-hint {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--color-muted-foreground);
+  opacity: 0.8;
+}
+
+.auth-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.auth-note svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--color-primary);
+}
+
+.agreement-panel {
+  margin-top: 2.5rem;
+  padding: 1.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.agreement-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--color-muted-foreground);
+}
+
+.agreement-signed {
+  color: var(--color-primary);
+}
+
+.agreement-pending {
+  color: var(--color-hold-yellow);
+}
+
+.agreement-status a {
+  color: var(--color-foreground);
+}
+
+.profile-summary {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.profile-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.profile-summary span {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.profile-summary strong {
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+/* ==========================================================================
    Route cards
    ========================================================================== */
 

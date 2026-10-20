@@ -19,6 +19,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { gymQuery, serviceStatusQuery, type ClimbRoute } from "@/services/arch";
+import { useSession } from "@/services/session";
 
 const nav = [
   { to: "/", label: "Home" },
@@ -60,6 +61,10 @@ export function Brand() {
 }
 export function Header() {
   const [open, setOpen] = useState(false);
+  const { status, user } = useSession();
+  const signedIn = status === "authenticated";
+  const memberTarget = signedIn ? "/member" : "/signin";
+  const memberLabel = signedIn ? "My climbing space" : "Sign in";
   return (
     <header className="site-header">
       <div className="header-inner">
@@ -77,8 +82,8 @@ export function Header() {
           ))}
         </nav>
         <Button asChild className="member-button">
-          <Link to="/member">
-            Member area <ArrowUpRight />
+          <Link to={memberTarget}>
+            {memberLabel} <ArrowUpRight />
           </Link>
         </Button>
         <Button
@@ -99,8 +104,10 @@ export function Header() {
               <ArrowUpRight size={16} />
             </Link>
           ))}
-          <Link to="/member" onClick={() => setOpen(false)}>
-            Member preview <ArrowUpRight size={16} />
+          <Link to={memberTarget} onClick={() => setOpen(false)}>
+            {memberLabel}
+            {signedIn && user ? ` · ${user.full_name.split(" ")[0]}` : ""}
+            <ArrowUpRight size={16} />
           </Link>
         </nav>
       )}

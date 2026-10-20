@@ -18,10 +18,12 @@ import { Route as GymRouteImport } from './routes/gym'
 import { Route as MemberRouteImport } from './routes/member'
 import { Route as RoutesRouteImport } from './routes/routes'
 import { Route as ShopRouteImport } from './routes/shop'
+import { Route as SigninRouteImport } from './routes/signin'
 import { Route as TourRouteImport } from './routes/tour'
 import { Route as VisitRouteImport } from './routes/visit'
 import { Route as MemberBetaRouteImport } from './routes/member_.beta'
 import { Route as MemberLogbookRouteImport } from './routes/member_.logbook'
+import { Route as MemberProfileRouteImport } from './routes/member_.profile'
 import { Route as MemberProgressRouteImport } from './routes/member_.progress'
 import { Route as ShopProductIdRouteImport } from './routes/shop_.$productId'
 
@@ -70,6 +72,11 @@ const ShopRoute = ShopRouteImport.update({
   path: '/shop',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SigninRoute = SigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TourRoute = TourRouteImport.update({
   id: '/tour',
   path: '/tour',
@@ -88,6 +95,11 @@ const MemberBetaRoute = MemberBetaRouteImport.update({
 const MemberLogbookRoute = MemberLogbookRouteImport.update({
   id: '/member_/logbook',
   path: '/member/logbook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MemberProfileRoute = MemberProfileRouteImport.update({
+  id: '/member_/profile',
+  path: '/member/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MemberProgressRoute = MemberProgressRouteImport.update({
@@ -111,10 +123,12 @@ export interface FileRoutesByFullPath {
   '/member': typeof MemberRoute
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
+  '/signin': typeof SigninRoute
   '/tour': typeof TourRoute
   '/visit': typeof VisitRoute
   '/member/beta': typeof MemberBetaRoute
   '/member/logbook': typeof MemberLogbookRoute
+  '/member/profile': typeof MemberProfileRoute
   '/member/progress': typeof MemberProgressRoute
   '/shop/$productId': typeof ShopProductIdRoute
 }
@@ -128,10 +142,12 @@ export interface FileRoutesByTo {
   '/member': typeof MemberRoute
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
+  '/signin': typeof SigninRoute
   '/tour': typeof TourRoute
   '/visit': typeof VisitRoute
   '/member/beta': typeof MemberBetaRoute
   '/member/logbook': typeof MemberLogbookRoute
+  '/member/profile': typeof MemberProfileRoute
   '/member/progress': typeof MemberProgressRoute
   '/shop/$productId': typeof ShopProductIdRoute
 }
@@ -146,10 +162,12 @@ export interface FileRoutesById {
   '/member': typeof MemberRoute
   '/routes': typeof RoutesRoute
   '/shop': typeof ShopRoute
+  '/signin': typeof SigninRoute
   '/tour': typeof TourRoute
   '/visit': typeof VisitRoute
   '/member_/beta': typeof MemberBetaRoute
   '/member_/logbook': typeof MemberLogbookRoute
+  '/member_/profile': typeof MemberProfileRoute
   '/member_/progress': typeof MemberProgressRoute
   '/shop_/$productId': typeof ShopProductIdRoute
 }
@@ -165,10 +183,12 @@ export interface FileRouteTypes {
     | '/member'
     | '/routes'
     | '/shop'
+    | '/signin'
     | '/tour'
     | '/visit'
     | '/member/beta'
     | '/member/logbook'
+    | '/member/profile'
     | '/member/progress'
     | '/shop/$productId'
   fileRoutesByTo: FileRoutesByTo
@@ -182,10 +202,12 @@ export interface FileRouteTypes {
     | '/member'
     | '/routes'
     | '/shop'
+    | '/signin'
     | '/tour'
     | '/visit'
     | '/member/beta'
     | '/member/logbook'
+    | '/member/profile'
     | '/member/progress'
     | '/shop/$productId'
   id:
@@ -199,10 +221,12 @@ export interface FileRouteTypes {
     | '/member'
     | '/routes'
     | '/shop'
+    | '/signin'
     | '/tour'
     | '/visit'
     | '/member_/beta'
     | '/member_/logbook'
+    | '/member_/profile'
     | '/member_/progress'
     | '/shop_/$productId'
   fileRoutesById: FileRoutesById
@@ -217,10 +241,12 @@ export interface RootRouteChildren {
   MemberRoute: typeof MemberRoute
   RoutesRoute: typeof RoutesRoute
   ShopRoute: typeof ShopRoute
+  SigninRoute: typeof SigninRoute
   TourRoute: typeof TourRoute
   VisitRoute: typeof VisitRoute
   MemberBetaRoute: typeof MemberBetaRoute
   MemberLogbookRoute: typeof MemberLogbookRoute
+  MemberProfileRoute: typeof MemberProfileRoute
   MemberProgressRoute: typeof MemberProgressRoute
   ShopProductIdRoute: typeof ShopProductIdRoute
 }
@@ -290,6 +316,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tour': {
       id: '/tour'
       path: '/tour'
@@ -316,6 +349,13 @@ declare module '@tanstack/react-router' {
       path: '/member/logbook'
       fullPath: '/member/logbook'
       preLoaderRoute: typeof MemberLogbookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/member_/profile': {
+      id: '/member_/profile'
+      path: '/member/profile'
+      fullPath: '/member/profile'
+      preLoaderRoute: typeof MemberProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/member_/progress': {
@@ -345,10 +385,12 @@ const rootRouteChildren: RootRouteChildren = {
   MemberRoute: MemberRoute,
   RoutesRoute: RoutesRoute,
   ShopRoute: ShopRoute,
+  SigninRoute: SigninRoute,
   TourRoute: TourRoute,
   VisitRoute: VisitRoute,
   MemberBetaRoute: MemberBetaRoute,
   MemberLogbookRoute: MemberLogbookRoute,
+  MemberProfileRoute: MemberProfileRoute,
   MemberProgressRoute: MemberProgressRoute,
   ShopProductIdRoute: ShopProductIdRoute,
 }

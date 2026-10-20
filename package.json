@@ -16,6 +16,8 @@
     "screenshot": "node scripts/screenshot.mjs",
     "check:pages": "node scripts/check-pages.mjs",
     "check:contact": "node scripts/check-contact-form.mjs",
+    "check:member": "node scripts/check-member-flows.mjs",
+    "check:styles": "node scripts/check-styles.mjs",
     "preview:build": "node scripts/preview-build.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

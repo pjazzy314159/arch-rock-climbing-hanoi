@@ -12,7 +12,15 @@ from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import AgreementStatus, Role, SafetyAgreement, User
-from app.schemas import LoginIn, ProfileUpdateIn, RegisterIn, TokenOut, UserOut
+from app.schemas import (
+    LoginIn,
+    Message,
+    PasswordChangeIn,
+    ProfileUpdateIn,
+    RegisterIn,
+    TokenOut,
+    UserOut,
+)
 from app.security import (
     DUMMY_PASSWORD_HASH,
     create_access_token,
@@ -114,3 +122,30 @@ def update_me(
     db.commit()
     db.refresh(user)
     return UserOut.model_validate(user)
+
+
+@router.post("/password", response_model=Message)
+def change_password(
+    payload: PasswordChangeIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Message:
+    """Change the authenticated user's own password.
+
+    The current password has to be confirmed first, so a stolen token alone
+    is not enough to take over an account.
+    """
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your current password is not correct",
+        )
+    if payload.new_password == payload.current_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The new password must be different from the current one",
+        )
+
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return Message(detail="Your password has been changed.")
