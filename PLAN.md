@@ -309,6 +309,43 @@ are marked `DRAFT`.
 
 ---
 
+### Task 2a — Production preview rendered without CSS (`DONE`)
+
+**Reported symptom:** the production-build preview on port 8090 served the
+pages without any styles, while the development site on port 8080 looked
+correct.
+
+**Diagnosis**
+
+- The server-rendered HTML linked `/assets/styles-BKG1c1ua.css`, but the
+  built stylesheet in `.output/public/assets` was `styles-BnTAO7e6.css`. The
+  two hashes did not match, so the request 404'd and the page rendered as
+  unstyled HTML.
+- The cause was a stale `.output` directory: the Nitro/Cloudflare output is
+  not fully emptied between builds, so repeated `bun run build` runs could
+  leave a server bundle that referenced an asset hash from an earlier build
+  while the public directory held the newer one. The build itself reported
+  success, which is why the problem only showed up in the browser.
+
+**Fix**
+
+- `scripts/clean-output.mjs` removes `.output`, `dist`, `.nitro` and
+  `.tanstack`; `bun run build` now runs it first, so every build is
+  self-contained and repeatable. `bun run clean` runs it on its own.
+- `scripts/check-styles.mjs` loads a page in a real browser and reports the
+  computed styles, the applied stylesheets and any failed request, so a
+  missing stylesheet cannot pass unnoticed again.
+
+**Verification**
+
+- `bun run build` twice in a row → the stylesheet hash in `.output/public`
+  and the hash referenced by the server bundle are identical both times.
+- `node scripts/check-styles.mjs http://localhost:8090` → the page is
+  correctly styled: dark background `rgb(13, 14, 13)`, Barlow, sticky header,
+  128px heading, and both stylesheets applied.
+
+---
+
 ### Next task — Task 4: Authentication, roles, client records and safety agreements (`IN_PROGRESS`)
 
 The backend already enforces the rules for this task: `/api/auth/register`,
