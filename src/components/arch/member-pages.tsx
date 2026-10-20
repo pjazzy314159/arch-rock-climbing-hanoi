@@ -113,7 +113,7 @@ function MemberError({ message }: { message: string }) {
 /* -------------------------------------------------------------------------- */
 
 export function MemberShell({ children, admin = false }: { children: ReactNode; admin?: boolean }) {
-  const { status, user, signOut } = useSession();
+  const { status, user, signOut, error, refresh } = useSession();
   const signedIn = status === "authenticated" && user !== null;
 
   return (
@@ -158,6 +158,14 @@ export function MemberShell({ children, admin = false }: { children: ReactNode; 
           )}
         </nav>
         <div className="preview-note">
+          {error && (
+            <p className="session-warning" role="alert">
+              {error}
+              <Button variant="outline" size="sm" onClick={() => void refresh()}>
+                Try again
+              </Button>
+            </p>
+          )}
           {signedIn && !admin ? (
             <>
               <span className="sample-badge">SIGNED IN</span>

@@ -78,14 +78,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setStatus("authenticated");
       setError(null);
     } catch (caught) {
-      // A token the backend does not accept is discarded, exactly as a
-      // browser would discard an expired session.
-      setAccessToken(null);
-      setUser(null);
+      if (caught instanceof ApiError && caught.status === 401) {
+        // The backend does not accept the token, so it is discarded, exactly as
+        // a browser would discard an expired session.
+        setAccessToken(null);
+        setUser(null);
+        setStatus("anonymous");
+        clearMemberCache();
+        return;
+      }
+      // Anything else — the service is unreachable, or it answered with an
+      // error — is a temporary problem, not a reason to throw the member's
+      // session away. The token is kept so the session survives, and the
+      // reason is reported so the member is not left guessing.
       setStatus("anonymous");
-      clearMemberCache();
-      if (caught instanceof ApiError && caught.status === 401) return;
-      setError(messageFor(caught, "Your session could not be restored."));
+      setError(
+        caught instanceof ApiUnavailableError
+          ? "We could not reach the ARCH service, so we could not check your session. " +
+              "You are still signed in — try again in a moment."
+          : "We could not check your session, so we could not confirm who you are. " +
+              "You are still signed in — try again in a moment.",
+      );
     }
   }, [clearMemberCache]);
 

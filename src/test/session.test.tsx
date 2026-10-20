@@ -233,6 +233,39 @@ describe("a stored token the backend rejects", () => {
   });
 });
 
+describe("a stored token the backend cannot be asked about", () => {
+  it("is kept, so a temporary failure does not sign the member out", async () => {
+    setAccessToken("good-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("network down");
+      }),
+    );
+
+    const { result } = renderSession();
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(getAccessToken()).toBe("good-token");
+    expect(result.current.status).toBe("anonymous");
+    expect(result.current.error).toMatch(/could not reach the ARCH service/i);
+  });
+
+  it("is also kept when the backend answers with an error", async () => {
+    setAccessToken("good-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ detail: "Server error" }, 500)),
+    );
+
+    const { result } = renderSession();
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(getAccessToken()).toBe("good-token");
+    expect(result.current.status).toBe("anonymous");
+  });
+});
+
 describe("signing out", () => {
   it("clears the token", async () => {
     vi.stubGlobal(

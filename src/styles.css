@@ -2630,6 +2630,21 @@
   text-decoration: none;
 }
 
+.session-warning {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--color-hold-yellow);
+  border-radius: var(--radius-md);
+  background: rgb(255 210 63 / 0.07);
+  color: var(--color-muted-foreground);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
 .workspace-content {
   min-width: 0;
 }

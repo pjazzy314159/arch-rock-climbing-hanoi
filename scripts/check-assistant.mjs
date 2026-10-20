@@ -37,16 +37,21 @@ console.log("mode label:", (await page.locator(".assistant-mode").first().textCo
 console.log("sources shown:", await page.locator(".assistant-sources li").count());
 
 // A question the knowledge base does not cover: the answer must say so.
-await page.fill(".assistant-form input", "What is the wifi password in Tokyo?");
+// "Can I bring my dog?" only shares the word "bring" with the published
+// answer about what to wear, and used to be answered with it.
+await page.fill(".assistant-form input", "Can I bring my dog?");
 await page.click(".assistant-form button[type=submit]");
 await page.waitForTimeout(2000);
 const modes = await page.locator(".assistant-mode").allTextContents();
 console.log("second mode label:", modes[modes.length - 1]?.trim());
+const secondAnswer = (await page.locator(".assistant-answer p").last().textContent()) ?? "";
 console.log(
   "second answer admits it:",
-  (await page.locator(".assistant-answer p").last().textContent())
-    ?.toLowerCase()
-    .includes("don't have approved information"),
+  secondAnswer.toLowerCase().includes("don't have approved information"),
+);
+console.log(
+  "second answer does not quote an unrelated entry:",
+  !secondAnswer.toLowerCase().includes("water bottle"),
 );
 
 await page.screenshot({ path: "var/screenshots/assistant.png", fullPage: false });
