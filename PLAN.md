@@ -74,16 +74,16 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 
 ## 3. Roadmap
 
-| #   | Task                                                                                             | Status |
-| --- | ------------------------------------------------------------------------------------------------ | ------ |
-| 1   | Repository audit, restore missing entries, install dependencies, baseline build/test/lint        | `DONE` |
-| 2   | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `DONE` |
-| 3   | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract                          | `DONE` |
-| 4   | Authentication, roles, client records and safety agreements                                      | `TODO` |     | 5   | Routes, route status, difficulty voting, leaderboard | `TODO` |
-| 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `TODO` |
-| 7   | AI customer-support assistant with grounded fallback                                             | `TODO` |
-| 8   | Shop/media polish, deployment configuration, environment documentation                           | `TODO` |
-| 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `TODO` |
+| #   | Task                                                                                             | Status        |
+| --- | ------------------------------------------------------------------------------------------------ | ------------- |
+| 1   | Repository audit, restore missing entries, install dependencies, baseline build/test/lint        | `DONE`        |
+| 2   | Frontend foundation: service layer, public content pages (prices, hours, rules, courses, events) | `DONE`        |
+| 3   | FastAPI backend + SQLAlchemy models + Alembic migrations + API contract                          | `DONE`        |
+| 4   | Authentication, roles, client records and safety agreements                                      | `IN_PROGRESS` |     | 5   | Routes, route status, difficulty voting, leaderboard | `TODO` |
+| 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `TODO`        |
+| 7   | AI customer-support assistant with grounded fallback                                             | `TODO`        |
+| 8   | Shop/media polish, deployment configuration, environment documentation                           | `TODO`        |
+| 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `TODO`        |
 
 > Task order note: Task 3 (the backend) was completed **before** Task 2 (the
 > frontend service layer) so that the frontend could be written against a real,
@@ -306,6 +306,30 @@ are marked `DRAFT`.
   instead; the deployed target is `npx wrangler --cwd .output/server deploy`.
 - The CORS origin list has to include the origin the frontend is served
   from. The default now covers ports 5173, 8080 and 8090.
+
+---
+
+### Next task — Task 4: Authentication, roles, client records and safety agreements (`IN_PROGRESS`)
+
+The backend already enforces the rules for this task: `/api/auth/register`,
+`/api/auth/login`, `/api/auth/me`, `/api/me/agreement` and
+`/api/me/agreement/signature` exist, the role is read from the database on
+every request, and ownership is checked server-side. The frontend service
+layer already has the access-token store (`setAccessToken` / `getAccessToken`).
+
+What is left is the member-facing UI:
+
+- a sign-in and registration page that stores the token through
+  `setAccessToken`;
+- a signed-in state for the member area, replacing the "MOCK PREVIEW" notice;
+- the safety-agreement panel, including the digital signature flow;
+- showing the signed-in member's own logbook, dashboard and votes from the
+  backend instead of the sample data.
+
+Two things have to be settled with ARCH first: the exact safety-agreement
+workflow (digital signature versus document upload versus a staff-confirmed
+status) and whether self-registration should be open before e-mail
+verification exists.
 
 ---
 
