@@ -743,6 +743,229 @@
 }
 
 /* ==========================================================================
+   Customer-support assistant
+   ========================================================================== */
+
+.assistant-launcher {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.1rem;
+  border: none;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 0.45);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.assistant-launcher:hover {
+  transform: translateY(-2px);
+}
+
+.assistant-panel {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 5rem;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: min(24rem, calc(100vw - 2.5rem));
+  max-height: min(34rem, calc(100vh - 8rem));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  box-shadow: 0 1.5rem 3rem rgb(0 0 0 / 0.55);
+  overflow: hidden;
+}
+
+.assistant-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.assistant-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background: rgb(200 245 66 / 0.14);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.assistant-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.assistant-head h2 {
+  font-size: 1.1rem;
+}
+
+.assistant-head p {
+  margin-top: 0.15rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.assistant-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.assistant-intro p {
+  color: var(--color-muted-foreground);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.assistant-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.assistant-question {
+  align-self: flex-end;
+  max-width: 90%;
+  padding: 0.5rem 0.8rem;
+  border-radius: 0.75rem 0.75rem 0 0.75rem;
+  background: var(--color-accent);
+  font-size: 0.88rem;
+}
+
+.assistant-answer {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0 0.75rem 0.75rem 0.75rem;
+  background: var(--color-background);
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+
+.assistant-answer p {
+  white-space: pre-line;
+}
+
+.assistant-mode {
+  display: inline-block;
+  margin-top: 0.6rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.assistant-mode-knowledge_base {
+  color: var(--color-primary);
+}
+
+.assistant-mode-llm_grounded {
+  color: var(--color-hold-blue);
+}
+
+.assistant-mode-not_covered {
+  color: var(--color-hold-yellow);
+}
+
+.assistant-sources {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0 0;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.assistant-sources li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+}
+
+.assistant-sources span {
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.assistant-form {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.85rem 1.1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.assistant-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.assistant-form input:focus {
+  outline: none;
+  border-color: var(--color-ring);
+}
+
+.assistant-footnote {
+  padding: 0 1.1rem 0.9rem;
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+}
+
+.assistant-footnote a {
+  color: var(--color-primary);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ==========================================================================
    Staff and operations
    ========================================================================== */
 

@@ -11,6 +11,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import { Header, Footer } from "@/components/arch/shared";
+import { AssistantWidget } from "@/components/arch/assistant";
 import { serviceStatusQuery } from "@/services/arch";
 import { SessionProvider } from "@/services/session";
 import appCss from "../styles.css?url";
@@ -143,6 +144,7 @@ function RootComponent() {
           <Outlet />
         </div>
         <Footer />
+        <AssistantWidget />
       </SessionProvider>
     </QueryClientProvider>
   );

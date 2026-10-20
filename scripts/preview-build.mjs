@@ -22,6 +22,15 @@ const outputDir = path.join(repoRoot, ".output");
 const publicDir = path.join(outputDir, "public");
 const port = Number(process.argv[2] ?? 8090);
 
+try {
+  await stat(path.join(outputDir, "server", "index.mjs"));
+} catch {
+  console.error(
+    "No production build found. Run `bun run build` first, then start this preview again.",
+  );
+  process.exit(1);
+}
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -92,4 +101,7 @@ const server = createServer(async (nodeRequest, nodeResponse) => {
 
 server.listen(port, () => {
   console.log(`Production build available at http://localhost:${port}/`);
+  console.log(
+    "The build is served from memory, so rebuild and restart this preview after changes.",
+  );
 });

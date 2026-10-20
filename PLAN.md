@@ -82,8 +82,8 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 | 4   | Authentication, roles, client records and safety agreements                                      | `DONE`        |
 | 5   | Routes, route status, difficulty voting, leaderboard                                             | `DONE`        |
 | 6   | Staff/admin: task assignment, checklists, schedules, events                                      | `DONE`        |
-| 7   | AI customer-support assistant with grounded fallback                                             | `IN_PROGRESS` |
-| 8   | Shop/media polish, deployment configuration, environment documentation                           | `TODO`        |
+| 7   | AI customer-support assistant with grounded fallback                                             | `DONE`        |
+| 8   | Shop/media polish, deployment configuration, environment documentation                           | `IN_PROGRESS` |
 | 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `TODO`        |
 
 > Task order note: Task 3 (the backend) was completed **before** Task 2 (the
@@ -593,6 +593,59 @@ pages, so both render the same first frame.
   built yet; the API supports it and the backend test covers it.
 - The agreement queue (approving agreements on the member's behalf) is not in
   the interface; the API supports it.
+
+### Task 7 — Customer-support assistant (`DONE`)
+
+**Changes**
+
+- `src/components/arch/assistant.tsx` — the assistant, embedded in the website
+  as a launcher in the corner of every page. It says where its answers come
+  from, shows the knowledge-base entries an answer is based on, and points at
+  the contact form when it cannot help.
+- `src/routes/__root.tsx` — the assistant is mounted for the whole site.
+- `src/styles.css` — the launcher, the panel, the messages and the source
+  labels.
+- `src/test/assistant-api.test.ts` — tests for the assistant endpoints, the
+  three answer modes and the unreachable case.
+- `scripts/check-assistant.mjs` — a browser check of the assistant.
+
+**How it answers**
+
+- The knowledge base is the published FAQ. A question that matches an entry is
+  answered with that entry, verbatim, and the entry is shown as the source.
+- A question that does not match is answered with a clear "I don't have
+  approved information about that yet", a list of what the assistant _can_
+  cover, and a pointer to the contact form. It never guesses.
+- A language model can be configured (`LLM_PROVIDER`, `LLM_API_KEY`,
+  `LLM_MODEL`). When one is, the matched entries are handed to the model
+  together with the question and the answer is labelled
+  "Answered with the configured assistant, using ARCH's published information".
+  The provider key is only ever read on the server. **No provider is
+  configured in this environment, so the assistant runs in knowledge-base mode
+  and the interface says so.**
+- The answer always carries a mode, and the interface always shows it.
+
+**Verification**
+
+- Backend: `ruff check` and `ruff format --check` clean; **123 tests pass**,
+  including the assistant's grounding and fallback behaviour.
+- Frontend: `bun run lint` 0 errors; `bun run typecheck` clean; `bun run test`
+  → **49 passing** (12 routing, 13 service mapping, 13 session, 7 staff API,
+  4 assistant).
+- `node scripts/check-assistant.mjs` against the dev server and the production
+  build: the panel states that the answers come from ARCH's published
+  information; a covered question returns the published answer with its source;
+  an uncovered question returns the "not covered" answer and says so. No
+  browser errors.
+- `node scripts/check-pages.mjs` → all 19 pages clean on both servers.
+
+**Open items**
+
+- No language model provider is configured, so the model path has not been
+  exercised end to end. The provider call, the grounding and the fallback are
+  unit-tested; the HTTP call to a provider is not.
+- The assistant does not yet suggest the published FAQ pages when a question
+  is close but not an exact match.
 
 ---
 
