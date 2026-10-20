@@ -21,7 +21,9 @@ records what it changed and how it was verified.
 
 ## 1. What is actually working
 
-### Verified by automated tests (173 tests in total)
+### Verified by automated tests (181 tests in total)
+
+The counts below are after the fixes: 129 backend tests and 52 frontend tests.
 
 | Area                             | Evidence                                                                                                                                                                                                                                                   |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -33,22 +35,22 @@ records what it changed and how it was verified.
 | Public API and input validation  | `backend/tests/test_public_api.py` — every public endpoint, the contact form, unpublished FAQ entries staying hidden, the vote tally reaching the public route list.                                                                                       |
 | Assistant grounding and fallback | `backend/tests/test_public_api.py` — a covered question, an uncovered question, and the assurance that no price is invented.                                                                                                                               |
 | Security configuration           | `backend/tests/test_security.py` — the production secret key, the wildcard CORS origin, the password length rules, the constant-time login, the role read from the database.                                                                               |
-| Frontend service layer           | `src/test/*.test.ts` (50 tests) — the wire-to-UI mapping, the session state machine, the account and staff request shapes, the assistant modes.                                                                                                            |
+| Frontend service layer           | `src/test/*.test.ts` (52 tests) — the wire-to-UI mapping, the session state machine, the account and staff request shapes, the assistant modes.                                                                                                            |
 
 ### Verified only in a local browser
 
 The seven browser checks under `scripts/` pass against **both** the development
 server and the production build:
 
-| Check                | What it proves                                                                                                                                  |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check-pages`        | All 19 pages load with no console error, no failed request and no hydration mismatch.                                                           |
-| `check-contact-form` | The contact form reaches the API and the confirmation is shown.                                                                                 |
-| `check-member-flows` | Register, sign the agreement, log a climb, edit the profile, refuse a wrong password, change the password, sign out, records hidden afterwards. |
-| `check-voting`       | Vote, change the vote, withdraw it, and see the leaderboard.                                                                                    |
-| `check-staff-flows`  | A customer is refused on both staff pages, a member of staff works their own task, an administrator publishes a route and an event.             |
-| `check-assistant`    | A covered question returns the published answer with its source; an uncovered question admits it.                                               |
-| `check-styles`       | The production build really is styled.                                                                                                          |
+| Check                | What it proves                                                                                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check-pages`        | All 20 pages load with no console error, no failed request and no hydration mismatch.                                                                           |
+| `check-contact-form` | The contact form reaches the API and the confirmation is shown.                                                                                                 |
+| `check-member-flows` | Register, sign the agreement, log a climb, edit the profile, refuse a wrong password, change the password, sign out, records hidden afterwards.                 |
+| `check-voting`       | Vote, change the vote, withdraw it, and see the leaderboard.                                                                                                    |
+| `check-staff-flows`  | A customer is refused on both staff pages, a member of staff works their own task, an administrator publishes a route and an event and works the contact inbox. |
+| `check-assistant`    | A covered question returns the published answer with its source; a question that only shares a keyword with one is refused.                                     |
+| `check-styles`       | The production build really is styled.                                                                                                                          |
 
 **Not verified anywhere:** the PostgreSQL path, the Cloudflare Worker
 deployment, the live language-model provider, and anything that depends on a
@@ -279,11 +281,24 @@ public API).
 
 ## 7. Conclusion
 
-The platform is **ready to demonstrate**, once the three blockers above are
-fixed. The public website, the member area, route voting, the leaderboard, the
-staff tools and the operations workspace all work end to end and are covered by
-tests and by real browser runs.
+**Ready to demonstrate: yes**, now that the three blockers above have been
+fixed and verified. The public website, the member area, route voting, the
+leaderboard, the staff tools and the operations workspace all work end to end,
+and are covered both by tests and by real browser runs against the
+development server _and_ the production build.
 
-It is **not ready for production**. The three production blockers that are
-technical (P1, P2, P3) are straightforward; the rest need ARCH's answers
-(D1–D12) and the institution's privacy review (P10).
+**Not ready for production.** The three production blockers that are
+technical (P1, P2, P3) are straightforward but have not been done here. The
+rest need ARCH's answers (D1–D12) and the institution's privacy review
+(P10). Nothing in this repository should be read as a claim of legal
+compliance: the data model, the safety-agreement workflow and the route
+voting rules are all proposals that ARCH has yet to confirm.
+
+**What a demonstration should show, and what it should not.** The site is
+honest about what it does not know: the price list is empty, the opening
+hours say "to be confirmed", the rules are marked as drafts, the
+photographs are placeholders, and the assistant says when it does not know.
+That honesty is a feature, and it should be presented as such. The
+photographs and the confirmed opening hours, prices, courses and events are
+the only things between the current build and a finished public site, and all
+five need ARCH.
