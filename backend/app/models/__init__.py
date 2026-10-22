@@ -29,6 +29,7 @@ from app.models.content import (
     Rule,
     Service,
 )
+from app.models.holds import HoldRole, HoldSetStatus, RouteHold, RouteHoldSet, WallHold
 from app.models.staff import ChecklistItem, StaffShift, StaffTask, TaskPriority, TaskStatus
 from app.models.users import AgreementMethod, AgreementStatus, Role, SafetyAgreement, User
 
@@ -45,11 +46,15 @@ __all__ = [
     "Event",
     "FaqEntry",
     "GymInfo",
+    "HoldRole",
+    "HoldSetStatus",
     "OpeningHour",
     "Price",
     "Product",
     "ResultType",
     "Role",
+    "RouteHold",
+    "RouteHoldSet",
     "RouteStatus",
     "RouteVote",
     "Rule",
@@ -63,6 +68,7 @@ __all__ = [
     "User",
     "VoteValue",
     "Wall",
+    "WallHold",
     "WallType",
     "utcnow",
 ]

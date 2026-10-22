@@ -114,6 +114,11 @@ class ClimbRoute(Base, TimestampMixin):
     created_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    #: The annotated hold sequence members see. It moves only when an
+    #: administrator publishes a draft, so unfinished staff edits stay hidden.
+    published_hold_set_id: Mapped[int | None] = mapped_column(
+        ForeignKey("route_hold_sets.id", ondelete="SET NULL", use_alter=True), nullable=True
+    )
 
     votes: Mapped[list[RouteVote]] = relationship(
         back_populates="route", cascade="all, delete-orphan"

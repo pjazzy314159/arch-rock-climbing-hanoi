@@ -1588,6 +1588,88 @@ foundation (schema, migration, validated endpoints, permission tests).
 
 ---
 
+### Phase 2B — Hold annotation backend (`DONE`)
+
+The editor's data layer is committed on its own so the API can be verified
+before any canvas code depends on it.
+
+**Schema** (migration `83693e68129f`, on top of `9d1c4f8ab207`)
+
+- `wall_holds` — one hand-drawn box on a wall photograph: `wall_id`, optional
+  `label`, normalised `x`, `y`, `width`, `height`, `created_by_id`, with
+  `CHECK` constraints that keep the box inside the image and forbid a
+  zero-sized box.
+- `route_hold_sets` — `route_id`, `status` (`draft` / `published` /
+  `superseded`), the `wall_image_url` the boxes were drawn on, `published_at`.
+- `route_holds` — `set_id`, `wall_hold_id`, 1-based `position` and `role`
+  (`start` / `middle` / `finish`), unique per set on both position and hold.
+- `climb_routes.published_hold_set_id` — nullable pointer to the sequence
+  members may see. Only publishing moves it.
+
+**API**
+
+| Endpoint | Who |
+| --- | --- |
+| `GET/POST /api/staff/walls/{wall_id}/holds` | staff + admin |
+| `PATCH/DELETE /api/staff/holds/{hold_id}` | staff + admin |
+| `GET /api/staff/walls`, `GET /api/staff/walls/{wall_id}/routes` | staff + admin |
+| `GET/PUT /api/staff/routes/{route_id}/hold-set` | staff + admin |
+| `POST /api/staff/routes/{route_id}/hold-set/publish` | **admin only** |
+| `GET /api/public/routes/{route_id}/holds` | anyone |
+
+A draft becomes visible only through the publish action; the previous
+published set is marked `superseded`, and an archived route returns no public
+holds. The first hold in the sequence is the start and the last is the finish;
+a supplied role that disagrees with the order is rejected. A new draft starts
+from the published sequence, so a small correction does not mean drawing the
+route again. A hold used by a published set cannot be deleted (409); removing
+one from a draft closes up the positions.
+
+**Migration and data safety**
+
+- The development database is `backend/arch_dev.db` (SQLite, the configured
+  default; no `.env` overrides it). Before migrating, a transactionally
+  consistent copy was taken with Python's SQLite backup API to
+  `var/backups/arch_dev-20261023-000541.db` (ignored by Git). The copy passes
+  `PRAGMA integrity_check` and contains 6 routes, 12 achievements and 8 users.
+- `alembic upgrade head` applied only the new, additive revision. Afterwards
+  the development database reports `integrity: ok`, still 6 routes and 12
+  achievements, and now has `wall_holds`, `route_hold_sets` and `route_holds`.
+  No downgrade or reset was run against it.
+- A separate disposable SQLite database ran `upgrade head` → `alembic check` →
+  `downgrade -1` → `upgrade head` successfully. This is SQLite evidence only,
+  not PostgreSQL evidence.
+- The API process was restarted to load the new code; `/api/health` still
+  reports `"database":"sqlite"`. The new staff and public endpoints were called
+  against the running server successfully.
+
+**Verification**
+
+- `uv run pytest` — **212 passed** (14 new hold tests).
+- `uv run ruff check .` — clean; `uv run ruff format --check .` — clean;
+  `uv run alembic check` — no new upgrade operations.
+- `backend/tests/test_holds_api.py` covers coordinate rounding and bounds,
+  create/move/read/delete, ordering and derived roles, duplicate holds, holds
+  from another wall, draft invisibility, admin-only publishing, supersession,
+  archived routes, 401/403 access, published-hold deletion refusal, draft
+  renumbering, incomplete publish and routes without a wall.
+
+**Limitations**
+
+- The migration has **not** been run against PostgreSQL; the table cycle was
+  handled with `use_alter=True`, but that is a claim to test in Phase 3, not a
+  proven result.
+- The editor UI and the member overlay are not part of this commit. There is
+  no upload endpoint: staff can only annotate a wall that already has an
+  `image_url`.
+- `alembic check` prints a table-sorting note on SQLite for the circular
+  pointer; it is a warning, not a failure.
+
+**Next:** the interactive editor in the staff/admin area, then the member
+overlay after save/reload/publish is verified.
+
+---
+
 ## 5. Decisions taken (and why)
 
 | Decision                                                                                 | Rationale                                                                                                                         |
