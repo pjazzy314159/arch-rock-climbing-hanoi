@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Wire types: the exact JSON the ARCH backend returns.
  *
  * The frontend works with the camelCase shapes in `src/services/arch.ts`; the
@@ -106,7 +106,10 @@ export type ApiRouteSummary = {
   id: number;
   name: string;
   grade: string;
-  zone: string;
+  /** The name of the wall the route is set on. */
+  wall: string;
+  wall_id: number | null;
+  wall_type: "slab" | "vertical" | "overhang" | "roof" | "boulder";
   color: string;
   style: string;
   setter: string;
@@ -121,6 +124,16 @@ export type ApiRouteSummary = {
   harder_votes: number;
   perceived_grade: string | null;
   is_fresh: boolean;
+};
+
+/** A wall in the gym. */
+export type ApiWall = {
+  id: number;
+  name: string;
+  description: string;
+  image_url: string | null;
+  sort_order: number;
+  is_active: boolean;
 };
 
 /** A member's difficulty vote for a route. */

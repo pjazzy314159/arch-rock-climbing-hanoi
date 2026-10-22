@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Content service for the ARCH website.
  *
  * Everything the pages render comes through here. Each call returns a
@@ -42,15 +42,19 @@ export type ClimbRoute = {
   apiId: number;
   name: string;
   grade: string;
-  zone: string;
+  /** The wall the route is set on. */
+  wall: string;
+  wallId: number | null;
+  /** The kind of surface the problem is set on. */
+  wallType: WallType;
   color: "lime" | "coral" | "blue" | "yellow";
   style: string;
   setter: string;
+  status: RouteStatus;
   fresh: boolean;
   sends: number;
   voteCount: number;
   perceivedGrade: string | null;
-  /** A reference to a picture of the route, if the setters published one. */
   imageUrl: string | null;
 };
 
@@ -237,7 +241,9 @@ export const mockRoutes: ClimbRoute[] = [
     apiId: 0,
     name: "Quiet the Mind",
     grade: "V3",
-    zone: "The Slab",
+    wall: "The Slab",
+    wallId: 3,
+    wallType: "slab",
     color: "lime",
     style: "Balance · Technical",
     setter: "Minh",
@@ -245,6 +251,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 24,
     voteCount: 0,
     perceivedGrade: null,
+    status: "active",
     imageUrl: null,
   },
   {
@@ -252,7 +259,9 @@ export const mockRoutes: ClimbRoute[] = [
     apiId: 0,
     name: "Against the Grain",
     grade: "V5",
-    zone: "The Cave",
+    wall: "The Cave",
+    wallId: 1,
+    wallType: "overhang",
     color: "coral",
     style: "Power · Overhang",
     setter: "Linh",
@@ -260,6 +269,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 12,
     voteCount: 0,
     perceivedGrade: null,
+    status: "active",
     imageUrl: null,
   },
   {
@@ -267,7 +277,9 @@ export const mockRoutes: ClimbRoute[] = [
     apiId: 0,
     name: "Little by Little",
     grade: "V1",
-    zone: "The Main Wall",
+    wall: "The Main Wall",
+    wallId: 2,
+    wallType: "vertical",
     color: "blue",
     style: "Flow · Beginner-friendly",
     setter: "An",
@@ -275,6 +287,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 68,
     voteCount: 0,
     perceivedGrade: null,
+    status: "active",
     imageUrl: null,
   },
   {
@@ -282,7 +295,9 @@ export const mockRoutes: ClimbRoute[] = [
     apiId: 0,
     name: "Trust Your Feet",
     grade: "V4",
-    zone: "The Slab",
+    wall: "The Slab",
+    wallId: 3,
+    wallType: "slab",
     color: "yellow",
     style: "Footwork · Technical",
     setter: "Minh",
@@ -290,6 +305,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 19,
     voteCount: 0,
     perceivedGrade: null,
+    status: "active",
     imageUrl: null,
   },
   {
@@ -297,7 +313,9 @@ export const mockRoutes: ClimbRoute[] = [
     apiId: 0,
     name: "After Hours",
     grade: "V6",
-    zone: "The Cave",
+    wall: "The Cave",
+    wallId: 1,
+    wallType: "overhang",
     color: "blue",
     style: "Compression · Power",
     setter: "Linh",
@@ -305,6 +323,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 7,
     voteCount: 0,
     perceivedGrade: null,
+    status: "active",
     imageUrl: null,
   },
   {
@@ -312,7 +331,9 @@ export const mockRoutes: ClimbRoute[] = [
     apiId: 0,
     name: "First Ascent",
     grade: "V0",
-    zone: "The Main Wall",
+    wall: "The Main Wall",
+    wallId: 2,
+    wallType: "vertical",
     color: "coral",
     style: "Beginner-friendly · Flow",
     setter: "An",
@@ -320,6 +341,7 @@ export const mockRoutes: ClimbRoute[] = [
     sends: 91,
     voteCount: 0,
     perceivedGrade: null,
+    status: "active",
     imageUrl: null,
   },
 ];
@@ -468,8 +490,38 @@ const mockGym: GymProfile = {
 const ROUTE_COLORS = ["lime", "coral", "blue", "yellow"] as const;
 type RouteColor = (typeof ROUTE_COLORS)[number];
 
+export const WALL_TYPES = ["slab", "vertical", "overhang", "roof", "boulder"] as const;
+export type WallType = (typeof WALL_TYPES)[number];
+
+export const ROUTE_STATUSES = ["active", "archived", "pending_reset"] as const;
+export type RouteStatus = (typeof ROUTE_STATUSES)[number];
+
+/** Human labels for the wall types, used in the interface. */
+export const WALL_TYPE_LABELS: Record<WallType, string> = {
+  slab: "Slab",
+  vertical: "Vertical",
+  overhang: "Overhang",
+  roof: "Roof",
+  boulder: "Boulder",
+};
+
+/** Human labels for the route statuses. */
+export const ROUTE_STATUS_LABELS: Record<RouteStatus, string> = {
+  active: "On the wall",
+  archived: "Archived",
+  pending_reset: "Being reset",
+};
+
 function toRouteColor(value: string): RouteColor {
   return ROUTE_COLORS.find((color) => color === value) ?? "lime";
+}
+
+function toWallType(value: string): WallType {
+  return WALL_TYPES.find((type) => type === value) ?? "vertical";
+}
+
+function toRouteStatus(value: string): RouteStatus {
+  return ROUTE_STATUSES.find((status) => status === value) ?? "active";
 }
 
 export function toClimbRoute(route: ApiRouteSummary): ClimbRoute {
@@ -478,10 +530,13 @@ export function toClimbRoute(route: ApiRouteSummary): ClimbRoute {
     apiId: route.id,
     name: route.name,
     grade: route.grade,
-    zone: route.zone,
+    wall: route.wall ?? "",
+    wallId: route.wall_id ?? null,
+    wallType: toWallType(route.wall_type),
     color: toRouteColor(route.color),
     style: route.style,
     setter: route.setter,
+    status: toRouteStatus(route.status),
     fresh: route.is_fresh,
     sends: route.sends,
     voteCount: route.vote_count,
@@ -705,6 +760,15 @@ export const archService = {
       (routes) => routes.length === 0,
     ),
 
+  /** Every route, including the archived ones. */
+  listAllRoutes: (): Promise<Resource<ClimbRoute[]>> =>
+    load(
+      "The route list",
+      async () => (await api.routes({ status: "all" })).map(toClimbRoute),
+      mockRoutes,
+      (routes) => routes.length === 0,
+    ),
+
   listProducts: (): Promise<Resource<Product[]>> =>
     load(
       "The shoe collection",
@@ -850,6 +914,11 @@ export const formatPrice = (price: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(price);
 
 export const routeQuery = { queryKey: ["arch", "routes"], queryFn: archService.listRoutes };
+/** Every route, including the archived ones, for the directory's status filter. */
+export const allRoutesQuery = {
+  queryKey: ["arch", "routes", "all"],
+  queryFn: archService.listAllRoutes,
+};
 export const productQuery = { queryKey: ["arch", "products"], queryFn: archService.listProducts };
 export const memberQuery = { queryKey: ["arch", "member"], queryFn: archService.getMember };
 export const logbookQuery = { queryKey: ["arch", "logbook"], queryFn: archService.getLogbook };

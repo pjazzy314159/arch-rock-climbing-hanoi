@@ -21,12 +21,17 @@ import { api, ApiError, ApiUnavailableError } from "@/services/api";
 import { PageHeading, RouteCard, ServiceIcon, TextLink } from "./shared";
 import { EmptyNotice, SampleDataBanner } from "./data-state";
 import {
+  allRoutesQuery,
   productQuery,
   routeQuery,
   serviceQuery,
   formatPrice,
+  WALL_TYPE_LABELS,
+  ROUTE_STATUS_LABELS,
   type DataSource,
   type Product,
+  type RouteStatus,
+  type WallType,
 } from "@/services/arch";
 import gymPhoto from "@/assets/arch-gym.jpg";
 import shoePhoto from "@/assets/climbing-shoes.jpg";
@@ -176,21 +181,30 @@ export function TourPage() {
 }
 
 export function RoutesPage() {
-  const { data: routes } = useSuspenseQuery(routeQuery);
+  const { data: routes } = useSuspenseQuery(allRoutesQuery);
   const [grade, setGrade] = useState("All grades");
-  const [zone, setZone] = useState("All walls");
+  const [wall, setWall] = useState("All walls");
+  const [wallType, setWallType] = useState("All types");
+  const [status, setStatus] = useState("active");
   const [query, setQuery] = useState("");
   const [fresh, setFresh] = useState(false);
   const list = routes.data;
   const filtered = list.filter(
     (r) =>
       (grade === "All grades" || r.grade === grade) &&
-      (zone === "All walls" || r.zone === zone) &&
+      (wall === "All walls" || r.wall === wall) &&
+      (wallType === "All types" || r.wallType === wallType) &&
+      (status === "all" || r.status === status) &&
       (!fresh || r.fresh) &&
-      `${r.name} ${r.style}`.toLowerCase().includes(query.toLowerCase()),
+      `${r.name} ${r.style} ${r.wall}`.toLowerCase().includes(query.toLowerCase()),
   );
   const grades = ["All grades", ...Array.from(new Set(list.map((r) => r.grade))).sort()];
-  const zones = ["All walls", ...Array.from(new Set(list.map((r) => r.zone))).sort()];
+  const walls = [
+    "All walls",
+    ...Array.from(new Set(list.map((r) => r.wall).filter(Boolean))).sort(),
+  ];
+  const wallTypes = ["All types", ...Array.from(new Set(list.map((r) => r.wallType))).sort()];
+  const statuses = ["active", "archived", "pending_reset", "all"];
   return (
     <main className="page-main">
       <PageHeading
@@ -218,9 +232,31 @@ export function RoutesPage() {
             <option key={g}>{g}</option>
           ))}
         </select>
-        <select aria-label="Filter wall" value={zone} onChange={(e) => setZone(e.target.value)}>
-          {zones.map((z) => (
-            <option key={z}>{z}</option>
+        <select aria-label="Filter wall" value={wall} onChange={(e) => setWall(e.target.value)}>
+          {walls.map((w) => (
+            <option key={w}>{w}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter wall type"
+          value={wallType}
+          onChange={(e) => setWallType(e.target.value)}
+        >
+          {wallTypes.map((t) => (
+            <option key={t} value={t}>
+              {t === "All types" ? t : WALL_TYPE_LABELS[t as WallType]}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter route status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
+          {statuses.map((s) => (
+            <option key={s} value={s}>
+              {s === "all" ? "All statuses" : ROUTE_STATUS_LABELS[s as RouteStatus]}
+            </option>
           ))}
         </select>
         <label className="check-filter">
@@ -255,7 +291,9 @@ export function RoutesPage() {
             onClick={() => {
               setQuery("");
               setGrade("All grades");
-              setZone("All walls");
+              setWall("All walls");
+              setWallType("All types");
+              setStatus("active");
               setFresh(false);
             }}
           >

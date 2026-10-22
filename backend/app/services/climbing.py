@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 
-from app.models import Achievement, ResultType, RouteStatus, VoteValue
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.models import Achievement, ClimbRoute, ResultType, RouteStatus, VoteValue
+from app.schemas.climbing import RouteOut, RouteSummary
 
 #: A route needs at least this many community votes before a perceived grade
 #: is published. Below the threshold the official grade is shown on its own.
@@ -190,3 +194,37 @@ def rank_rows(rows: list[LeaderboardRow]) -> list[tuple[int, LeaderboardRow]]:
 def is_route_visible(status: RouteStatus) -> bool:
     """Return whether a route status should be listed publicly."""
     return status is RouteStatus.ACTIVE
+
+
+def build_route_out(route: ClimbRoute) -> RouteOut:
+    """Build the plain route response, including the wall's name."""
+    out = RouteOut.model_validate(route)
+    out.wall = route.wall.name if route.wall else ""
+    return out
+
+
+def build_route_summary(db: Session, route: ClimbRoute) -> RouteSummary:
+    """Build the public summary of a route, with its community feedback.
+
+    The official grade the gym set is reported unchanged. The perceived grade
+    is the community's view of it, and is only present once enough climbers
+    have voted.
+    """
+    summary = RouteSummary.model_validate(route)
+    summary.wall = route.wall.name if route.wall else ""
+    tally = tally_votes(route.id, route.grade, [vote.value for vote in route.votes])
+    summary.vote_count = tally.total
+    summary.easier_votes = tally.easier
+    summary.as_set_votes = tally.as_set
+    summary.harder_votes = tally.harder
+    summary.perceived_grade = tally.perceived_grade
+    summary.sends = (
+        db.scalar(
+            select(func.count())
+            .select_from(Achievement)
+            .where(Achievement.route_id == route.id, Achievement.result == ResultType.SENT)
+        )
+        or 0
+    )
+    summary.is_fresh = bool(route.set_at and (datetime.now(UTC).date() - route.set_at).days <= 7)
+    return summary

@@ -46,8 +46,15 @@ from app.models import (
     StaffTask,
     User,
     VoteValue,
+    Wall,
+    WallType,
 )
 from app.security import hash_password
+
+#: The placeholder photograph the seeded walls point at. ARCH has not
+#: published a photograph of each wall yet; the real pictures live in the
+#: media store and are referenced the same way.
+WALL_PHOTO = "/walls/placeholder-gym.jpg"
 
 # --- Content that is safe to publish ----------------------------------------
 
@@ -319,21 +326,97 @@ def _seed_demo(db: Session) -> None:
             "Refusing to seed demo accounts with development passwords in a production environment."
         )
 
+    # A wall carries a reference to the photograph it is set against, not the
+    # photograph itself. ARCH has not published a photograph of each wall yet,
+    # so the seeded walls point at the placeholder photograph and that is
+    # replaced with the real ones in the media store.
+    demo_walls = [
+        ("The Main Wall", "The long main face of the gym.", 1, WALL_PHOTO),
+        ("The Slab", "Low-angle wall for balance and technique.", 2, WALL_PHOTO),
+        ("The Cave", "Steep overhang for power and commitment.", 3, WALL_PHOTO),
+    ]
+    walls: dict[str, Wall] = {}
+    for name, description, order, image_url in demo_walls:
+        wall = db.scalar(select(Wall).where(Wall.name == name))
+        if wall is None:
+            wall = Wall(
+                name=name,
+                description=description,
+                sort_order=order,
+                image_url=image_url,
+            )
+            db.add(wall)
+        else:
+            # The wall already exists, most likely because the migration
+            # created it. It still gets the description, the ordering and the
+            # photograph it should have.
+            wall.description = description
+            wall.sort_order = order
+            if not wall.image_url:
+                wall.image_url = image_url
+        walls[name] = wall
+    db.flush()
+    for wall in db.scalars(select(Wall)).all():
+        walls.setdefault(wall.name, wall)
+
     demo_routes = [
-        ("Quiet the Mind", "V3", "The Slab", "lime", "Balance · Technical", "Minh"),
-        ("Against the Grain", "V5", "The Cave", "coral", "Power · Overhang", "Linh"),
-        ("Little by Little", "V1", "The Main Wall", "blue", "Flow · Beginner-friendly", "An"),
-        ("Trust Your Feet", "V4", "The Slab", "yellow", "Footwork · Technical", "Minh"),
-        ("After Hours", "V6", "The Cave", "blue", "Compression · Power", "Linh"),
-        ("First Ascent", "V0", "The Main Wall", "coral", "Beginner-friendly · Flow", "An"),
+        ("Quiet the Mind", "V3", "The Slab", WallType.SLAB, "lime", "Balance · Technical", "Minh"),
+        (
+            "Against the Grain",
+            "V5",
+            "The Cave",
+            WallType.OVERHANG,
+            "coral",
+            "Power · Overhang",
+            "Linh",
+        ),
+        (
+            "Little by Little",
+            "V1",
+            "The Main Wall",
+            WallType.VERTICAL,
+            "blue",
+            "Flow · Beginner-friendly",
+            "An",
+        ),
+        (
+            "Trust Your Feet",
+            "V4",
+            "The Slab",
+            WallType.SLAB,
+            "yellow",
+            "Footwork · Technical",
+            "Minh",
+        ),
+        (
+            "After Hours",
+            "V6",
+            "The Cave",
+            WallType.OVERHANG,
+            "blue",
+            "Compression · Power",
+            "Linh",
+        ),
+        (
+            "First Ascent",
+            "V0",
+            "The Main Wall",
+            WallType.VERTICAL,
+            "coral",
+            "Beginner-friendly · Flow",
+            "An",
+        ),
     ]
     if db.scalar(select(ClimbRoute).limit(1)) is None:
-        for index, (name, grade, zone, color, style, setter) in enumerate(demo_routes):
+        for index, (name, grade, wall_name, wall_type, color, style, setter) in enumerate(
+            demo_routes
+        ):
             db.add(
                 ClimbRoute(
                     name=name,
                     grade=grade,
-                    zone=zone,
+                    wall_id=walls[wall_name].id if wall_name in walls else None,
+                    wall_type=wall_type,
                     color=color,
                     style=style,
                     setter=setter,

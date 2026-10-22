@@ -1,4 +1,4 @@
-﻿import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -866,7 +866,7 @@ export function BetaPage({ selectedId }: { selectedId?: string | undefined }) {
           <RouteCard route={route} />
           <div>
             <span className="eyebrow">
-              {route.zone} · {route.grade}
+              {route.wall} · {route.grade}
             </span>
             <h2>{route.name}</h2>
             <p>{route.style}</p>
@@ -1049,7 +1049,7 @@ export function AdminPage() {
                       </td>
                       <td>{r.grade}</td>
                       <td>{r.setter}</td>
-                      <td>{r.zone}</td>
+                      <td>{r.wall}</td>
                       <td>
                         <span className="status-sent">Active</span>
                       </td>

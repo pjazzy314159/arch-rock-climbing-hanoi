@@ -8,6 +8,7 @@ import {
   toVoteTally,
   type ClimbRoute,
 } from "@/services/arch";
+import type { ApiRouteSummary } from "@/services/types";
 
 /**
  * The service layer has to keep the sample data clearly separate from live
@@ -15,11 +16,13 @@ import {
  * the shapes the pages render.
  */
 
-const apiRoute = {
+const apiRoute: ApiRouteSummary = {
   id: 7,
   name: "Quiet the Mind",
   grade: "V3",
-  zone: "The Slab",
+  wall: "The Slab",
+  wall_id: 3,
+  wall_type: "slab",
   color: "coral",
   style: "Balance",
   setter: "Minh",
@@ -43,7 +46,10 @@ describe("route mapping", () => {
     expect(route.apiId).toBe(7);
     expect(route.name).toBe("Quiet the Mind");
     expect(route.grade).toBe("V3");
-    expect(route.zone).toBe("The Slab");
+    expect(route.wall).toBe("The Slab");
+    expect(route.wallId).toBe(3);
+    expect(route.wallType).toBe("slab");
+    expect(route.status).toBe("active");
     expect(route.sends).toBe(12);
     expect(route.fresh).toBe(true);
   });
@@ -80,6 +86,22 @@ describe("route mapping", () => {
     expect(toClimbRoute({ ...apiRoute, image_url: "https://example.com/route.jpg" }).imageUrl).toBe(
       "https://example.com/route.jpg",
     );
+  });
+
+  it("falls back to a known wall type and status for an unknown one", () => {
+    const route = toClimbRoute({
+      ...apiRoute,
+      wall_type: "banana" as never,
+      status: "sideways" as never,
+    });
+    expect(route.wallType).toBe("vertical");
+    expect(route.status).toBe("active");
+  });
+
+  it("copes with a route that is not on a wall yet", () => {
+    const route = toClimbRoute({ ...apiRoute, wall: "", wall_id: null });
+    expect(route.wall).toBe("");
+    expect(route.wallId).toBeNull();
   });
 });
 

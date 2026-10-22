@@ -18,7 +18,7 @@ import { api, memberApi, ApiError, ApiUnavailableError } from "@/services/api";
 import { useSession } from "@/services/session";
 import { EmptyNotice, SampleDataBanner } from "./data-state";
 import { PageHeading, RouteCard, TextLink } from "./shared";
-import { leaderboardQuery, routeQuery, type Resource } from "@/services/arch";
+import { leaderboardQuery, routeQuery, toClimbRoute, type Resource } from "@/services/arch";
 import type { ApiVoteTally, ApiRouteSummary } from "@/services/types";
 
 const VOTE_OPTIONS = [
@@ -95,23 +95,7 @@ export function RouteDetailPage({ routeId }: { routeId: string }) {
   }
 
   const found = route.data.data as ApiRouteSummary;
-  const card = {
-    id: String(found.id),
-    apiId: found.id,
-    name: found.name,
-    grade: found.grade,
-    zone: found.zone,
-    color: (["lime", "coral", "blue", "yellow"] as const).includes(found.color as "lime")
-      ? (found.color as "lime" | "coral" | "blue" | "yellow")
-      : ("lime" as const),
-    style: found.style,
-    setter: found.setter,
-    fresh: found.is_fresh,
-    sends: found.sends,
-    voteCount: found.vote_count,
-    perceivedGrade: found.perceived_grade,
-    imageUrl: found.image_url ?? null,
-  };
+  const card = toClimbRoute(found);
   const tallies = tally.data?.data as ApiVoteTally | undefined;
   const myVoteValue = myVote.data?.value ?? null;
 
@@ -164,7 +148,7 @@ export function RouteDetailPage({ routeId }: { routeId: string }) {
         <ChevronRight size={14} />
         {found.name}
       </div>
-      <PageHeading eyebrow={found.zone.toUpperCase()} title={found.name} description={found.style}>
+      <PageHeading eyebrow={card.wall.toUpperCase()} title={found.name} description={found.style}>
         <span className="sample-badge">
           {route.data.source === "api" ? "LIVE ROUTE" : "SAMPLE ROUTE"}
         </span>

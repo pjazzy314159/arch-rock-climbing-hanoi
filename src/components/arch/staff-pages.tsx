@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { adminApi, staffApi, ApiError, ApiUnavailableError } from "@/services/api";
+import { WALL_TYPES, WALL_TYPE_LABELS, type WallType } from "@/services/arch";
 import { useSession } from "@/services/session";
 import type { ApiAdminMember, ApiRouteSummary, ApiTask } from "@/services/types";
 import { EmptyNotice } from "./data-state";
@@ -522,9 +523,12 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [grade, setGrade] = useState("");
-  const [zone, setZone] = useState("The Main Wall");
+  const [wallId, setWallId] = useState("");
+  const [wallType, setWallType] = useState<WallType>("vertical");
   const [setter, setSetter] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+
+  const walls = useQuery({ queryKey: ["admin", "walls"], queryFn: () => adminApi.walls() });
 
   async function createRoute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -534,7 +538,8 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
       await adminApi.createRoute({
         name: name.trim(),
         grade: grade.trim().toUpperCase(),
-        zone: zone.trim(),
+        wall_id: wallId ? Number(wallId) : null,
+        wall_type: wallType,
         setter: setter.trim(),
         ...(imageUrl.trim() ? { image_url: imageUrl.trim() } : {}),
       });
@@ -586,7 +591,10 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
                   <small>Set by {route.setter || "—"}</small>
                 </td>
                 <td>{route.grade}</td>
-                <td>{route.zone}</td>
+                <td>
+                  {route.wall || "—"}
+                  <small>{WALL_TYPE_LABELS[route.wall_type] ?? route.wall_type}</small>
+                </td>
                 <td>
                   <span className={route.status === "active" ? "status-sent" : "status-project"}>
                     {route.status.replace("_", " ")}
@@ -642,8 +650,30 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
           <div className="form-row">
             <label>
               Wall
-              <input value={zone} onChange={(event) => setZone(event.target.value)} />
+              <select value={wallId} onChange={(event) => setWallId(event.target.value)}>
+                <option value="">Not set yet</option>
+                {(walls.data ?? []).map((wall) => (
+                  <option key={wall.id} value={wall.id}>
+                    {wall.name}
+                  </option>
+                ))}
+              </select>
             </label>
+            <label>
+              Wall type
+              <select
+                value={wallType}
+                onChange={(event) => setWallType(event.target.value as WallType)}
+              >
+                {WALL_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {WALL_TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="form-row">
             <label>
               Setter
               <input value={setter} onChange={(event) => setSetter(event.target.value)} />

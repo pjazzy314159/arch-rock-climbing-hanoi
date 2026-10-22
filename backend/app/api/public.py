@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+# ``status`` is imported under another name: the route list has a query
+# parameter called ``status``, which would otherwise shadow the module.
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import status as http_status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import (
-    Achievement,
     ClimbRoute,
     ContactMessage,
     Course,
@@ -20,10 +22,11 @@ from app.models import (
     OpeningHour,
     Price,
     Product,
-    ResultType,
     RouteStatus,
     Rule,
     Service,
+    Wall,
+    WallType,
 )
 from app.schemas import (
     ContactMessageIn,
@@ -39,8 +42,9 @@ from app.schemas import (
     RouteSummary,
     RuleOut,
     ServiceOut,
+    WallOut,
 )
-from app.services.climbing import tally_votes
+from app.services.climbing import build_route_summary
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -139,7 +143,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)) -> ProductOut:
     """A single catalogue entry."""
     product = db.get(Product, product_id)
     if product is None or not product.is_active:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Product not found")
     return ProductOut.model_validate(product)
 
 
@@ -147,61 +151,78 @@ def get_product(product_id: int, db: Session = Depends(get_db)) -> ProductOut:
 def list_routes(
     db: Session = Depends(get_db),
     grade: str | None = Query(default=None),
-    zone: str | None = Query(default=None),
+    wall: str | None = Query(default=None),
+    wall_type: str | None = Query(default=None),
+    status: str | None = Query(default=None),
     search: str | None = Query(default=None),
     fresh_only: bool = Query(default=False),
 ) -> list[RouteSummary]:
-    """The public route directory with community vote summaries."""
-    statement = select(ClimbRoute).where(ClimbRoute.status == RouteStatus.ACTIVE)
+    """The public route directory with community vote summaries.
+
+    Only active routes are listed by default. A status can be asked for
+    explicitly, and an archived route keeps its place in the directory with its
+    status shown, rather than silently disappearing.
+    """
+    statement = select(ClimbRoute)
+    if status == "all":
+        # Every status is asked for, so no status filter is applied.
+        pass
+    elif status:
+        try:
+            wanted = RouteStatus(status)
+        except ValueError:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST, detail="Unknown route status"
+            ) from None
+        statement = statement.where(ClimbRoute.status == wanted)
+    else:
+        statement = statement.where(ClimbRoute.status == RouteStatus.ACTIVE)
+
     if grade:
         statement = statement.where(ClimbRoute.grade == grade)
-    if zone:
-        statement = statement.where(ClimbRoute.zone == zone)
+    if wall:
+        statement = statement.join(Wall).where(Wall.name == wall)
+    if wall_type:
+        try:
+            wanted_type = WallType(wall_type)
+        except ValueError:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST, detail="Unknown wall type"
+            ) from None
+        statement = statement.where(ClimbRoute.wall_type == wanted_type)
     if search:
         statement = statement.where(ClimbRoute.name.ilike(f"%{search}%"))
-    routes = db.scalars(statement.order_by(ClimbRoute.id)).all()
+    if fresh_only:
+        statement = statement.where(
+            ClimbRoute.set_at >= datetime.now(UTC).date() - timedelta(days=7)
+        )
 
-    summaries: list[RouteSummary] = []
-    for route in routes:
-        summary = RouteSummary.model_validate(route)
-        tally = tally_votes(route.id, route.grade, [vote.value for vote in route.votes])
-        summary.vote_count = tally.total
-        summary.easier_votes = tally.easier
-        summary.as_set_votes = tally.as_set
-        summary.harder_votes = tally.harder
-        summary.perceived_grade = tally.perceived_grade
-        summary.sends = (
-            db.scalar(
-                select(func.count())
-                .select_from(Achievement)
-                .where(Achievement.route_id == route.id, Achievement.result == ResultType.SENT)
-            )
-            or 0
-        )
-        summary.is_fresh = bool(
-            route.set_at and (datetime.now(UTC).date() - route.set_at).days <= 7
-        )
-        summaries.append(summary)
-    return summaries
+    routes = db.scalars(statement.order_by(ClimbRoute.id)).all()
+    return [build_route_summary(db, route) for route in routes]
+
+
+@router.get("/walls", response_model=list[WallOut])
+def list_walls(db: Session = Depends(get_db)) -> list[WallOut]:
+    """The walls in the gym, with the photograph each one is set against."""
+    walls = db.scalars(select(Wall).order_by(Wall.sort_order, Wall.id)).all()
+    return [WallOut.model_validate(wall) for wall in walls]
 
 
 @router.get("/routes/{route_id}", response_model=RouteSummary)
 def get_route(route_id: int, db: Session = Depends(get_db)) -> RouteSummary:
-    """A single route with its community vote summary."""
+    """A single route with its community vote summary.
+
+    An archived route is still returned, with its status, so a member who
+    follows an old link is told it has been taken down rather than being shown
+    a page that does not exist.
+    """
     route = db.get(ClimbRoute, route_id)
-    if route is None or route.status != RouteStatus.ACTIVE:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Route not found")
-    summary = RouteSummary.model_validate(route)
-    tally = tally_votes(route.id, route.grade, [vote.value for vote in route.votes])
-    summary.vote_count = tally.total
-    summary.easier_votes = tally.easier
-    summary.as_set_votes = tally.as_set
-    summary.harder_votes = tally.harder
-    summary.perceived_grade = tally.perceived_grade
-    return summary
+    if route is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Route not found")
+    return build_route_summary(db, route)
 
 
-@router.post("/contact", response_model=ContactMessageOut, status_code=status.HTTP_201_CREATED)
+@router.post("/contact", response_model=ContactMessageOut, status_code=http_status.HTTP_201_CREATED)
 def submit_contact(
     payload: ContactMessageIn,
     db: Session = Depends(get_db),

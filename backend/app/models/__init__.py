@@ -13,6 +13,8 @@ from app.models.climbing import (
     RouteStatus,
     RouteVote,
     VoteValue,
+    Wall,
+    WallType,
 )
 from app.models.commerce import Product
 from app.models.content import (
@@ -60,5 +62,7 @@ __all__ = [
     "TimestampMixin",
     "User",
     "VoteValue",
+    "Wall",
+    "WallType",
     "utcnow",
 ]

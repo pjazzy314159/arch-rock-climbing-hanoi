@@ -64,15 +64,72 @@ def test_only_archived_routes_are_hidden_from_the_public_directory(
 
 
 def test_the_route_directory_can_be_filtered(client: TestClient, db, route) -> None:
-    from app.models import ClimbRoute
+    from app.models import ClimbRoute, Wall, WallType
 
-    db.add(ClimbRoute(name="Another One", grade="V5", zone="The Cave", status="active"))
+    cave = Wall(name="The Cave", description="Steep, overhanging terrain.", sort_order=2)
+    db.add(cave)
+    db.commit()
+    db.refresh(cave)
+    db.add(
+        ClimbRoute(
+            name="Another One",
+            grade="V5",
+            wall_id=cave.id,
+            wall_type=WallType.OVERHANG,
+            status="active",
+        )
+    )
     db.commit()
 
     assert len(client.get("/api/public/routes").json()) == 2
     assert len(client.get("/api/public/routes?grade=V5").json()) == 1
-    assert len(client.get("/api/public/routes?zone=The Cave").json()) == 1
+    assert len(client.get("/api/public/routes?wall=The Cave").json()) == 1
+    assert len(client.get("/api/public/routes?wall_type=overhang").json()) == 1
+    assert len(client.get("/api/public/routes?wall_type=slab").json()) == 1
     assert len(client.get("/api/public/routes?search=quiet").json()) == 1
+
+
+def test_an_unknown_wall_type_is_refused(client: TestClient, route) -> None:
+    response = client.get("/api/public/routes?wall_type=banana")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unknown wall type"
+
+
+def test_an_unknown_route_status_is_refused(client: TestClient, route) -> None:
+    response = client.get("/api/public/routes?status=sideways")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unknown route status"
+
+
+def test_the_wall_directory_lists_the_walls(client: TestClient, wall) -> None:
+    listed = client.get("/api/public/walls")
+    assert listed.status_code == 200
+    assert listed.json() == [
+        {
+            "id": wall.id,
+            "name": "The Slab",
+            "description": "Low-angle wall for balance and technique.",
+            "image_url": None,
+            "sort_order": 1,
+            "is_active": True,
+        }
+    ]
+
+
+def test_the_wall_directory_is_empty_when_there_are_no_walls(client: TestClient) -> None:
+    assert client.get("/api/public/walls").json() == []
+
+
+def test_an_archived_route_keeps_its_place_with_its_status(client: TestClient, db, route) -> None:
+    from app.models import RouteStatus
+
+    route.status = RouteStatus.ARCHIVED
+    db.commit()
+
+    listed = client.get("/api/public/routes?status=all").json()
+    assert len(listed) == 1
+    assert listed[0]["status"] == "archived"
+    assert listed[0]["wall"] == "The Slab"
 
 
 def test_unpublished_faq_entries_are_not_exposed(client: TestClient, db) -> None:

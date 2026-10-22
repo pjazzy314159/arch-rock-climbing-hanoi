@@ -27,6 +27,8 @@ from app.schemas.climbing import (
     VoteIn,
     VoteOut,
     VoteTally,
+    WallCreateIn,
+    WallOut,
 )
 from app.schemas.common import (
     ContactMessageIn,
@@ -106,4 +108,6 @@ __all__ = [
     "VoteIn",
     "VoteOut",
     "VoteTally",
+    "WallCreateIn",
+    "WallOut",
 ]

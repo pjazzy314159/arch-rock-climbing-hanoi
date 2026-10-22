@@ -4,17 +4,41 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from app.models import ResultType, RouteStatus, VoteValue
+from app.models import ResultType, RouteStatus, VoteValue, WallType
 from app.schemas.common import ORMModel
+
+
+class WallOut(ORMModel):
+    """A wall in the gym."""
+
+    id: int
+    name: str
+    description: str
+    image_url: str | None = None
+    sort_order: int
+    is_active: bool
+
+
+class WallCreateIn(BaseModel):
+    """The body for adding a wall to the gym."""
+
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(default="", max_length=2000)
+    image_url: str | None = Field(default=None, max_length=400)
+    sort_order: int = Field(default=0, ge=0, le=999)
+    is_active: bool = True
 
 
 class RouteOut(ORMModel):
     id: int
     name: str
     grade: str
-    zone: str
+    #: The wall the route is set on. Empty when the route is not linked to one.
+    wall: str = ""
+    wall_id: int | None = None
+    wall_type: WallType = WallType.VERTICAL
     color: str
     style: str
     setter: str
@@ -22,6 +46,21 @@ class RouteOut(ORMModel):
     set_at: date | None = None
     beta: str | None = None
     image_url: str | None = None
+
+    @field_validator("wall", mode="before")
+    @classmethod
+    def _wall_name(cls, value: object) -> str:
+        """Accept either the wall's name or the wall itself.
+
+        The model exposes ``wall`` as a relationship, so the response takes the
+        name from it rather than the object.
+        """
+        if value is None:
+            return ""
+        name = getattr(value, "name", None)
+        if isinstance(name, str):
+            return name
+        return str(value)
 
 
 class RouteSummary(RouteOut):
@@ -39,7 +78,8 @@ class RouteSummary(RouteOut):
 class RouteCreateIn(BaseModel):
     name: str = Field(min_length=1, max_length=140)
     grade: str = Field(min_length=1, max_length=20)
-    zone: str = Field(default="The Main Wall", max_length=80)
+    wall_id: int | None = None
+    wall_type: WallType = WallType.VERTICAL
     color: str = Field(default="lime", max_length=20)
     style: str = Field(default="", max_length=120)
     setter: str = Field(default="", max_length=80)
@@ -52,7 +92,8 @@ class RouteCreateIn(BaseModel):
 class RouteUpdateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=140)
     grade: str | None = Field(default=None, min_length=1, max_length=20)
-    zone: str | None = Field(default=None, max_length=80)
+    wall_id: int | None = None
+    wall_type: WallType | None = None
     color: str | None = Field(default=None, max_length=20)
     style: str | None = Field(default=None, max_length=120)
     setter: str | None = Field(default=None, max_length=80)

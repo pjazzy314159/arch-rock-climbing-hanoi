@@ -182,7 +182,7 @@ export function RouteCard({ route }: { route: ClimbRoute }) {
     >
       <div className="route-card-top">
         <span className="route-dot" />
-        <span>{route.zone}</span>
+        <span>{route.wall || "Wall to be confirmed"}</span>
         {route.fresh && <span className="fresh-tag">NEW SET</span>}
       </div>
       <div className="route-card-art" aria-hidden="true">

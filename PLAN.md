@@ -114,7 +114,7 @@ Every phase keeps the public website and the backend working.
 
 | #   | Task                                                                                                                       | Status        | Acceptance criteria                                                                                                                        |
 | --- | -------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1.1 | `walls` table, `wall_type` on routes, route status published                                                               | `IN_PROGRESS` | Migration applies and rolls back; existing routes keep their wall name; seeded walls have a type and a photograph reference.               |
+| 1.1 | `walls` table, `wall_type` on routes, route status published                                                               | `DONE`        | Migration applies and rolls back; existing routes keep their wall name; seeded walls have a type and a photograph reference.               |
 | 1.2 | Dashboard response: outcome distribution, statistics by grade, ranking and percentile, recent attempts, active route count | `TODO`        | Every field comes from the member's own rows; a flash is a send with one attempt; the ranking uses the documented leaderboard calculation. |
 | 1.3 | Route directory filters: grade, wall, wall type, status                                                                    | `TODO`        | Each filter narrows the list server-side; the available options come from the data, not from a hard-coded list.                            |
 | 1.4 | The member dashboard                                                                                                       | `TODO`        | Real data only; empty, loaded and unavailable states are visibly different; no sample achievements are shown as real.                      |
@@ -864,6 +864,118 @@ requirements) and §5 (optional improvements) of the review.
 
 ---
 
+### Task 1.1 — Structured climbing walls and route types (`DONE`)
+
+**The change**
+
+The routes used to carry a free-text `zone` — the name of the wall, typed in
+by hand. That cannot carry a photograph, cannot be filtered reliably and
+cannot be checked. A wall is now a record of its own, and each route records
+the type of its own problem.
+
+- `backend/app/models/climbing.py` — a `walls` table (`name`, `description`,
+  `image_url`, `sort_order`, `is_active`) and a `WallType` enum
+  (`slab`, `vertical`, `overhang`, `roof`, `boulder`). `climb_routes` gains
+  `wall_id` (a foreign key with `ON DELETE SET NULL`) and `wall_type`, and
+  loses `zone`.
+- **The type belongs to the problem, not to the wall.** A mixed wall holds
+  both a slab and an overhang, so `wall_type` is a column of the route. This
+  is a decision, not an accident.
+- `backend/migrations/versions/9d1c4f8ab207_add_walls_and_route_types.py` —
+  creates the walls, backfills them from the zones already in use, points
+  every route at the wall with the matching name, gives the routes on the
+  known walls their type, and then drops `zone`. The downgrade puts the wall
+  name back into `zone`, restoring the column as the required column it was.
+- `backend/app/schemas/climbing.py` — `WallOut`, `WallCreateIn`, and the
+  route responses carry `wall`, `wall_id` and `wall_type`.
+- `backend/app/api/public.py` — `GET /api/public/walls`, and the route
+  directory can be filtered by **wall**, **wall type** and **status**. A
+  route that has been archived keeps its place in the directory with its
+  status shown, instead of silently disappearing.
+- `backend/app/api/admin.py` — `GET` and `POST /api/admin/walls`, and route
+  creation and update reject a wall that does not exist.
+- `backend/app/services/climbing.py` — `build_route_out` and
+  `build_route_summary` build the route responses in one place, so the public
+  directory and the administration list cannot drift apart.
+- `backend/app/seed.py` — three demo walls, each with a description, an
+  ordering and a reference to a photograph, and the demo routes point at them
+  with their own type.
+- `public/walls/placeholder-gym.jpg` — the placeholder photograph the seeded
+  walls point at. It is a **placeholder**: ARCH has not published a
+  photograph of each wall yet, and the real pictures are referenced the same
+  way from the media store.
+- The frontend contract follows: `ClimbRoute` carries `wall`, `wallId`,
+  `wallType` and `status`; the route card, the route page, the beta page and
+  the logbook show the wall; the administration route form picks the wall and
+  the wall type from lists that come from the data.
+
+**Four bugs found and fixed while doing it**
+
+- **The `status` query parameter shadowed the `fastapi.status` module.** Every
+  error raised from the route list — an unknown wall type, an unknown status —
+  died with `AttributeError` instead of returning a 400. The module is now
+  imported as `http_status`.
+- **`?status=all` did not mean "all".** The branch that handled "all" fell
+  through to "active only", so the archived-route filter returned nothing at
+  all. The frontend filter was built on a promise the backend did not keep.
+- **The migration's `wall_type` default did not match the model.** The column
+  was a plain string with the default `"vertical"`, while SQLAlchemy writes
+  and reads the enum **name** (`"VERTICAL"`). A row inserted without a wall
+  type took a value the ORM could not read back. The column is now declared
+  as the same enum the model uses, with the default `"VERTICAL"`.
+- **The seed could not create a wall.** It passed `wall_type` to the `Wall`
+  model, which has no such column. The branch was unreachable while the
+  migration created the walls first, but it would have failed the moment the
+  walls table was empty.
+
+**Verification**
+
+- Backend: `ruff check` clean, `ruff format --check` clean, `alembic check`
+  reports no drift, **158 tests pass** (129 before this task).
+- Frontend: `bun run lint` 0 errors (7 pre-existing `react-refresh` warnings),
+  `bun run typecheck` clean, `bun run test` → **54 tests pass**, `bun run
+  build` succeeds and the placeholder photograph is in the build output.
+- **Migration**, on a disposable SQLite database that is deleted afterwards:
+  fresh upgrade to head applies cleanly; a downgrade to the previous revision
+  and back again works, and the route keeps its wall name across the round
+  trip; a route that was on "The Slab" is still on "The Slab" afterwards, with
+  the type `SLAB`; a zone ARCH had not published ("Training Area") becomes a
+  wall of its own with the default type; a row written without a wall type
+  can still be read back by the ORM.
+- The seed was run twice against a disposable database and produced the same
+  three walls and six routes both times.
+- The development database was **not** reset or downgraded. It was at
+  `9d1c4f8ab207 (head)` already and stayed there; only the seed was re-run
+  against it, which is idempotent.
+
+**Tests added**
+
+- `backend/tests/test_migrations.py` (new) — the migration behaviour above.
+- `backend/tests/test_seed.py` (new) — the demo walls, their photograph
+  reference, the routes pointing at them, idempotency, and the refusal to
+  seed demo accounts in a production environment.
+- `backend/tests/test_public_api.py` — the wall and wall-type filters, the
+  status filter, an unknown wall type, an unknown status, the wall directory,
+  and an archived route keeping its place.
+- `backend/tests/test_staff_admin_api.py` — creating a wall, a duplicate name,
+  the administration wall list, the permissions around it, creating a route
+  on a wall, rejecting a wall that does not exist on create and on update,
+  moving a route between walls, and filtering the administration route list
+  by status.
+- `src/test/service-mapping.test.ts` — the new route fields, an unknown wall
+  type and status falling back safely, and a route that is not on a wall yet.
+
+**Open items**
+
+- The route directory filters in the interface are applied to the list the
+  browser already has. The backend filters are in place and tested; moving
+  the filtering server-side is task 1.3.
+- The wall photograph is a placeholder. ARCH's own wall photographs are still
+  needed.
+- The wall photographs are not shown on the route card yet. That is task 1.5.
+
+---
+
 ## 5. Decisions taken (and why)
 
 | Decision                                                                                 | Rationale                                                                                                                         |
@@ -881,6 +993,9 @@ requirements) and §5 (optional improvements) of the review.
 | Reads never throw, writes do                                                             | A page must stay browsable when the backend is down, but a message that failed to send has to say so.                             |
 | Removed `src/client.tsx`                                                                 | The framework's default client entry is the only one that mounts the app; the file added in Task 1 silently disabled hydration.   |
 | AI provider credentials stay server-side; no provider configured → grounded FAQ fallback | The brief forbids exposing keys and forbids pretending a fallback is live AI.                                                     |
+| The wall type is a property of the route, not of the wall                                          | A mixed wall holds both a slab and an overhang, so one wall can carry problems of different types.                               |
+| SQLAlchemy stores the enum **name**; the API exposes the lower-case value                             | The database has to hold what SQLAlchemy reads back. The API stays readable, and the two are kept apart deliberately.            |
+| An archived route keeps its place in the public directory, with its status shown                     | A climber who follows an old link is told the route has been taken down, rather than being shown a page that does not exist.     |
 
 ---
 

@@ -40,6 +40,7 @@ import type {
   ApiUser,
   ApiVote,
   ApiVoteTally,
+  ApiWall,
 } from "./types";
 
 /** Base URL of the backend. Empty means "no backend configured". */
@@ -189,8 +190,12 @@ export const api = {
   rules: () => apiRequest<ApiRule[]>("/api/public/rules"),
   faq: () => apiRequest<ApiFaqEntry[]>("/api/public/faq"),
   products: () => apiRequest<ApiCatalogProduct[]>("/api/public/products"),
-  routes: () => apiRequest<ApiRouteSummary[]>("/api/public/routes"),
+  routes: (options?: { status?: string }) =>
+    apiRequest<ApiRouteSummary[]>(
+      `/api/public/routes${options?.status ? `?status=${encodeURIComponent(options.status)}` : ""}`,
+    ),
   route: (id: number | string) => apiRequest<ApiRouteSummary>(`/api/public/routes/${id}`),
+  walls: () => apiRequest<ApiWall[]>("/api/public/walls"),
   product: (id: number | string) => apiRequest<ApiCatalogProduct>(`/api/public/products/${id}`),
 
   submitContactMessage: (body: { name: string; email: string; subject: string; message: string }) =>
@@ -295,10 +300,13 @@ export const adminApi = {
   routes: (status?: string) =>
     apiRequest<ApiRouteSummary[]>(`/api/admin/routes${status ? `?status=${status}` : ""}`),
 
+  walls: () => apiRequest<ApiWall[]>("/api/admin/walls"),
+
   createRoute: (body: {
     name: string;
     grade: string;
-    zone?: string;
+    wall_id?: number | null;
+    wall_type?: string;
     color?: string;
     style?: string;
     setter?: string;

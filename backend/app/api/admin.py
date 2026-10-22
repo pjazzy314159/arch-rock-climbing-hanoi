@@ -29,6 +29,7 @@ from app.models import (
     StaffTask,
     TaskStatus,
     User,
+    Wall,
 )
 from app.schemas import (
     AdminMemberOut,
@@ -43,8 +44,10 @@ from app.schemas import (
     RouteSummary,
     RouteUpdateIn,
     TaskOut,
+    WallCreateIn,
+    WallOut,
 )
-from app.services.climbing import tally_votes
+from app.services.climbing import build_route_out, build_route_summary
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -179,18 +182,40 @@ def list_all_routes(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown route status"
             ) from None
     routes = db.scalars(statement.order_by(ClimbRoute.id)).all()
+    return [build_route_summary(db, route) for route in routes]
 
-    summaries: list[RouteSummary] = []
-    for route in routes:
-        summary = RouteSummary.model_validate(route)
-        tally = tally_votes(route.id, route.grade, [vote.value for vote in route.votes])
-        summary.vote_count = tally.total
-        summary.easier_votes = tally.easier
-        summary.as_set_votes = tally.as_set
-        summary.harder_votes = tally.harder
-        summary.perceived_grade = tally.perceived_grade
-        summaries.append(summary)
-    return summaries
+
+@router.get("/walls", response_model=list[WallOut])
+def list_all_walls(
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[WallOut]:
+    """Every wall, including the ones that are not in use."""
+    walls = db.scalars(select(Wall).order_by(Wall.sort_order, Wall.id)).all()
+    return [WallOut.model_validate(wall) for wall in walls]
+
+
+@router.post("/walls", response_model=WallOut, status_code=status.HTTP_201_CREATED)
+def create_wall(
+    payload: WallCreateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> WallOut:
+    """Add a wall to the gym."""
+    name = payload.name.strip()
+    if db.scalar(select(Wall).where(Wall.name == name)) is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wall already exists")
+    wall = Wall(
+        name=name,
+        description=payload.description.strip(),
+        image_url=(payload.image_url or "").strip() or None,
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+    )
+    db.add(wall)
+    db.commit()
+    db.refresh(wall)
+    return WallOut.model_validate(wall)
 
 
 @router.post("/routes", response_model=RouteOut, status_code=status.HTTP_201_CREATED)
@@ -200,10 +225,15 @@ def create_route(
     db: Session = Depends(get_db),
 ) -> RouteOut:
     """Create a route."""
+    wall = db.get(Wall, payload.wall_id) if payload.wall_id is not None else None
+    if payload.wall_id is not None and wall is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wall not found")
+
     route = ClimbRoute(
         name=payload.name.strip(),
         grade=payload.grade.strip().upper(),
-        zone=payload.zone.strip() or "The Main Wall",
+        wall_id=wall.id if wall is not None else None,
+        wall_type=payload.wall_type,
         color=payload.color.strip() or "lime",
         style=payload.style.strip(),
         setter=payload.setter.strip(),
@@ -216,7 +246,7 @@ def create_route(
     db.add(route)
     db.commit()
     db.refresh(route)
-    return RouteOut.model_validate(route)
+    return build_route_out(route)
 
 
 @router.patch("/routes/{route_id}", response_model=RouteOut)
@@ -235,8 +265,12 @@ def update_route(
         route.name = payload.name.strip()
     if payload.grade is not None:
         route.grade = payload.grade.strip().upper()
-    if payload.zone is not None:
-        route.zone = payload.zone.strip()
+    if payload.wall_id is not None:
+        if db.get(Wall, payload.wall_id) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wall not found")
+        route.wall_id = payload.wall_id
+    if payload.wall_type is not None:
+        route.wall_type = payload.wall_type
     if payload.color is not None:
         route.color = payload.color.strip()
     if payload.style is not None:
@@ -254,7 +288,7 @@ def update_route(
         route.archived_at = datetime.now(UTC) if payload.status is RouteStatus.ARCHIVED else None
     db.commit()
     db.refresh(route)
-    return RouteOut.model_validate(route)
+    return build_route_out(route)
 
 
 @router.get("/votes", response_model=list[dict])

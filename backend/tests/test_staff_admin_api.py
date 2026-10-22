@@ -299,3 +299,139 @@ def test_a_contact_message_is_not_visible_to_a_customer(client: TestClient, cust
     token = login(client, customer.email)
     response = client.get("/api/admin/contact", headers=auth_headers(token))
     assert response.status_code == 403
+
+
+def test_an_admin_can_add_a_wall(client: TestClient, admin) -> None:
+    token = login(client, admin.email)
+    response = client.post(
+        "/api/admin/walls",
+        json={
+            "name": "The Cave",
+            "description": "Steep, overhanging terrain.",
+            "image_url": "https://example.com/cave.jpg",
+            "sort_order": 3,
+        },
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["name"] == "The Cave"
+    assert response.json()["image_url"] == "https://example.com/cave.jpg"
+    assert response.json()["is_active"] is True
+
+
+def test_a_wall_name_cannot_be_used_twice(client: TestClient, admin, wall) -> None:
+    token = login(client, admin.email)
+    response = client.post(
+        "/api/admin/walls",
+        json={"name": "The Slab"},
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Wall already exists"
+
+
+def test_the_admin_wall_list_is_restricted(client: TestClient, customer) -> None:
+    token = login(client, customer.email)
+    assert client.get("/api/admin/walls", headers=auth_headers(token)).status_code == 403
+    assert client.get("/api/admin/walls").status_code == 401
+
+
+def test_the_admin_wall_list_shows_every_wall(client: TestClient, admin, wall) -> None:
+    token = login(client, admin.email)
+    listed = client.get("/api/admin/walls", headers=auth_headers(token))
+    assert listed.status_code == 200
+    assert [item["name"] for item in listed.json()] == ["The Slab"]
+
+
+def test_an_admin_can_create_a_route_on_a_wall(client: TestClient, admin, wall) -> None:
+    token = login(client, admin.email)
+    response = client.post(
+        "/api/admin/routes",
+        json={
+            "name": "Nightfall",
+            "grade": "v5",
+            "wall_id": wall.id,
+            "wall_type": "overhang",
+            "setter": "Minh",
+        },
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 201, response.text
+    created = response.json()
+    assert created["wall"] == "The Slab"
+    assert created["wall_id"] == wall.id
+    assert created["wall_type"] == "overhang"
+    assert created["grade"] == "V5"
+
+
+def test_a_route_cannot_be_created_on_a_wall_that_does_not_exist(client: TestClient, admin) -> None:
+    token = login(client, admin.email)
+    response = client.post(
+        "/api/admin/routes",
+        json={"name": "Nightfall", "grade": "V5", "wall_id": 4242},
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Wall not found"
+
+
+def test_a_route_cannot_be_moved_to_a_wall_that_does_not_exist(
+    client: TestClient, admin, route
+) -> None:
+    token = login(client, admin.email)
+    response = client.patch(
+        f"/api/admin/routes/{route.id}",
+        json={"wall_id": 4242},
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Wall not found"
+
+
+def test_a_route_can_be_moved_to_another_wall(client: TestClient, db, admin, route, wall) -> None:
+    from app.models import Wall
+
+    other = Wall(name="The Cave", description="", sort_order=2)
+    db.add(other)
+    db.commit()
+    db.refresh(other)
+
+    token = login(client, admin.email)
+    response = client.patch(
+        f"/api/admin/routes/{route.id}",
+        json={"wall_id": other.id},
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["wall"] == "The Cave"
+    assert response.json()["wall_id"] == other.id
+    assert wall.name == "The Slab"
+
+
+def test_the_admin_route_list_can_be_filtered_by_status(client: TestClient, admin, route) -> None:
+    token = login(client, admin.email)
+
+    archived = client.patch(
+        f"/api/admin/routes/{route.id}",
+        json={"status": "archived"},
+        headers=auth_headers(token),
+    )
+    assert archived.status_code == 200
+
+    active = client.get("/api/admin/routes?status=active", headers=auth_headers(token)).json()
+    assert active == []
+
+    archived_routes = client.get(
+        "/api/admin/routes?status=archived", headers=auth_headers(token)
+    ).json()
+    assert len(archived_routes) == 1
+    assert archived_routes[0]["status"] == "archived"
+
+
+def test_an_unknown_status_is_refused_by_the_admin_route_list(
+    client: TestClient, admin, route
+) -> None:
+    token = login(client, admin.email)
+    response = client.get("/api/admin/routes?status=sideways", headers=auth_headers(token))
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unknown route status"

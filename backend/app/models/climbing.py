@@ -6,6 +6,7 @@ import enum
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Enum,
@@ -27,6 +28,40 @@ class RouteStatus(enum.StrEnum):
     ACTIVE = "active"
     ARCHIVED = "archived"
     PENDING_RESET = "pending_reset"
+
+
+class WallType(enum.StrEnum):
+    """The kind of surface a route is set on.
+
+    This is a property of the *problem*, not of the wall it is set on: a
+    mixed wall can hold both a slab and an overhang.
+    """
+
+    SLAB = "slab"
+    VERTICAL = "vertical"
+    OVERHANG = "overhang"
+    ROOF = "roof"
+    BOULDER = "boulder"
+
+
+class Wall(Base, TimestampMixin):
+    """A physical wall in the gym.
+
+    A wall carries the photograph the routes on it are set against. The
+    photograph itself lives in the media store; only the reference is stored
+    here.
+    """
+
+    __tablename__ = "walls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, index=True, nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    image_url: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+
+    routes: Mapped[list[ClimbRoute]] = relationship(back_populates="wall")
 
 
 class VoteValue(enum.StrEnum):
@@ -52,7 +87,15 @@ class ClimbRoute(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(140), nullable=False, index=True)
     grade: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
-    zone: Mapped[str] = mapped_column(String(80), default="The Main Wall", index=True)
+    wall_id: Mapped[int | None] = mapped_column(
+        ForeignKey("walls.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    wall_type: Mapped[WallType] = mapped_column(
+        Enum(WallType, native_enum=False, length=20),
+        default=WallType.VERTICAL,
+        nullable=False,
+        index=True,
+    )
     color: Mapped[str] = mapped_column(String(20), default="lime")
     style: Mapped[str] = mapped_column(String(120), default="")
     setter: Mapped[str] = mapped_column(String(80), default="")
@@ -78,6 +121,7 @@ class ClimbRoute(Base, TimestampMixin):
     achievements: Mapped[list[Achievement]] = relationship(
         back_populates="route", cascade="all, delete-orphan"
     )
+    wall: Mapped[Wall | None] = relationship(back_populates="routes")
 
 
 class RouteVote(Base, TimestampMixin):

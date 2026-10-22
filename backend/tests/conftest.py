@@ -46,6 +46,8 @@ from app.models import (  # noqa: E402
     StaffShift,
     StaffTask,
     User,
+    Wall,
+    WallType,
 )
 
 
@@ -146,11 +148,26 @@ def admin(db: Session) -> User:
 
 
 @pytest.fixture
-def route(db: Session) -> ClimbRoute:
+def wall(db: Session) -> Wall:
+    """A wall in the gym."""
+    item = Wall(
+        name="The Slab",
+        description="Low-angle wall for balance and technique.",
+        sort_order=1,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@pytest.fixture
+def route(db: Session, wall: Wall) -> ClimbRoute:
     item = ClimbRoute(
         name="Quiet the Mind",
         grade="V3",
-        zone="The Slab",
+        wall_id=wall.id,
+        wall_type=WallType.SLAB,
         color="lime",
         style="Balance",
         setter="Minh",
@@ -184,6 +201,8 @@ __all__ = [
     "StaffShift",
     "StaffTask",
     "User",
+    "Wall",
+    "WallType",
     "auth_headers",
     "login",
     "make_user",
