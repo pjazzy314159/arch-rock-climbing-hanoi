@@ -74,6 +74,8 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 
 ## 3. Roadmap
 
+### 3a. The original roadmap (complete)
+
 | #   | Task                                                                                             | Status |
 | --- | ------------------------------------------------------------------------------------------------ | ------ |
 | 1   | Repository audit, restore missing entries, install dependencies, baseline build/test/lint        | `DONE` |
@@ -85,11 +87,85 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 | 7   | AI customer-support assistant with grounded fallback                                             | `DONE` |
 | 8   | Shop/media polish, deployment configuration, environment documentation                           | `DONE` |
 | 9   | Final verification, `LOCAL_DEVELOPMENT.md`, handover                                             | `DONE` |
+| 10  | MVP readiness review (`MVP_READINESS_REVIEW.md`) and the four defects it found                   | `DONE` |
 
 > Task order note: Task 3 (the backend) was completed **before** Task 2 (the
 > frontend service layer) so that the frontend could be written against a real,
 > running API contract instead of a guessed one. The task numbering is kept
 > for traceability.
+
+### 3b. The current roadmap (ARCH OS)
+
+The product priorities have changed. This is the order of work from now on.
+Every phase keeps the public website and the backend working.
+
+| Phase | Scope                                                   | Status        | Depends on                                    |
+| ----- | ------------------------------------------------------- | ------------- | --------------------------------------------- |
+| **0** | Audit and planning: `MEMBER_UX_REVIEW.md`, this plan    | `DONE`        | —                                             |
+| **1** | Member dashboard and climbing experience                | `IN_PROGRESS` | Phase 0                                       |
+| **2** | Visual route-setting tool for staff                     | `TODO`        | Phase 1 (route and wall data must be settled) |
+| **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `TODO`        | Phase 1 (coordinate with any schema change)   |
+| **4** | Admin customer management                               | `TODO`        | Phase 1, Phase 3                              |
+| **5** | Staff operations                                        | `TODO`        | Phase 2, Phase 4                              |
+| **6** | ARCH-scoped AI assistant                                | `TODO`        | Phase 1 (route and content data)              |
+| **7** | Handover and local data ownership (`DATA_HANDOVER.md`)  | `TODO`        | Phase 3                                       |
+
+#### Phase 1 — Member dashboard and climbing experience
+
+| #   | Task                                                                                                                       | Status        | Acceptance criteria                                                                                                                        |
+| --- | -------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1.1 | `walls` table, `wall_type` on routes, route status published                                                               | `IN_PROGRESS` | Migration applies and rolls back; existing routes keep their wall name; seeded walls have a type and a photograph reference.               |
+| 1.2 | Dashboard response: outcome distribution, statistics by grade, ranking and percentile, recent attempts, active route count | `TODO`        | Every field comes from the member's own rows; a flash is a send with one attempt; the ranking uses the documented leaderboard calculation. |
+| 1.3 | Route directory filters: grade, wall, wall type, status                                                                    | `TODO`        | Each filter narrows the list server-side; the available options come from the data, not from a hard-coded list.                            |
+| 1.4 | The member dashboard                                                                                                       | `TODO`        | Real data only; empty, loaded and unavailable states are visibly different; no sample achievements are shown as real.                      |
+| 1.5 | Route card and route page: wall, wall type, status, imagery                                                                | `TODO`        | The card states the wall and the status; a placeholder photograph is labelled as one.                                                      |
+| 1.6 | Log an attempt from the dashboard and from a route                                                                         | `TODO`        | The attempt is stored by the backend, survives a refresh and a sign-in, and a member cannot change another member's records.               |
+| 1.7 | Ranking rule stated on the dashboard and the leaderboard                                                                   | `TODO`        | The page states the scoring rule and the displayed rank matches the backend.                                                               |
+| 1.8 | Tests                                                                                                                      | `TODO`        | Backend: the new response, the filters, the flash derivation, the ranking. Frontend: the mapping.                                          |
+| 1.9 | Browser review at desktop and mobile sizes                                                                                 | `TODO`        | Screenshots reviewed; no console or hydration errors; the empty state reviewed as well as the populated one.                               |
+
+#### Acceptance criteria for Phase 1 as a whole
+
+- The dashboard is backed by the authenticated member's actual data.
+- Route filtering and route details work.
+- Attempt records can be created and retrieved correctly.
+- Climbing statistics and rankings agree with the backend's documented rules.
+- New members see sensible empty states.
+- No fabricated sample achievements are presented as real.
+- Frontend tests, backend tests, typecheck, lint and the production build pass.
+- The member experience has been reviewed in a real browser at desktop and
+  mobile sizes.
+- `PLAN.md` records the evidence, the remaining limitations and the next phase.
+
+#### Phase 2 — Visual route-setting tool
+
+- Walls carry a photograph; annotations are stored in normalised image space.
+- Click to place a default box, drag to draw a custom one; move, resize,
+  select and delete.
+- Start and finish markers, a defined hold sequence, undo and reorder.
+- Routes, walls, images and hold annotations are separate, structured tables.
+- Editing a route does not silently rewrite historical member attempts:
+  route versions are used.
+- Members see only the published version of a route.
+
+#### Phase 3 — PostgreSQL 18.6
+
+- The actual client and server versions are verified and recorded.
+- A local PostgreSQL development database is configured through environment
+  variables, with no secret in source control.
+- Alembic migrations run against PostgreSQL 18.6.
+- Seeding is repeatable and safe.
+- Authentication, member records, attempts, routes, annotations, staff tasks
+  and contact messages are tested against PostgreSQL.
+- SQLite stays for fast isolated tests, and is never described as proof of
+  PostgreSQL compatibility.
+- Database creation, migration, seeding, backup and restore are documented.
+
+#### Phase 4–7
+
+See the section headings above and the brief in the task that set this
+roadmap. `MEMBER_UX_REVIEW.md` records what Phase 1 changes and what it
+deliberately leaves alone.
 
 ---
 
