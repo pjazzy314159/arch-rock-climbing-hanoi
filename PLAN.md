@@ -103,7 +103,7 @@ Every phase keeps the public website and the backend working.
 | ----- | ------------------------------------------------------- | ------------- | --------------------------------------------- |
 | **0** | Audit and planning: `MEMBER_UX_REVIEW.md`, this plan    | `DONE`        | —                                             |
 | **1** | Member dashboard and climbing experience                | `IN_PROGRESS` | Phase 0                                       |
-| **2** | Visual route-setting tool for staff                     | `TODO`        | Phase 1 (route and wall data must be settled) |
+| **2** | Visual route-setting tool for staff                     | `IN_PROGRESS` | Phase 1 (route and wall data must be settled) |
 | **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `TODO`        | Phase 1 (coordinate with any schema change)   |
 | **4** | Admin customer management                               | `TODO`        | Phase 1, Phase 3                              |
 | **5** | Staff operations                                        | `TODO`        | Phase 2, Phase 4                              |
@@ -1549,6 +1549,42 @@ that applies it.
 
 **Next:** the full regression sweep, then Phase 2A — the visual route-setting
 design.
+
+---
+
+### Phase 2A — Visual route-setting design (`DONE`)
+
+`ROUTE_SETTING_DESIGN.md` was written from the code, not from assumptions:
+
+- **What exists.** `Wall.image_url` holds a *reference* to the photograph
+  (`/walls/placeholder-gym.jpg`, served from the frontend's `public/`); there
+  is no image table, upload endpoint or pixel dimensions. `ClimbRoute` has
+  `wall_id`, `wall_type`, `status`, `set_at`, `archived_at` and `image_url`,
+  and no versioning. `Achievement` snapshots `route_name` and `grade`, so a
+  member's attempts keep their meaning without route versions. Route CRUD is
+  admin-only; `require_staff` and `require_admin` already exist.
+- **What the design adds.** Three tables — `wall_holds` (normalised `x`, `y`,
+  `width`, `height` on a wall photograph), `route_hold_sets`
+  (draft/published/superseded), `route_holds` (ordered hold with
+  start/middle/finish role) — plus one nullable
+  `climb_routes.published_hold_set_id`. Holds belong to the wall, not the
+  route, so one physical hold can serve several routes. Members read only
+  through the published pointer of an active route.
+- **Why not versions.** A reset is modelled as archive-old + create-new, which
+  is already supported and keeps `achievements.route_id` pointing at the line
+  that was actually climbed. The document records this as a question for ARCH
+  rather than inventing a version table.
+- **Validation, API, workflow, security, migration and tests** are specified,
+  including normalised-coordinate bounds, same-wall checks, one start and one
+  finish, staff drafting vs admin publishing, a portable single migration, and
+  SQLite-only testing being *not* proof of PostgreSQL support.
+- **Open questions** are listed for ARCH: who publishes, how resets are
+  handled, whether holds may be shared, photograph replacement, what counts as
+  a hold, labels, multiple photographs per wall, and deleting annotated
+  routes.
+
+**Next:** Phase 2B — the minimum working editor, starting with the backend
+foundation (schema, migration, validated endpoints, permission tests).
 
 ---
 
