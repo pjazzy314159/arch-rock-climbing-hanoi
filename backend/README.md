@@ -108,7 +108,7 @@ for every private endpoint.
 | `POST` | `/api/auth/register` | – | Create a customer account. |
 | `POST` | `/api/auth/login` | – | Sign in. |
 | `GET`/`PATCH` | `/api/auth/me` | member | Own profile. |
-| `GET` | `/api/me/dashboard` | member | Own climbing statistics. |
+| `GET` | `/api/me/dashboard` | member | Own climbing statistics: outcomes, grades, ranking, recent attempts. |
 | `GET`/`POST` | `/api/me/logbook` | member | Own logbook. |
 | `GET` | `/api/me/agreement` | member | Own safety agreement. |
 | `POST` | `/api/me/agreement/signature` | member | Sign the agreement. |
@@ -151,6 +151,35 @@ for every private endpoint.
 
 Both sets of rules live in `app/services/climbing.py` and are covered by
 `tests/test_climbing_rules.py`.
+
+### Member dashboard
+
+`GET /api/me/dashboard` answers with the member's own record and nothing else.
+The rules live in `app/services/dashboard.py`, and it **reuses** the
+leaderboard's calculation rather than reimplementing it, so the dashboard and
+the public leaderboard cannot disagree.
+
+* A **flash** is derived, not stored: a send with exactly one attempt. It is a
+  subset of the sends, never a third outcome.
+* The outcome counts break the member's own logbook into sends, flashes,
+  projects and total attempts.
+* The record is grouped by grade, easiest first. A grade the member has only
+  tried appears too, with its projects and no sends.
+* The ranking is the leaderboard's own: sends only, one point per grade step,
+  ties broken by number of sends, then best grade, then the date of the first
+  send. A climber with no sends is not ranked.
+* The **percentile** is the share of ranked climbers who are at or behind the
+  member's position, as a whole percentage. The top-ranked climber is at the
+  100th percentile. It is `null` for a member who is not ranked, rather than
+  zero.
+* A value that is not available is `null`, never zero: no best grade, no
+  rank, no first climb. `has_activity` says whether the member has logged
+  anything at all.
+* The scoring rule and the percentile rule are **sent with the ranking**, in
+  words, so the interface cannot state a rule that differs from the one the
+  numbers were worked out with.
+
+Covered by `tests/test_dashboard.py`.
 
 ## Security notes
 

@@ -131,13 +131,3 @@ class ProductOut(ORMModel):
     image_url: str | None = None
     stock: int
     is_active: bool
-
-
-class DashboardOut(BaseModel):
-    """Aggregate numbers for a member dashboard."""
-
-    total_sends: int
-    total_sessions: int
-    best_grade: str | None
-    active_projects: int
-    agreement_status: str | None = None

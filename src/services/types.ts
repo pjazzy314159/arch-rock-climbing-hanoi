@@ -290,12 +290,74 @@ export type ApiAgreement = {
   created_at: string;
 };
 
-/** The signed-in member's climbing statistics. */
+/** How the member's logged climbs break down. */
+export type ApiOutcomeCounts = {
+  sends: number;
+  /** The sends that were climbed on the first attempt. A subset of `sends`. */
+  flashes: number;
+  projects: number;
+  attempts: number;
+};
+
+/** One grade in the member's own record. */
+export type ApiGradeStat = {
+  grade: string;
+  sends: number;
+  flashes: number;
+  projects: number;
+};
+
+/** Where the member stands, together with the rule that produced it. */
+export type ApiRanking = {
+  /** `null` when the member is not ranked, which is not the same as rank 0. */
+  rank: number | null;
+  ranked_count: number;
+  ahead: number;
+  /** `null` when the member is not ranked. */
+  percentile: number | null;
+  score: number;
+  total_sends: number;
+  best_grade: string | null;
+  /** The scoring rule in words, as the backend applied it. */
+  scoring_rule: string;
+  /** How the percentile is worked out, in words. */
+  percentile_rule: string;
+};
+
+/** One of the member's most recent logged climbs. */
+export type ApiRecentAttempt = {
+  id: number;
+  route_id: number | null;
+  route_name: string;
+  grade: string;
+  result: "sent" | "project";
+  attempts: number;
+  climbed_on: string;
+  /** True when the climb was a send on the first attempt. */
+  is_flash: boolean;
+};
+
+/**
+ * The signed-in member's climbing statistics.
+ *
+ * A value that is not available is `null`, never zero: a member who has never
+ * climbed has no best grade, and is not ranked.
+ */
 export type ApiDashboard = {
+  /** How many routes are on the wall at the gym right now. */
+  active_routes: number;
   total_sends: number;
   total_sessions: number;
   best_grade: string | null;
   active_projects: number;
+  outcomes: ApiOutcomeCounts;
+  by_grade: ApiGradeStat[];
+  ranking: ApiRanking;
+  recent_attempts: ApiRecentAttempt[];
+  /** False for a member who has never logged a climb. */
+  has_activity: boolean;
+  first_climb: string | null;
+  last_climb: string | null;
   agreement_status: string | null;
 };
 

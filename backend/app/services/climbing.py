@@ -26,6 +26,27 @@ MAX_GRADE_SHIFT = 1
 #: Score awarded for one send, based on the grade index (V0 -> 1, V1 -> 2, ...).
 BASE_SCORE_PER_SEND = 1
 
+#: The scoring rule in words, for the member's own dashboard and the public
+#: leaderboard. It is written here, next to the calculation it describes, and
+#: sent with the ranking, so the interface cannot show a different rule from
+#: the one that was actually applied.
+LEADERBOARD_SCORING_RULE = (
+    "Sends only. A logged send is worth one point per grade step, so V0 is "
+    f"worth {BASE_SCORE_PER_SEND} point and V3 is worth {3 + BASE_SCORE_PER_SEND} "
+    "points. Projects do not count, and a send on a grade outside the V scale "
+    "is not counted either. Ties are broken by number of sends, then by best "
+    "grade, then by the date of the first send. Climbers with no sends are "
+    "not ranked."
+)
+
+#: How the percentile is worked out, in words. It accompanies the ranking so
+#: that the number is never shown without its meaning.
+PERCENTILE_RULE = (
+    "The percentile is the share of ranked climbers who are at or behind your "
+    "position, so the top-ranked climber is at the 100th percentile. It is not "
+    "shown when you are not ranked."
+)
+
 _GRADE_PATTERN = re.compile(r"^\s*V\s*(\d{1,2})\s*$", re.IGNORECASE)
 
 

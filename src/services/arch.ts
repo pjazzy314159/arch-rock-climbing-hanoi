@@ -211,11 +211,75 @@ export type Agreement = {
   notes: string | null;
 };
 
+/** How the member's logged climbs break down. */
+export type DashboardOutcomes = {
+  sends: number;
+  /** The sends that were climbed on the first attempt. A subset of `sends`. */
+  flashes: number;
+  projects: number;
+  attempts: number;
+};
+
+/** One grade in the member's own record. */
+export type DashboardGradeStat = {
+  grade: string;
+  sends: number;
+  flashes: number;
+  projects: number;
+};
+
+/** Where the member stands, together with the rule that produced it. */
+export type DashboardRanking = {
+  /** `null` when the member is not ranked, which is not the same as rank 0. */
+  rank: number | null;
+  rankedCount: number;
+  ahead: number;
+  /** `null` when the member is not ranked. */
+  percentile: number | null;
+  score: number;
+  totalSends: number;
+  bestGrade: string | null;
+  /** The scoring rule in words, as the backend applied it. */
+  scoringRule: string;
+  /** How the percentile is worked out, in words. */
+  percentileRule: string;
+};
+
+/** One of the member's most recent logged climbs. */
+export type DashboardAttempt = {
+  id: string;
+  routeId: number | null;
+  route: string;
+  grade: string;
+  result: "sent" | "project";
+  attempts: number;
+  date: string;
+  /** True when the climb was a send on the first attempt. */
+  isFlash: boolean;
+};
+
+/**
+ * The member's own picture of their climbing.
+ *
+ * Every field comes from the backend's own records. A value that is not
+ * available is `null`, never zero, so the interface can tell "there is
+ * nothing here yet" from "the number is zero".
+ */
 export type MemberDashboard = {
+  /** How many routes are on the wall at the gym right now. */
+  activeRoutes: number;
   totalSends: number;
   totalSessions: number;
   bestGrade: string | null;
   activeProjects: number;
+  outcomes: DashboardOutcomes;
+  byGrade: DashboardGradeStat[];
+  ranking: DashboardRanking;
+  recentAttempts: DashboardAttempt[];
+  /** False for a member who has never logged a climb. */
+  hasActivity: boolean;
+  firstClimb: string | null;
+  lastClimb: string | null;
   agreementStatus: string | null;
 };
 
@@ -873,10 +937,47 @@ export const archService = {
     loadAuthenticated("Your statistics", async () => {
       const dashboard: ApiDashboard = await memberApi.dashboard();
       return {
+        activeRoutes: dashboard.active_routes,
         totalSends: dashboard.total_sends,
         totalSessions: dashboard.total_sessions,
         bestGrade: dashboard.best_grade,
         activeProjects: dashboard.active_projects,
+        outcomes: {
+          sends: dashboard.outcomes.sends,
+          flashes: dashboard.outcomes.flashes,
+          projects: dashboard.outcomes.projects,
+          attempts: dashboard.outcomes.attempts,
+        },
+        byGrade: dashboard.by_grade.map((item) => ({
+          grade: item.grade,
+          sends: item.sends,
+          flashes: item.flashes,
+          projects: item.projects,
+        })),
+        ranking: {
+          rank: dashboard.ranking.rank,
+          rankedCount: dashboard.ranking.ranked_count,
+          ahead: dashboard.ranking.ahead,
+          percentile: dashboard.ranking.percentile,
+          score: dashboard.ranking.score,
+          totalSends: dashboard.ranking.total_sends,
+          bestGrade: dashboard.ranking.best_grade,
+          scoringRule: dashboard.ranking.scoring_rule,
+          percentileRule: dashboard.ranking.percentile_rule,
+        },
+        recentAttempts: dashboard.recent_attempts.map((item) => ({
+          id: String(item.id),
+          routeId: item.route_id,
+          route: item.route_name,
+          grade: item.grade,
+          result: item.result,
+          attempts: item.attempts,
+          date: item.climbed_on,
+          isFlash: item.is_flash,
+        })),
+        hasActivity: dashboard.has_activity,
+        firstClimb: dashboard.first_climb,
+        lastClimb: dashboard.last_climb,
         agreementStatus: dashboard.agreement_status,
       };
     }),

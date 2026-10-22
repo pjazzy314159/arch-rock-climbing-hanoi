@@ -15,7 +15,6 @@ from app.models import (
     AgreementMethod,
     AgreementStatus,
     ClimbRoute,
-    ResultType,
     RouteStatus,
     RouteVote,
     SafetyAgreement,
@@ -34,11 +33,10 @@ from app.schemas import (
 )
 from app.services.climbing import (
     build_leaderboard,
-    grade_to_index,
-    index_to_grade,
     rank_rows,
     tally_votes,
 )
+from app.services.dashboard import build_dashboard
 
 router = APIRouter(prefix="/api/me", tags=["member"])
 
@@ -55,27 +53,16 @@ def _latest_agreement(db: Session, user_id: int) -> SafetyAgreement | None:
 def dashboard(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> DashboardOut:
-    """Aggregate climbing statistics for the signed-in member."""
-    achievements = db.scalars(select(Achievement).where(Achievement.user_id == user.id)).all()
-    sends = [item for item in achievements if item.result is ResultType.SENT]
-    projects = [item for item in achievements if item.result is ResultType.PROJECT]
+    """Everything the member dashboard shows.
 
-    best_grade = None
-    best_index = -1
-    for item in sends:
-        index = grade_to_index(item.grade)
-        if index is not None and index > best_index:
-            best_index = index
-            best_grade = index_to_grade(index)
-
-    sessions = len({item.climbed_on for item in achievements})
+    Every number is read from the member's own records, or from the gym's own
+    route list. The scoring rule behind the ranking is the leaderboard's own
+    and is not changed here.
+    """
     agreement = _latest_agreement(db, user.id)
-
-    return DashboardOut(
-        total_sends=len(sends),
-        total_sessions=sessions,
-        best_grade=best_grade,
-        active_projects=len(projects),
+    return build_dashboard(
+        db,
+        user,
         agreement_status=agreement.status.value if agreement else None,
     )
 

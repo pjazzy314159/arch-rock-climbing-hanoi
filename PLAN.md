@@ -115,7 +115,7 @@ Every phase keeps the public website and the backend working.
 | #   | Task                                                                                                                       | Status        | Acceptance criteria                                                                                                                        |
 | --- | -------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1.1 | `walls` table, `wall_type` on routes, route status published                                                               | `DONE`        | Migration applies and rolls back; existing routes keep their wall name; seeded walls have a type and a photograph reference.               |
-| 1.2 | Dashboard response: outcome distribution, statistics by grade, ranking and percentile, recent attempts, active route count | `TODO`        | Every field comes from the member's own rows; a flash is a send with one attempt; the ranking uses the documented leaderboard calculation. |
+| 1.2 | Dashboard response: outcome distribution, statistics by grade, ranking and percentile, recent attempts, active route count | `DONE`        | Every field comes from the member's own rows; a flash is a send with one attempt; the ranking uses the documented leaderboard calculation. |
 | 1.3 | Route directory filters: grade, wall, wall type, status                                                                    | `TODO`        | Each filter narrows the list server-side; the available options come from the data, not from a hard-coded list.                            |
 | 1.4 | The member dashboard                                                                                                       | `TODO`        | Real data only; empty, loaded and unavailable states are visibly different; no sample achievements are shown as real.                      |
 | 1.5 | Route card and route page: wall, wall type, status, imagery                                                                | `TODO`        | The card states the wall and the status; a placeholder photograph is labelled as one.                                                      |
@@ -976,6 +976,99 @@ the type of its own problem.
 
 ---
 
+### Task 1.2 — The member dashboard API (`DONE`)
+
+**The change**
+
+`GET /api/me/dashboard` used to answer with four numbers. It now answers with
+the member's own picture of their climbing. The data is the member's own
+records and the gym's own route list; nothing is estimated, and nothing is
+invented.
+
+- `backend/app/schemas/dashboard.py` (new) — the response contract:
+  `DashboardOut`, `OutcomeCounts`, `GradeStat`, `RankingInfo` and
+  `RecentAttempt`. `DashboardOut` moved out of `schemas/common.py`, which
+  keeps the shared shapes and nothing more.
+- `backend/app/services/dashboard.py` (new) — the rules: `count_active_routes`,
+  `is_flash`, `build_outcomes`, `build_grade_stats`, `build_ranking`,
+  `build_recent_attempts` and `build_dashboard`.
+- `backend/app/api/member.py` — the endpoint now calls the service. The
+  `/api/me/stats` alias answers with the same payload.
+- `backend/app/services/climbing.py` — the scoring rule and the percentile rule
+  are defined **once**, next to the calculation they describe, and travel with
+  the ranking.
+- `src/services/types.ts`, `src/services/arch.ts` — the frontend types and the
+  mapping follow the new contract field for field.
+
+**The rules, as implemented**
+
+- **A flash is derived, not stored.** It is a send with exactly one attempt.
+  It is a *subset* of the sends, never a third outcome, and the two are never
+  added together.
+- The outcome counts break the member's own logbook into **sends, flashes,
+  projects and total attempts**.
+- The record is **grouped by grade, easiest first**. A grade the member has
+  only tried appears too, with its projects and no sends, so a project is
+  never hidden by the absence of a send.
+- The **ranking is the leaderboard's own**: sends only, one point per grade
+  step (V0 = 1 point, V3 = 4 points), ties broken by number of sends, then
+  best grade, then the date of the first send. A climber with no sends is not
+  ranked. The dashboard reuses `build_leaderboard` and `rank_rows` rather than
+  reimplementing them, so the two pages cannot disagree.
+- The **percentile** is the share of ranked climbers who are **at or behind**
+  the member's position, as a whole percentage. The top-ranked climber is at
+  the 100th percentile; the last one at the lowest. It is `null` for a member
+  who is not ranked, rather than zero.
+- **A value that is not available is `null`, never zero.** No best grade, no
+  rank, no percentile, no first climb. `has_activity` says whether the member
+  has logged anything at all, so the interface can show an empty state rather
+  than a page of zeroes.
+- The **scoring rule and the percentile rule are sent with the ranking**, in
+  words. The interface does not write the rule out again; it shows the one
+  the numbers were actually worked out with.
+
+**Verification**
+
+- Backend: `ruff check` clean, `ruff format --check` clean, `alembic check`
+  reports no drift, **186 tests pass** (158 before this task).
+- Frontend: `bun run lint` 0 errors (7 pre-existing `react-refresh` warnings),
+  `bun run typecheck` clean, `bun run test` → **59 tests pass** (54 before),
+  `bun run build` succeeds.
+- `backend/tests/test_dashboard.py` (new, 28 tests) — the empty member, the
+  populated member, the outcome derivation, the grade grouping, the bounded
+  recent-attempts list, the active route count, the scoring rule, the
+  percentile, the agreement with the public leaderboard, and the boundaries:
+  a token is required, another member's records never appear, no other
+  member's name is published, and a deactivated account is refused.
+- `src/test/dashboard-mapping.test.ts` (new, 5 tests) — the mapping carries
+  every field across, keeps a value that is not available unavailable, keeps
+  the rule that came with the numbers, and never replaces the member's record
+  with sample numbers.
+
+**Two corrections to the tests themselves**
+
+Both were wrong expectations in new tests, not faults in the product:
+
+- The recent-attempts list ends on `2026-10-09`, not `2026-10-10`: nine climbs
+  counted from the 1st.
+- A deactivated account is refused with **401**, not 403. `get_current_user`
+  treats an inactive account as not signed in, which is what every other
+  protected endpoint already does.
+
+**Limitations**
+
+- The ranking reads every climber's records to work out where the member
+  stands. It is the same calculation the leaderboard makes, so the two agree,
+  but it is not cheap on a large gym. It does not publish anything about the
+  other climbers: only a count and the member's own numbers.
+- The public leaderboard endpoint still answers with a plain list, so it
+  cannot carry the rule text. The rule is available through the dashboard
+  response; stating it on the leaderboard page is task 1.7.
+- The dashboard interface itself is unchanged. The data is ready for it; the
+  page that shows it is task 1.4.
+
+---
+
 ## 5. Decisions taken (and why)
 
 | Decision                                                                                 | Rationale                                                                                                                         |
@@ -996,6 +1089,9 @@ the type of its own problem.
 | The wall type is a property of the route, not of the wall                                          | A mixed wall holds both a slab and an overhang, so one wall can carry problems of different types.                               |
 | SQLAlchemy stores the enum **name**; the API exposes the lower-case value                             | The database has to hold what SQLAlchemy reads back. The API stays readable, and the two are kept apart deliberately.            |
 | An archived route keeps its place in the public directory, with its status shown                     | A climber who follows an old link is told the route has been taken down, rather than being shown a page that does not exist.     |
+| The dashboard reuses the leaderboard's calculation instead of reimplementing it                     | Two pages that show the same ranking must never tell a member different stories.                                                |
+| The scoring rule and the percentile rule are defined in the backend and sent with the ranking        | The interface cannot state a rule that differs from the one the numbers were worked out with.                                   |
+| A value that is not available is `null`, never zero                                                | "No best grade yet" and "a best grade of V0" are different facts, and a new member should not be shown a page of zeroes.            |
 
 ---
 
