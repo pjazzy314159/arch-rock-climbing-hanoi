@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Check,
   ClipboardList,
+  PenLine,
   Plus,
   Search,
   Shield,
@@ -67,7 +68,7 @@ export function PermissionDenied({ need }: { need: string }) {
   );
 }
 
-function StaffShell({ children }: { children: ReactNode }) {
+export function StaffShell({ children }: { children: ReactNode }) {
   const { user } = useSession();
   return (
     <div className="workspace">
@@ -83,9 +84,17 @@ function StaffShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav aria-label="Staff navigation">
-          <Link to="/staff" className="workspace-active">
+          <Link
+            to="/staff"
+            activeProps={{ className: "workspace-active" }}
+            activeOptions={{ exact: true }}
+          >
             <ClipboardList size={18} />
             My tasks
+          </Link>
+          <Link to="/staff/route-setting" activeProps={{ className: "workspace-active" }}>
+            <PenLine size={18} />
+            Route setting
           </Link>
           {user?.role === "admin" && (
             <Link to="/admin">

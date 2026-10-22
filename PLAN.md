@@ -1670,6 +1670,132 @@ overlay after save/reload/publish is verified.
 
 ---
 
+### Phase 2B — Interactive route-setting editor (`DONE`)
+
+The staff can now draw holds on a wall photograph, put them in climbing order
+and save a draft. An administrator publishes it. Members still see nothing
+until that publish step, and no member page reads a draft.
+
+**What was added**
+
+- `src/components/arch/hold-geometry.ts` — one tested set of conversions
+  between pointer pixels and normalised image coordinates. `containRect`
+  computes the photograph's real rectangle inside a contained image, so boxes
+  are placed against the picture, not the letterbox padding. It also derives
+  the default click box, drag boxes, move bounds, corner resizing with a
+  minimum size, pixel placement and the start/middle/finish roles from order.
+- `src/components/arch/hold-canvas.tsx` — a responsive `<img>` plus an
+  absolutely positioned overlay. A click creates a 4%-of-image box; a drag past
+  four pixels draws a custom one; a tiny drag is treated as a click. Boxes can
+  be selected, moved, resized from four visible corners and deleted. Pointer
+  capture, `touch-action: none` and `user-select: none` keep dragging
+  predictable; Escape cancels a gesture; box and canvas are keyboard focusable
+  and Delete removes the selected box.
+- `src/components/arch/route-setting.tsx` and
+  `src/routes/staff_.route-setting.tsx` — the page itself, reached from the
+  existing staff navigation. It picks an active wall, then one of that wall's
+  routes, shows loading/empty/error/saving/saved/permission-denied states and
+  never treats a failed request as an empty collection.
+- Route sequence panel: add the selected hold, reorder with up/down, "Make
+  start"/"Make finish", remove from the route without deleting the wall box.
+  Roles are always derived from position, duplicates are impossible in the UI,
+  and the canvas labels each assigned box with its step number. The first hold
+  is always the start and the last is the finish.
+- Save writes the whole ordered list through
+  `PUT /api/staff/routes/{id}/hold-set`; the button is disabled while a request
+  is in flight, so a double click cannot submit twice. A failed save leaves the
+  page's sequence untouched and the button enabled for a retry. Reloading the
+  page reproduces the same boxes, order and roles from the backend.
+- Publish calls the existing admin-only endpoint. Staff are told that an
+  administrator publishes, and the button is not rendered for them. The
+  backend still enforces the role, so hiding the button is not the protection.
+- Draft/published states are shown separately. The page warns when the stored
+  annotation was drawn on a different photograph from the wall's current
+  image. It also warns that moving or resizing a box already used by the
+  published sequence changes the members' overlay immediately, because the
+  published set references the wall-level box.
+- Missing images and broken image URLs replace the canvas with an explanation
+  instead of an empty annotation area.
+- `src/services/api.ts` / `src/services/types.ts` gained the staff walls,
+  routes, holds, hold-set, publish and public-holds calls. `StaffShell` now
+  marks the current navigation item from the router instead of hard-coding
+  "My tasks".
+- `src/styles.css` gained only the editor's own classes.
+
+**Verification**
+
+- `bun run typecheck` — clean.
+- `bun run lint` — 0 errors; the 7 pre-existing `react-refresh` warnings.
+- `bun run test` — **141 tests in 14 files pass** (107 before this change).
+  New tests:
+  - `hold-geometry.test.ts` — pointer-to-image and image-to-pixel conversion
+    both ways, letterboxing/pillarboxing, edge clamping, minimum sizes, drags
+    in any direction, move/resize anchors and role derivation.
+  - `hold-canvas.test.tsx` — click creation, drag creation, accidental-click
+    threshold, letterbox alignment, move, corner resize, keyboard delete,
+    step labels and roles, alignment after a viewport change, image failure.
+  - `route-setting.test.tsx` — order saved to the real endpoint shape, reload,
+    publish, save failure retaining edits, staff publication restriction,
+    published sequence loading, hold-set load failure, missing image, broken
+    image and member access refusal.
+- `bun run build` — succeeds; `routeTree.gen.ts` regenerated with the new route.
+- Browser: `node scripts/check-route-setting.mjs http://localhost:8090
+  http://localhost:8000` — **27/27 checks passed**.
+  - 1440×900: staff signed in, three real clicks created three boxes, all three
+    were added in order, start/middle/finish were correct, the draft saved, the
+    public API still reported `published=false, holds=0`, the page reloaded
+    with the same three boxes and roles, staff had no publish button.
+  - The administrator then published: the public API reported
+    `published=true, holds=3` with start first and finish last.
+  - 390×844: 0px horizontal overflow, 350px canvas, a tap selected a box and
+    showed four handles, a tap created a temporary box, and Delete removed it.
+  - A customer was refused the editor. Staff and customer access is also
+    enforced by the backend tests from the previous commit.
+  - Screenshots were inspected: `var/screenshots/route-setting-desktop-top.png`,
+    `-desktop-draft.png`, `-desktop-published.png`, `-desktop-canvas.png`,
+    `-mobile-top.png`, `-mobile-canvas.png`, `-mobile.png` and
+    `-member-denied.png` (all ignored by Git).
+- The browser run created a real published annotation for demo route 1
+  ("Quiet the Mind", The Slab): three wall boxes and one published set. Before
+  cleaning up the first pass and re-running, a consistent copy was made with
+  SQLite's backup API at
+  `var/backups/arch_dev-before-editor-rerun-20261023-003757.db` (integrity ok).
+  Only `wall_holds`, `route_hold_sets` and `route_holds` changed; route, vote
+  and agreement counts were unchanged. The development database still passes
+  `PRAGMA integrity_check`.
+
+**Limitations**
+
+- Phase 2 is still `IN_PROGRESS`: the member route-detail overlay is next.
+- The pre-existing Phase 2 acceptance bullet "undo and reorder" is only half
+  met. Reordering is implemented; there is no undo stack. Deleting a box is
+  immediate and the backend refuses to delete a box a published set uses.
+- A published set stores route membership and order, but its boxes reference
+  the wall-level `wall_holds` row. Moving or resizing a box therefore updates
+  every route that uses it, including a published overlay, without a second
+  publish. The editor now says so before the edit, but the underlying product
+  decision (stage geometry too, or treat wall boxes as live corrections) is
+  still open. It is recorded under the shared-holds question in
+  `ROUTE_SETTING_DESIGN.md`.
+- There is no image upload and no image dimension metadata: the editor learns
+  the aspect ratio from the loaded photograph and falls back to 4:3 until it
+  loads.
+- On a phone the wall image is about 350px wide, so default 4% boxes are small;
+  selection through the side list works, and the corner handles are the resize
+  affordance. The global "Ask ARCH" button can overlap the bottom-right of the
+  page, as it already does elsewhere on the site.
+- The arrow-key nudge described in the design is not implemented. Enter
+  selects, Delete removes and Escape cancels; move and resize need a pointer.
+- PostgreSQL remains untested for this feature. The canvas, API calls and
+  schema do not use SQLite-specific frontend behaviour, but that is not
+  evidence of PostgreSQL compatibility.
+
+**Next:** add the published-hold overlay to the member route detail page,
+keeping voting, logging and navigation unchanged, then run the full regression
+sweep.
+
+---
+
 ## 5. Decisions taken (and why)
 
 | Decision                                                                                 | Rationale                                                                                                                         |

@@ -3615,3 +3615,420 @@
     justify-content: space-between;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Route-setting editor                                                       */
+/* -------------------------------------------------------------------------- */
+
+.muted {
+  color: var(--color-muted-foreground);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.route-setting-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-card);
+}
+
+.route-setting-toolbar label {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.route-setting-toolbar select {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+.route-setting-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.editor-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.editor-notice svg {
+  flex: none;
+  margin-top: 0.1rem;
+}
+
+.editor-notice-success {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+.editor-notice-error {
+  border-color: color-mix(in srgb, var(--color-destructive) 55%, transparent);
+}
+
+.editor-notice-info {
+  border-color: var(--color-border);
+}
+
+.route-setting-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.route-setting-canvas-block {
+  min-width: 0;
+}
+
+.route-setting-side {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.hold-canvas-wrap {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.hold-canvas {
+  position: relative;
+  width: 100%;
+  max-height: 70vh;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: #070907;
+  cursor: crosshair;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+
+.hold-canvas:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.hold-canvas-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hold-canvas-hint {
+  color: var(--color-muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.hold-box {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 0;
+  border: 2px solid rgba(242, 241, 236, 0.55);
+  border-radius: 7px;
+  background: rgba(13, 14, 13, 0.06);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    box-shadow 120ms ease,
+    border-color 120ms ease;
+}
+
+.hold-box:active {
+  cursor: grabbing;
+}
+
+.hold-box-unassigned {
+  border-style: dashed;
+}
+
+.hold-box-start {
+  border-color: var(--color-primary);
+}
+
+.hold-box-middle {
+  border-color: #7dd3fc;
+}
+
+.hold-box-finish {
+  border-color: #fbbf24;
+}
+
+.hold-box-selected {
+  box-shadow: 0 0 0 3px rgba(200, 245, 66, 0.3);
+}
+
+.hold-badge {
+  position: absolute;
+  top: -11px;
+  left: -11px;
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #10130a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.hold-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #10130a;
+  border-radius: 4px;
+  background: var(--color-foreground);
+  touch-action: none;
+}
+
+/* The visible handle stays small, but the touch target is 26px. */
+.hold-handle::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 8px;
+}
+
+.hold-handle-nw {
+  top: -8px;
+  left: -8px;
+  cursor: nwse-resize;
+}
+
+.hold-handle-ne {
+  top: -8px;
+  right: -8px;
+  cursor: nesw-resize;
+}
+
+.hold-handle-sw {
+  bottom: -8px;
+  left: -8px;
+  cursor: nesw-resize;
+}
+
+.hold-handle-se {
+  right: -8px;
+  bottom: -8px;
+  cursor: nwse-resize;
+}
+
+.hold-box-preview {
+  border-style: dashed;
+  border-color: var(--color-primary);
+  background: rgba(200, 245, 66, 0.14);
+  pointer-events: none;
+}
+
+.route-setting-route-line {
+  margin-bottom: 0.5rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.route-setting-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.9rem;
+}
+
+.route-setting-add {
+  margin-bottom: 0.85rem;
+}
+
+.hold-sequence {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  list-style: none;
+}
+
+.hold-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-secondary);
+}
+
+.hold-step-number {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(242, 241, 236, 0.12);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.hold-step-start .hold-step-number {
+  background: var(--color-primary);
+  color: #10130a;
+}
+
+.hold-step-middle .hold-step-number {
+  background: #7dd3fc;
+  color: #0b1116;
+}
+
+.hold-step-finish .hold-step-number {
+  background: #fbbf24;
+  color: #1a1204;
+}
+
+.hold-step-text {
+  min-width: 0;
+}
+
+.hold-step-text strong {
+  display: block;
+  overflow: hidden;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hold-step-text small {
+  color: var(--color-muted-foreground);
+  font-size: 0.72rem;
+}
+
+.hold-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.05rem;
+}
+
+.hold-step-actions button {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+
+.route-setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.wall-hold-list {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 18rem;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.wall-hold-list button {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wall-hold-list button small {
+  color: var(--color-muted-foreground);
+  font-size: 0.72rem;
+}
+
+.wall-hold-list button.is-selected {
+  border-color: var(--color-primary);
+  background: rgba(200, 245, 66, 0.08);
+}
+
+.selected-hold {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.selected-hold h3 {
+  font-size: 1rem;
+}
+
+@media (max-width: 980px) {
+  .route-setting-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hold-canvas {
+    max-height: 58vh;
+  }
+}
+
+@media (max-width: 520px) {
+  .route-setting-toolbar {
+    padding: 0.75rem;
+  }
+
+  .hold-step {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .hold-step-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}

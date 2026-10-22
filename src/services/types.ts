@@ -401,3 +401,63 @@ export type ApiAchievement = {
   notes: string | null;
   created_at: string;
 };
+
+/** The short route shape the staff picker receives. */
+export type ApiStaffRouteOption = {
+  id: number;
+  name: string;
+  grade: string;
+  wall_id: number | null;
+  status: string;
+};
+
+/** A hand-drawn hold box on a wall photograph, in normalised image space. */
+export type ApiWallHold = {
+  id: number;
+  wall_id: number;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ApiHoldRole = "start" | "middle" | "finish";
+
+/** One hold in a route's ordered sequence. */
+export type ApiRouteHold = {
+  id: number;
+  wall_hold_id: number;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  position: number;
+  role: ApiHoldRole;
+};
+
+export type ApiRouteHoldSet = {
+  id: number;
+  route_id: number;
+  status: "draft" | "published" | "superseded";
+  wall_image_url: string | null;
+  published_at: string | null;
+  updated_at: string;
+  holds: ApiRouteHold[];
+};
+
+export type ApiRouteHoldSetState = {
+  route_id: number;
+  draft: ApiRouteHoldSet | null;
+  published: ApiRouteHoldSet | null;
+};
+
+export type ApiPublicRouteHolds = {
+  route_id: number;
+  image_url: string | null;
+  published: boolean;
+  holds: ApiRouteHold[];
+};

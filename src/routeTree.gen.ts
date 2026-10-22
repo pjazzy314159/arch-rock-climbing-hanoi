@@ -29,6 +29,7 @@ import { Route as MemberProfileRouteImport } from './routes/member_.profile'
 import { Route as MemberProgressRouteImport } from './routes/member_.progress'
 import { Route as RoutesRouteIdRouteImport } from './routes/routes_.$routeId'
 import { Route as ShopProductIdRouteImport } from './routes/shop_.$productId'
+import { Route as StaffRouteSettingRouteImport } from './routes/staff_.route-setting'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -130,6 +131,11 @@ const ShopProductIdRoute = ShopProductIdRouteImport.update({
   path: '/shop/$productId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StaffRouteSettingRoute = StaffRouteSettingRouteImport.update({
+  id: '/staff_/route-setting',
+  path: '/staff/route-setting',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/member/progress': typeof MemberProgressRoute
   '/routes/$routeId': typeof RoutesRouteIdRoute
   '/shop/$productId': typeof ShopProductIdRoute
+  '/staff/route-setting': typeof StaffRouteSettingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/member/progress': typeof MemberProgressRoute
   '/routes/$routeId': typeof RoutesRouteIdRoute
   '/shop/$productId': typeof ShopProductIdRoute
+  '/staff/route-setting': typeof StaffRouteSettingRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -197,6 +205,7 @@ export interface FileRoutesById {
   '/member_/progress': typeof MemberProgressRoute
   '/routes_/$routeId': typeof RoutesRouteIdRoute
   '/shop_/$productId': typeof ShopProductIdRoute
+  '/staff_/route-setting': typeof StaffRouteSettingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -221,6 +230,7 @@ export interface FileRouteTypes {
     | '/member/progress'
     | '/routes/$routeId'
     | '/shop/$productId'
+    | '/staff/route-setting'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
     | '/member/progress'
     | '/routes/$routeId'
     | '/shop/$productId'
+    | '/staff/route-setting'
   id:
     | '__root__'
     | '/'
@@ -265,6 +276,7 @@ export interface FileRouteTypes {
     | '/member_/progress'
     | '/routes_/$routeId'
     | '/shop_/$productId'
+    | '/staff_/route-setting'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -288,6 +300,7 @@ export interface RootRouteChildren {
   MemberProgressRoute: typeof MemberProgressRoute
   RoutesRouteIdRoute: typeof RoutesRouteIdRoute
   ShopProductIdRoute: typeof ShopProductIdRoute
+  StaffRouteSettingRoute: typeof StaffRouteSettingRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -432,6 +445,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopProductIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/staff_/route-setting': {
+      id: '/staff_/route-setting'
+      path: '/staff/route-setting'
+      fullPath: '/staff/route-setting'
+      preLoaderRoute: typeof StaffRouteSettingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -456,6 +476,7 @@ const rootRouteChildren: RootRouteChildren = {
   MemberProgressRoute: MemberProgressRoute,
   RoutesRouteIdRoute: RoutesRouteIdRoute,
   ShopProductIdRoute: ShopProductIdRoute,
+  StaffRouteSettingRoute: StaffRouteSettingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

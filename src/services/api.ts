@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Typed client for the ARCH FastAPI backend.
  *
  * The backend is the source of truth for everything the website shows. This
@@ -32,8 +32,13 @@ import type {
   ApiLeaderboardEntry,
   ApiLeaderboardRules,
   ApiPrice,
+  ApiPublicRouteHolds,
+  ApiRouteHoldSet,
+  ApiRouteHoldSetState,
   ApiRouteFilterOptions,
   ApiRouteSummary,
+  ApiStaffRouteOption,
+  ApiWallHold,
   ApiRule,
   ApiService,
   ApiShift,
@@ -157,7 +162,7 @@ export function getAccessToken(): string | null {
 /* -------------------------------------------------------------------------- */
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   /** Send the access token with this request. Defaults to true. */
   auth?: boolean;
@@ -407,4 +412,61 @@ export const adminApi = {
         created_at: string;
       }[]
     >(`/api/admin/votes${routeId ? `?route_id=${routeId}` : ""}`),
+};
+
+/**
+ * The route-setting tool's own endpoints.
+ *
+ * Walls and holds are staff data; the publish call is additionally restricted
+ * to administrators by the backend, not by this client.
+ */
+export const routeSettingApi = {
+  walls: () => apiRequest<ApiWall[]>("/api/staff/walls"),
+
+  wallRoutes: (wallId: number) =>
+    apiRequest<ApiStaffRouteOption[]>(`/api/staff/walls/${wallId}/routes`),
+
+  wallHolds: (wallId: number) => apiRequest<ApiWallHold[]>(`/api/staff/walls/${wallId}/holds`),
+
+  createHold: (
+    wallId: number,
+    body: { x: number; y: number; width: number; height: number; label?: string },
+  ) => apiRequest<ApiWallHold>(`/api/staff/walls/${wallId}/holds`, { method: "POST", body }),
+
+  updateHold: (
+    holdId: number,
+    body: {
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      label?: string;
+    },
+  ) => apiRequest<ApiWallHold>(`/api/staff/holds/${holdId}`, { method: "PATCH", body }),
+
+  deleteHold: (holdId: number) =>
+    apiRequest<void>(`/api/staff/holds/${holdId}`, { method: "DELETE" }),
+
+  holdSet: (routeId: number) =>
+    apiRequest<ApiRouteHoldSetState>(`/api/staff/routes/${routeId}/hold-set`),
+
+  saveHoldSet: (
+    routeId: number,
+    body: { holds: { wall_hold_id: number }[]; wall_image_url?: string | null },
+  ) =>
+    apiRequest<ApiRouteHoldSet>(`/api/staff/routes/${routeId}/hold-set`, {
+      method: "PUT",
+      body,
+    }),
+
+  publishHoldSet: (routeId: number) =>
+    apiRequest<ApiRouteHoldSet>(`/api/staff/routes/${routeId}/hold-set/publish`, {
+      method: "POST",
+    }),
+
+  /** The published annotation of an active route, readable without a token. */
+  publicHolds: (routeId: number) =>
+    apiRequest<ApiPublicRouteHolds>(`/api/public/routes/${routeId}/holds`, {
+      auth: false,
+    }),
 };
