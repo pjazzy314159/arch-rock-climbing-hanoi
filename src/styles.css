@@ -449,6 +449,27 @@
   color: var(--color-muted-foreground);
 }
 
+.rules-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.rules-panel h2 {
+  font-size: 1.05rem;
+}
+
+.rules-panel p {
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--color-muted-foreground);
+}
+
 .feedback {
   margin-top: 0.85rem;
   font-size: 0.85rem;

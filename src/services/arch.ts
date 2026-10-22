@@ -26,6 +26,7 @@ import type {
   ApiFaqEntry,
   ApiGym,
   ApiLeaderboardEntry,
+  ApiLeaderboardRules,
   ApiOpeningHour,
   ApiPrice,
   ApiRouteSummary,
@@ -192,6 +193,18 @@ export type LeaderboardEntry = {
   totalSends: number;
   bestGrade: string | null;
   score: number;
+};
+
+/**
+ * The ranking's own explanation.
+ *
+ * These are the backend's words, fetched from the ranking code. There is no
+ * sample copy behind them: if the API cannot be reached the page says so
+ * rather than describing a rule the numbers were not worked out with.
+ */
+export type LeaderboardRules = {
+  scoringRule: string;
+  percentileRule: string;
 };
 
 export type VoteTally = {
@@ -780,6 +793,13 @@ export function toLeaderboardEntry(entry: ApiLeaderboardEntry): LeaderboardEntry
   };
 }
 
+export function toLeaderboardRules(rules: ApiLeaderboardRules): LeaderboardRules {
+  return {
+    scoringRule: rules.scoring_rule,
+    percentileRule: rules.percentile_rule,
+  };
+}
+
 export function toVoteTally(tally: ApiVoteTally): VoteTally {
   return {
     routeId: tally.route_id,
@@ -1015,6 +1035,20 @@ export const archService = {
       (entries) => entries.length === 0,
     ),
 
+  /**
+   * The ranking's explanation, fetched rather than written on the page.
+   *
+   * No sample fallback: a different rule in the browser would be a different
+   * rule from the one the ranking applies, which is worse than saying the
+   * explanation could not be loaded.
+   */
+  getLeaderboardRules: (): Promise<Resource<LeaderboardRules | null>> =>
+    loadFiltered(
+      "the leaderboard rules",
+      async () => toLeaderboardRules(await api.leaderboardRules()),
+      null,
+    ),
+
   getRouteTally: (routeId: number | string): Promise<Resource<VoteTally | null>> =>
     load("The community feedback", async () => toVoteTally(await api.routeTally(routeId)), null),
 
@@ -1170,6 +1204,10 @@ export const gymQuery = { queryKey: ["arch", "gym"], queryFn: archService.getGym
 export const leaderboardQuery = {
   queryKey: ["arch", "leaderboard"],
   queryFn: archService.getLeaderboard,
+};
+export const leaderboardRulesQuery = {
+  queryKey: ["arch", "leaderboard-rules"],
+  queryFn: archService.getLeaderboardRules,
 };
 export const serviceStatusQuery = {
   queryKey: ["arch", "service-status"],

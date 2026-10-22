@@ -22,6 +22,7 @@ import { PageHeading, RouteCard, TextLink } from "./shared";
 import { LogClimbModal } from "./log-climb-modal";
 import {
   leaderboardQuery,
+  leaderboardRulesQuery,
   routeQuery,
   toClimbRoute,
   WALL_TYPE_LABELS,
@@ -341,6 +342,44 @@ export function RouteDetailPage({ routeId }: { routeId: string }) {
   );
 }
 
+/**
+ * How the ranking works, in the backend's own words.
+ *
+ * The text is fetched from `/api/public/leaderboard/rules`, which serves the
+ * same constants the leaderboard is computed with. The page keeps no second
+ * copy: if the explanation cannot be loaded it says so, rather than describing
+ * a rule the numbers were not worked out with.
+ */
+export function LeaderboardRulesPanel() {
+  const rules = useQuery(leaderboardRulesQuery);
+  const record = rules.data?.data ?? null;
+
+  if (rules.isPending) {
+    return (
+      <p className="muted-note" role="status">
+        Loading how the ranking works…
+      </p>
+    );
+  }
+
+  if (!record) {
+    return (
+      <p className="muted-note" role="status">
+        How the ranking works could not be loaded right now. The places above are unaffected; reload
+        the page to read the rule.
+      </p>
+    );
+  }
+
+  return (
+    <section className="rules-panel" aria-labelledby="leaderboard-rules">
+      <h2 id="leaderboard-rules">How the ranking works</h2>
+      <p>{record.scoringRule}</p>
+      <p>{record.percentileRule}</p>
+    </section>
+  );
+}
+
 /** The community leaderboard. */
 export function LeaderboardPage() {
   // A suspense query, like the other content pages: the loader prefetches the
@@ -397,10 +436,7 @@ export function LeaderboardPage() {
           </table>
         </div>
       )}
-      <p className="muted-note">
-        Only logged sends count. Ties are broken by the number of sends, then the best grade, then
-        the date of the first send.
-      </p>
+      <LeaderboardRulesPanel />
       <div className="section-title">
         <h2>Log your own climbs</h2>
         <TextLink to="/member/logbook">Open logbook</TextLink>

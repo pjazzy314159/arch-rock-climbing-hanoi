@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   toClimbRoute,
   toGymProfile,
+  toLeaderboardRules,
   toOpeningHour,
   toProduct,
   toVoteTally,
@@ -224,5 +225,18 @@ describe("opening hours mapping", () => {
     });
     expect(hour.isClosed).toBe(true);
     expect(hour.note).toBe("To be confirmed");
+  });
+});
+
+describe("leaderboard rules mapping", () => {
+  it("keeps the backend's wording untouched", () => {
+    const rules = toLeaderboardRules({
+      scoring_rule: "Sends only.",
+      percentile_rule: "The share of ranked climbers behind you.",
+    });
+    expect(rules).toEqual({
+      scoringRule: "Sends only.",
+      percentileRule: "The share of ranked climbers behind you.",
+    });
   });
 });

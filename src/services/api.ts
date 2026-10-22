@@ -30,6 +30,7 @@ import type {
   ApiFaqEntry,
   ApiGym,
   ApiLeaderboardEntry,
+  ApiLeaderboardRules,
   ApiPrice,
   ApiRouteFilterOptions,
   ApiRouteSummary,
@@ -247,6 +248,8 @@ export const api = {
     }),
 
   leaderboard: () => apiRequest<ApiLeaderboardEntry[]>("/api/me/leaderboard"),
+  leaderboardRules: () =>
+    apiRequest<ApiLeaderboardRules>("/api/public/leaderboard/rules", { auth: false }),
   routeTally: (routeId: number | string) =>
     apiRequest<ApiVoteTally>(`/api/me/routes/${routeId}/tally`),
 

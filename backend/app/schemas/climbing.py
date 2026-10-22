@@ -188,3 +188,15 @@ class LeaderboardEntry(BaseModel):
     total_sends: int
     best_grade: str | None
     score: int
+
+
+class LeaderboardRules(BaseModel):
+    """The leaderboard's own words, for anyone who reads the ranking.
+
+    The text is not written for the page: it is the same text the ranking is
+    documented with, so a public page can never explain a different rule from
+    the one the numbers were worked out with.
+    """
+
+    scoring_rule: str
+    percentile_rule: str

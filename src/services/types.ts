@@ -185,6 +185,12 @@ export type ApiLeaderboardEntry = {
   score: number;
 };
 
+/** The ranking's own explanation, as the backend applies it. */
+export type ApiLeaderboardRules = {
+  scoring_rule: string;
+  percentile_rule: string;
+};
+
 export type ApiAssistantStatus = {
   provider: string | null;
   model: string | null;

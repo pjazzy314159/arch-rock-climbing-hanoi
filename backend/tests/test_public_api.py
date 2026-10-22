@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 from app.models import FaqEntry
 from app.services.assistant import answer_question, retrieve, score_entry, tokenize
+from app.services.climbing import (
+    LEADERBOARD_SCORING_RULE,
+    PERCENTILE_RULE,
+    LeaderboardRow,
+    rank_rows,
+)
 
 
 def test_health_reports_the_database(client: TestClient) -> None:
@@ -439,3 +447,42 @@ class TestRetrieval:
         result = await answer_question(get_settings(), "Can I rent climbing shoes?", entries)
         assert result["mode"] == "knowledge_base"
         assert "reception" in result["answer"]
+
+
+def test_the_leaderboard_rules_are_public_and_come_from_the_ranking(
+    client: TestClient,
+) -> None:
+    """No token, and the words are the ranking's own, not a second copy."""
+    response = client.get("/api/public/leaderboard/rules")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["scoring_rule"] == LEADERBOARD_SCORING_RULE
+    assert body["percentile_rule"] == PERCENTILE_RULE
+
+
+def test_the_published_rule_names_the_ties_the_ranking_implements() -> None:
+    """The explanation and the calculation agree on what separates climbers.
+
+    Two climbers equal on score, sends, best grade and first-send date share a
+    rank; the published rule must name those same criteria, because those are
+    the ones that actually decide it.
+    """
+    same_record = dict(
+        total_sends=2,
+        best_grade="V3",
+        best_grade_index=3,
+        score=8,
+        first_send_on=date(2026, 1, 1),
+    )
+    ranked = rank_rows(
+        [
+            LeaderboardRow(user_id=1, display_name="An", **same_record),
+            LeaderboardRow(user_id=2, display_name="Binh", **same_record),
+        ]
+    )
+    assert ranked[0][0] == ranked[1][0] == 1
+
+    for criterion in ("number of sends", "best grade", "date of the first send"):
+        assert criterion in LEADERBOARD_SCORING_RULE
+    assert "not ranked" in LEADERBOARD_SCORING_RULE
+    assert "100th percentile" in PERCENTILE_RULE

@@ -120,7 +120,7 @@ Every phase keeps the public website and the backend working.
 | 1.4 | The member dashboard                                                                                                       | `DONE`        | Real data only; empty, loaded and unavailable states are visibly different; no sample achievements are shown as real.                      |
 | 1.5 | Route card and route page: wall, wall type, status, imagery                                                                | `DONE`        | The card states the wall and the status; a placeholder photograph is labelled as one.                                                      |
 | 1.6 | Log an attempt from the dashboard and from a route                                                                         | `DONE`        | The attempt is stored by the backend, survives a refresh and a sign-in, and a member cannot change another member's records.               |
-| 1.7 | Ranking rule stated on the dashboard and the leaderboard                                                                   | `TODO`        | The page states the scoring rule and the displayed rank matches the backend.                                                               |
+| 1.7 | Ranking rule stated on the dashboard and the leaderboard                                                                   | `DONE`        | The page states the scoring rule and the displayed rank matches the backend.                                                               |
 | 1.8 | Tests                                                                                                                      | `TODO`        | Backend: the new response, the filters, the flash derivation, the ranking. Frontend: the mapping.                                          |
 | 1.9 | Browser review at desktop and mobile sizes                                                                                 | `TODO`        | Screenshots reviewed; no console or hydration errors; the empty state reviewed as well as the populated one.                               |
 
@@ -1474,6 +1474,81 @@ the member is when they finish a climb.
   one was in scope.
 
 **Next:** task 1.7 — explain leaderboard scoring and ranking publicly.
+
+---
+
+### Task 1.7 — The leaderboard explains its own ranking (`DONE`)
+
+**The change**
+
+The public leaderboard stated part of the rule as hand-written frontend copy
+and said nothing about the percentile. The rule now comes from the backend
+that applies it.
+
+- `backend/app/schemas/climbing.py` — `LeaderboardRules` (`scoring_rule`,
+  `percentile_rule`), exported from `app/schemas/__init__.py`.
+- `backend/app/api/public.py` — `GET /api/public/leaderboard/rules`. It
+  returns `LEADERBOARD_SCORING_RULE` and `PERCENTILE_RULE` straight from
+  `app/services/climbing.py`, needs no token, and leaves the existing
+  `/api/me/leaderboard` list response byte-for-byte compatible.
+- `src/services/types.ts`, `src/services/api.ts` — `ApiLeaderboardRules` and
+  `api.leaderboardRules()`, requested with `auth: false`.
+- `src/services/arch.ts` — `LeaderboardRules`, `toLeaderboardRules`,
+  `archService.getLeaderboardRules`, `leaderboardRulesQuery`. The service
+  uses `loadFiltered`, which never substitutes sample data: if the rules
+  cannot be fetched the UI is told so rather than describing a rule the
+  numbers were not worked out with.
+- `src/components/arch/route-pages.tsx` — `LeaderboardRulesPanel` replaces the
+  hardcoded note under the table. It has three honest states: loading, the
+  backend's two rules, or "could not be loaded right now". The ranking table,
+  headings and navigation are unchanged.
+- `src/styles.css` — `.rules-panel`, in the existing card conventions.
+
+**Verification**
+
+- Backend: **198 tests pass**; `ruff check`, `ruff format --check` and
+  `alembic check` clean.
+- `backend/tests/test_public_api.py` (+2 tests) — the endpoint answers without
+  a token and its body equals `LEADERBOARD_SCORING_RULE` / `PERCENTILE_RULE`;
+  and the published tie-break criteria are the ones `rank_rows` actually uses
+  (two climbers equal on score, sends, best grade and first-send date share
+  rank 1, and the rule names those same criteria, "not ranked" and the
+  "100th percentile").
+- Frontend: **107 tests pass in 11 files**; `bun run typecheck` clean,
+  `bun run lint` 0 errors (7 pre-existing `react-refresh` warnings),
+  `bun run build` succeeds.
+- `src/test/leaderboard-rules.test.tsx` (new, 3 tests) — the panel renders
+  sentinel text returned by the API (so the copy provably comes from the
+  endpoint), shows its loading state, and shows the unavailable state without
+  inventing a rule when the endpoint fails.
+- `src/test/service-mapping.test.ts` — `toLeaderboardRules` keeps the
+  backend's wording untouched.
+- Browser, `scripts/check-member-flows.mjs http://localhost:8090` —
+  **24/24 checks passed, no browser errors.** It signed in as the demo
+  member, logged a climb from the dashboard (sends 4→5 after reload, logbook
+  6→7 rows), logged another from a route page with the route pre-filled
+  (logbook 7→8 after reload), read both rules from the live panel and
+  compared them with the API response, confirmed the dashboard rank (#1) and
+  the public leaderboard rank (#1) agree for that climber, forced the rules
+  endpoint to fail and saw the unavailable message with no rule text
+  invented, and measured 0px horizontal overflow at 390×844 on the dashboard,
+  logbook and leaderboard. Desktop screenshots at 1440×900 were captured.
+- `scripts/check-route-directory.mjs` and `scripts/check-route-cards.mjs` —
+  all checks passed against the same build (filters individually and
+  together, clearing, archived status handling, failure-vs-empty states, card
+  imagery, route detail and 0px mobile overflow).
+
+**Limitations**
+
+- The screenshots (`var/screenshots/*.png`) were captured but not reviewed
+  pixel-by-pixel: the model in this session cannot view images. The checks
+  above assert the rendered structure and text instead.
+- The public leaderboard does not display each climber's percentile (only the
+  rule that defines it); the dashboard shows the member's own percentile.
+  That matches the existing list contract and was not changed.
+
+**Next:** the full regression sweep, then Phase 2A — the visual route-setting
+design.
 
 ---
 

@@ -35,6 +35,7 @@ from app.schemas import (
     EventOut,
     FaqOut,
     GymOut,
+    LeaderboardRules,
     Message,
     OpeningHourOut,
     PriceOut,
@@ -46,7 +47,11 @@ from app.schemas import (
     WallFilterOption,
     WallOut,
 )
-from app.services.climbing import build_route_summary
+from app.services.climbing import (
+    LEADERBOARD_SCORING_RULE,
+    PERCENTILE_RULE,
+    build_route_summary,
+)
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -265,6 +270,21 @@ def get_route(route_id: int, db: Session = Depends(get_db)) -> RouteSummary:
     if route is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Route not found")
     return build_route_summary(db, route)
+
+
+@router.get("/leaderboard/rules", response_model=LeaderboardRules)
+def leaderboard_rules() -> LeaderboardRules:
+    """Explain the ranking, in the ranking's own words.
+
+    The text comes from the module that works out the leaderboard, so the
+    public page cannot describe a rule different from the one applied. It is
+    public on purpose: a ranking that cannot be explained is not a ranking a
+    climber can trust.
+    """
+    return LeaderboardRules(
+        scoring_rule=LEADERBOARD_SCORING_RULE,
+        percentile_rule=PERCENTILE_RULE,
+    )
 
 
 @router.post("/contact", response_model=ContactMessageOut, status_code=http_status.HTTP_201_CREATED)
