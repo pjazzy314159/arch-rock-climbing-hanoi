@@ -27,6 +27,85 @@ def test_logging_a_climb_returns_the_entry(client: TestClient, customer) -> None
     assert response.json()["attempts"] == 2
 
 
+def test_logging_with_a_route_id_uses_the_routes_details(
+    client: TestClient, customer, route
+) -> None:
+    token = login(client, customer.email)
+    response = client.post(
+        "/api/me/logbook",
+        json={"route_id": route.id, "route_name": "spoofed", "grade": "V9"},
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 201, response.text
+    entry = response.json()
+    # The record is the route's own: attempting to name another route or grade
+    # does not stick once a route id says which route it was.
+    assert entry["route_name"] == route.name
+    assert entry["grade"] == route.grade
+    assert entry["route_id"] == route.id
+
+
+def test_logging_with_invalid_input_is_refused(client: TestClient, customer) -> None:
+    token = login(client, customer.email)
+    # Zero attempts is nonsense; the schema refuses it before it is stored.
+    response = client.post(
+        "/api/me/logbook",
+        json={"route_name": "X", "grade": "V1", "attempts": 0},
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 422
+    # An empty route name is refused too.
+    response = client.post(
+        "/api/me/logbook",
+        json={"route_name": "", "grade": "V1"},
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 422
+
+
+def test_a_logged_climb_persists_across_requests(client: TestClient, customer) -> None:
+    token = login(client, customer.email)
+    created = client.post(
+        "/api/me/logbook",
+        json={"route_name": "After Hours", "grade": "V6", "attempts": 3, "result": "project"},
+        headers=auth_headers(token),
+    )
+    entry_id = created.json()["id"]
+
+    # A fresh request sees the same record: it lives in the database, not in
+    # the page that created it.
+    listed = client.get("/api/me/logbook", headers=auth_headers(token)).json()
+    assert [entry["id"] for entry in listed] == [entry_id]
+    assert listed[0]["route_name"] == "After Hours"
+    assert listed[0]["attempts"] == 3
+
+
+def test_a_newly_logged_climb_moves_the_dashboard(client: TestClient, customer, route) -> None:
+    token = login(client, customer.email)
+    dashboard_before = client.get("/api/me/dashboard", headers=auth_headers(token)).json()
+    assert dashboard_before["has_activity"] is False
+    assert dashboard_before["total_sends"] == 0
+
+    client.post(
+        "/api/me/logbook",
+        json={
+            "route_id": route.id,
+            "route_name": route.name,
+            "grade": route.grade,
+            "attempts": 1,
+            "result": "sent",
+        },
+        headers=auth_headers(token),
+    )
+
+    dashboard_after = client.get("/api/me/dashboard", headers=auth_headers(token)).json()
+    assert dashboard_after["has_activity"] is True
+    assert dashboard_after["total_sends"] == 1
+    # A send with one attempt is a flash, and flash is a subset of sends.
+    assert dashboard_after["outcomes"]["flashes"] == 1
+    assert dashboard_after["best_grade"] == route.grade
+
+
 def test_a_member_only_sees_their_own_logbook(client: TestClient, customer, other_customer) -> None:
     token = login(client, customer.email)
     client.post(

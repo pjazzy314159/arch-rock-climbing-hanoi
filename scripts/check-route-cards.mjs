@@ -50,7 +50,8 @@ try {
   const cardText = await firstCard.innerText();
   check(
     "a card names its wall and wall type",
-    cardText.includes("Wall to be confirmed") || /(Slab|Vertical|Overhang|Roof|Boulder)/.test(cardText),
+    cardText.includes("Wall to be confirmed") ||
+      /(Slab|Vertical|Overhang|Roof|Boulder)/.test(cardText),
     cardText.split("\n")[0],
   );
 
@@ -58,7 +59,11 @@ try {
   console.log("\n--- imagery ---");
   const photos = await page.locator(".route-photo").count();
   const placeholders = await page.locator(".photo-note").count();
-  check("a picture or a labelled placeholder is showing", photos + placeholders === total, `${photos} photos, ${placeholders} placeholders`);
+  check(
+    "a picture or a labelled placeholder is showing",
+    photos + placeholders === total,
+    `${photos} photos, ${placeholders} placeholders`,
+  );
 
   // No route should ever be left with neither.
   const noArt = total - photos - placeholders;
@@ -74,7 +79,13 @@ try {
   await page.waitForURL("**/routes/**", { timeout: 20_000 });
   await page.waitForTimeout(900);
 
-  check("the route page names the route", await page.locator("text=" + routeName).first().isVisible());
+  check(
+    "the route page names the route",
+    await page
+      .locator("text=" + routeName)
+      .first()
+      .isVisible(),
+  );
   const gradeText = (await page.locator(".grade-block").innerText()).toUpperCase();
   check("the route page states the wall type", gradeText.includes("WALL TYPE"));
   check("the route page states the status", gradeText.includes("STATUS"));

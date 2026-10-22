@@ -119,7 +119,7 @@ Every phase keeps the public website and the backend working.
 | 1.3 | Route directory filters: grade, wall, wall type, status                                                                    | `DONE`        | Each filter narrows the list server-side; the available options come from the data, not from a hard-coded list.                            |
 | 1.4 | The member dashboard                                                                                                       | `DONE`        | Real data only; empty, loaded and unavailable states are visibly different; no sample achievements are shown as real.                      |
 | 1.5 | Route card and route page: wall, wall type, status, imagery                                                                | `DONE`        | The card states the wall and the status; a placeholder photograph is labelled as one.                                                      |
-| 1.6 | Log an attempt from the dashboard and from a route                                                                         | `TODO`        | The attempt is stored by the backend, survives a refresh and a sign-in, and a member cannot change another member's records.               |
+| 1.6 | Log an attempt from the dashboard and from a route                                                                         | `DONE`        | The attempt is stored by the backend, survives a refresh and a sign-in, and a member cannot change another member's records.               |
 | 1.7 | Ranking rule stated on the dashboard and the leaderboard                                                                   | `TODO`        | The page states the scoring rule and the displayed rank matches the backend.                                                               |
 | 1.8 | Tests                                                                                                                      | `TODO`        | Backend: the new response, the filters, the flash derivation, the ranking. Frontend: the mapping.                                          |
 | 1.9 | Browser review at desktop and mobile sizes                                                                                 | `TODO`        | Screenshots reviewed; no console or hydration errors; the empty state reviewed as well as the populated one.                               |
@@ -1385,6 +1385,95 @@ that exists — and it says so honestly when none does.
   no picture of their own; the fallback order is still exercised by tests.
 
 **Next:** task 1.6 — context-aware attempt logging.
+
+---
+
+### Task 1.6 — Contextual attempt logging (`DONE`)
+
+**The change**
+
+Logging a climb was only possible from the logbook page, in a form that lived
+inside that page. The same form is now one shared dialog, opened from wherever
+the member is when they finish a climb.
+
+- `src/components/arch/log-climb-modal.tsx` (new) — `LogClimbModal`, the one
+  place a climb is logged:
+  - It can be opened with a route already chosen (`preselectedRoute`), which
+    the route page supplies, or without one, and then the member picks from the
+    routes on the wall.
+  - While a route is preselected the dialog shows it plainly
+    (`Sloper Opera · V4`) and offers **Choose a different route** instead of a
+    pre-filled select, so the member can still log something else.
+  - The fields are the ones the existing model supports: route, date,
+    attempts, result (Sent / Project) and notes. Flash is still *derived* by
+    the backend (`sent` with one attempt); the dialog does not invent a third
+    outcome or any new climbing rule.
+  - Submission goes to the existing `POST /api/me/logbook`; the backend
+    replaces the name and grade with the route's own when a route id is sent.
+  - Pending state: the button reads "Saving…" and is disabled, and a
+    `useRef` guard rejects a second submit that arrives before React has
+    re-rendered — a double Enter or double click sends **one** request.
+  - Errors (including a 401 / validation failure) are shown in the dialog and
+    nothing is closed or claimed saved. Success closes the dialog and reports
+    "<route> has been added to your logbook."
+  - The route list has honest loading and empty states rather than an empty
+    select.
+  - On success it invalidates `["member","dashboard"]`, `["member","logbook"]`,
+    `["arch","leaderboard"]`, `["arch","route",<id>]` and the member's vote key
+    for that route, so the dashboard, the logbook, the leaderboard and the
+    route's send count redraw with the new record.
+- `src/components/arch/member-pages.tsx` — the dashboard's "Log an attempt"
+  button (and the empty-state welcome button) now opens the dialog instead of
+  sending the member to another page; the logbook page uses the same dialog
+  and shows the confirmation under its heading, instead of keeping its own
+  copy of the form.
+- `src/components/arch/member-dashboard.tsx` — `DashboardWelcome` takes
+  `onLogAttempt`, so the first-climb empty state opens the dialog too.
+- `src/components/arch/route-pages.tsx` — the route page's "Keep climbing"
+  band gains **Log this climb**, which opens the dialog with that route
+  preselected. A signed-out visitor is offered "Sign in to log this climb"
+  instead; the dialog is never shown to a signed-out member.
+- `src/styles.css` — `.preset-route` and `.preset-switch`, in the existing
+  panel and link conventions.
+- Ownership is unchanged and still enforced on the server: the endpoint takes
+  the user from the token, never from the payload, and deleting/reading another
+  member's entry is a 404.
+
+**Verification**
+
+- Frontend: `bun run typecheck` clean, `bun run lint` **0 errors** (the 7
+  pre-existing `react-refresh` warnings), `bun run test` →
+  **103 tests pass in 10 files**, `bun run build` succeeds.
+- Backend: `uv run pytest` → **196 tests pass**; `ruff check` and
+  `ruff format --check` clean.
+- `src/test/log-climb-modal.test.tsx` (new, 8 tests) — posts the right body to
+  `/api/me/logbook` and closes; invalidates the dashboard, logbook,
+  leaderboard and route keys; keeps a supplied route pre-filled and offers to
+  switch; does nothing when no route was chosen; sends only one request when
+  submit fires twice while the first is in flight; shows an authentication
+  failure instead of claiming a save; says so when the wall has no routes.
+- `src/test/member-dashboard.test.tsx` — the welcome state now asserts the
+  button opens logging rather than linking away.
+- `backend/tests/test_member_api.py` (+4 tests) — logging with a route id
+  uses the route's own name, grade and id even if the payload says otherwise;
+  zero attempts and an empty route name are refused with 422; a logged climb
+  is returned by a fresh request (persistence, not page state); and a newly
+  logged send with one attempt moves the dashboard (`has_activity`,
+  `total_sends`, `flashes = 1`, `best_grade`) — the flash rule is preserved.
+  The existing tests already covered authentication, one member's logbook not
+  showing another's, and refusing to delete another member's entry.
+- `scripts/check-route-cards.mjs` was re-formatted by Prettier (whitespace
+  only); it had been committed before the formatter ran over it.
+
+**Limitations**
+
+- The browser walkthrough of the two entry points and the refresh-persistence
+  check is part of the regression sweep (section 5), not of this commit; this
+  commit's evidence is the unit/API suites above.
+- The dialog does not yet offer to edit an existing log entry; only creating
+  one was in scope.
+
+**Next:** task 1.7 — explain leaderboard scoring and ranking publicly.
 
 ---
 

@@ -6,6 +6,7 @@ import {
   Check,
   ChevronRight,
   Mountain,
+  Plus,
   ThumbsDown,
   ThumbsUp,
   Trophy,
@@ -18,6 +19,7 @@ import { api, memberApi, ApiError, ApiUnavailableError } from "@/services/api";
 import { useSession } from "@/services/session";
 import { EmptyNotice, SampleDataBanner } from "./data-state";
 import { PageHeading, RouteCard, TextLink } from "./shared";
+import { LogClimbModal } from "./log-climb-modal";
 import {
   leaderboardQuery,
   routeQuery,
@@ -48,6 +50,8 @@ export function RouteDetailPage({ routeId }: { routeId: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
+  const [logMessage, setLogMessage] = useState<string | null>(null);
 
   const route = useQuery({
     queryKey: ["arch", "route", routeId],
@@ -286,20 +290,53 @@ export function RouteDetailPage({ routeId }: { routeId: string }) {
             <h2>Keep climbing</h2>
             <TextLink to="/routes">All routes</TextLink>
           </div>
+          {logMessage && (
+            <p className="feedback" role="status">
+              {logMessage}
+            </p>
+          )}
           <div className="session-band">
             <Mountain />
             <div>
               <h3>Beta and progression</h3>
-              <p>Look at the route beta, then log the climb in your logbook.</p>
+              <p>Look at the route beta, then log how the climb went.</p>
             </div>
             <Button asChild>
               <Link to="/member/beta" search={{ route: String(found.id) }}>
                 Explore beta <ArrowUpRight />
               </Link>
             </Button>
+            {signedIn ? (
+              <Button onClick={() => setLogOpen(true)}>
+                <Plus />
+                Log this climb
+              </Button>
+            ) : (
+              <Button asChild variant="outline">
+                <Link to="/signin">
+                  Sign in to log this climb <ArrowUpRight />
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </div>
+      {logOpen && (
+        <LogClimbModal
+          open={logOpen}
+          onClose={() => setLogOpen(false)}
+          preselectedRoute={{
+            id: String(found.id),
+            apiId: found.id,
+            name: found.name,
+            grade: found.grade,
+          }}
+          onSuccess={(text) => {
+            setLogMessage(text);
+            setLogOpen(false);
+          }}
+        />
+      )}
     </main>
   );
 }

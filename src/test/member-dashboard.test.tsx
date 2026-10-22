@@ -320,12 +320,13 @@ describe("the member dashboard", () => {
 
 describe("a member who has not logged anything yet", () => {
   it("is welcomed rather than shown a page of zeroes", async () => {
-    await renderAt(<DashboardWelcome activeRoutes={6} />, /ready for its first line/);
+    await renderAt(
+      <DashboardWelcome activeRoutes={6} onLogAttempt={() => {}} />,
+      /ready for its first line/,
+    );
 
     expect(screen.getByText(/There are 6 routes on the wall right now/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Log an attempt/ }).getAttribute("href")).toBe(
-      "/member/logbook",
-    );
+    expect(screen.getByRole("button", { name: /Log an attempt/ })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Browse the routes/ }).getAttribute("href")).toBe(
       "/routes",
     );
@@ -336,7 +337,10 @@ describe("a member who has not logged anything yet", () => {
   });
 
   it("does not promise routes when the wall is empty", async () => {
-    await renderAt(<DashboardWelcome activeRoutes={0} />, /ready for its first line/);
+    await renderAt(
+      <DashboardWelcome activeRoutes={0} onLogAttempt={() => {}} />,
+      /ready for its first line/,
+    );
 
     expect(screen.queryByText(/routes on the wall right now/)).toBeNull();
     expect(screen.getByText(/Log what you climb/)).toBeTruthy();

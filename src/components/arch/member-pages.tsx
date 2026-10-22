@@ -5,7 +5,6 @@ import {
   Mountain,
   ArrowUpRight,
   Plus,
-  X,
   Check,
   Shield,
   Users,
@@ -22,6 +21,7 @@ import { PageHeading, RouteCard, TextLink } from "./shared";
 import { EmptyNotice, SampleDataBanner } from "./data-state";
 import { MemberError, MemberLoading, MemberShell, Metric, SignInPrompt } from "./member-shell";
 import { DashboardOverview, DashboardUnavailable, DashboardWelcome } from "./member-dashboard";
+import { LogClimbModal } from "./log-climb-modal";
 import {
   adminQuery,
   myAgreementQuery,
@@ -47,6 +47,8 @@ export function MemberPage() {
   // list, not a guess about what the member likes.
   const fresh = routes.data.filter((route) => route.fresh);
   const featured = (fresh.length > 0 ? fresh : routes.data).slice(0, 3);
+  const [logOpen, setLogOpen] = useState(false);
+  const [logMessage, setLogMessage] = useState<string | null>(null);
 
   return (
     <MemberShell>
@@ -56,14 +58,17 @@ export function MemberPage() {
         description="Every session is a step forward. Make this one count."
       >
         {signedIn && (
-          <Button asChild>
-            <Link to="/member/logbook">
-              <Plus />
-              Log an attempt
-            </Link>
+          <Button onClick={() => setLogOpen(true)}>
+            <Plus />
+            Log an attempt
           </Button>
         )}
       </PageHeading>
+      {logMessage && (
+        <p className="feedback" role="status">
+          {logMessage}
+        </p>
+      )}
       {!signedIn ? (
         <SignInPrompt what="your statistics" />
       ) : (
@@ -79,7 +84,10 @@ export function MemberPage() {
             dashboard.data.data.hasActivity ? (
               <DashboardOverview dashboard={dashboard.data.data} />
             ) : (
-              <DashboardWelcome activeRoutes={dashboard.data.data.activeRoutes} />
+              <DashboardWelcome
+                activeRoutes={dashboard.data.data.activeRoutes}
+                onLogAttempt={() => setLogOpen(true)}
+              />
             )
           ) : null}
           <AgreementPanel />
@@ -116,6 +124,16 @@ export function MemberPage() {
             <RouteCard route={r} key={r.id} />
           ))}
         </div>
+      )}
+      {logOpen && (
+        <LogClimbModal
+          open={logOpen}
+          onClose={() => setLogOpen(false)}
+          onSuccess={(text) => {
+            setLogMessage(text);
+            setLogOpen(false);
+          }}
+        />
       )}
     </MemberShell>
   );
@@ -237,48 +255,13 @@ export function AgreementPanel() {
 
 export function LogbookPage() {
   const { status } = useSession();
-  const { data: routes } = useSuspenseQuery(routeQuery);
   const signedIn = status === "authenticated";
   const logbook = useQuery({ ...myLogbookQuery, enabled: signedIn });
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("All climbs");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const hydrated = useHydrated();
+  const [message, setMessage] = useState<string | null>(null);
 
   const entries: LogEntry[] = logbook.data?.data ?? [];
-
-  async function submitClimb(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const route = routes.data.find((r) => r.id === data.get("route"));
-    if (!route) return;
-    setPending(true);
-    setError(null);
-    try {
-      await memberApi.logClimb({
-        route_id: route.apiId || null,
-        route_name: route.name,
-        grade: route.grade,
-        result: data.get("result") === "Sent" ? "sent" : "project",
-        attempts: Number(data.get("attempts")),
-        climbed_on: String(data.get("date")),
-        notes: String(data.get("notes") ?? ""),
-      });
-      await queryClient.invalidateQueries({ queryKey: ["member"] });
-      setOpen(false);
-    } catch (caught) {
-      setError(
-        caught instanceof ApiError || caught instanceof ApiUnavailableError
-          ? caught.message
-          : "That climb could not be saved.",
-      );
-    } finally {
-      setPending(false);
-    }
-  }
 
   return (
     <MemberShell>
@@ -295,148 +278,78 @@ export function LogbookPage() {
         )}
       </PageHeading>
 
+      {message && (
+        <p className="feedback" role="status">
+          {message}
+        </p>
+      )}
+
       {!signedIn ? (
         <SignInPrompt what="your logbook" />
+      ) : logbook.isPending ? (
+        <MemberLoading />
+      ) : logbook.data?.error ? (
+        <MemberError message={logbook.data.error} />
+      ) : entries.length === 0 ? (
+        <EmptyNotice
+          title="No climbs logged yet."
+          description="Log your first climb and it will show up here — the sends, the projects and the notes you want to keep."
+        />
       ) : (
         <>
-          {logbook.isPending ? (
-            <MemberLoading />
-          ) : logbook.data?.error ? (
-            <MemberError message={logbook.data.error} />
-          ) : entries.length === 0 ? (
-            <EmptyNotice
-              title="No climbs logged yet."
-              description="Log your first climb and it will show up here — the sends, the projects and the notes you want to keep."
-            />
-          ) : (
-            <>
-              <div className="category-tabs">
-                {["All climbs", "Sent", "Project"].map((f) => (
-                  <Button
-                    variant={filter === f ? "default" : "ghost"}
-                    key={f}
-                    onClick={() => setFilter(f)}
-                  >
-                    {f}
-                  </Button>
-                ))}
-              </div>
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Route</th>
-                      <th>Grade</th>
-                      <th>Date</th>
-                      <th>Result</th>
-                      <th>Attempts</th>
+          <div className="category-tabs">
+            {["All climbs", "Sent", "Project"].map((f) => (
+              <Button
+                variant={filter === f ? "default" : "ghost"}
+                key={f}
+                onClick={() => setFilter(f)}
+              >
+                {f}
+              </Button>
+            ))}
+          </div>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Grade</th>
+                  <th>Date</th>
+                  <th>Result</th>
+                  <th>Attempts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries
+                  .filter((e) => filter === "All climbs" || e.result === filter)
+                  .map((e) => (
+                    <tr key={e.id}>
+                      <td>
+                        <strong>{e.route}</strong>
+                        {e.notes && <small>{e.notes}</small>}
+                      </td>
+                      <td>{e.grade}</td>
+                      <td>{e.date}</td>
+                      <td>
+                        <span className={e.result === "Sent" ? "status-sent" : "status-project"}>
+                          {e.result}
+                        </span>
+                      </td>
+                      <td>{e.attempts}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {entries
-                      .filter((e) => filter === "All climbs" || e.result === filter)
-                      .map((e) => (
-                        <tr key={e.id}>
-                          <td>
-                            <strong>{e.route}</strong>
-                            {e.notes && <small>{e.notes}</small>}
-                          </td>
-                          <td>{e.grade}</td>
-                          <td>{e.date}</td>
-                          <td>
-                            <span
-                              className={e.result === "Sent" ? "status-sent" : "status-project"}
-                            >
-                              {e.result}
-                            </span>
-                          </td>
-                          <td>{e.attempts}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
       {open && (
-        <div className="modal-backdrop" onClick={() => setOpen(false)}>
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="log-title"
-            className="log-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-heading">
-              <h2 id="log-title">Log a climb</h2>
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="Close log form"
-                onClick={() => setOpen(false)}
-              >
-                <X />
-              </Button>
-            </div>
-            <form onSubmit={submitClimb}>
-              <label>
-                Route
-                <select name="route" autoFocus>
-                  {routes.data.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} · {r.grade}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="form-row">
-                <label>
-                  Date
-                  <input
-                    required
-                    type="date"
-                    name="date"
-                    defaultValue={new Date().toISOString().slice(0, 10)}
-                  />
-                </label>
-                <label>
-                  Attempts
-                  <input
-                    type="number"
-                    name="attempts"
-                    min={1}
-                    max={999}
-                    defaultValue={1}
-                    required
-                  />
-                </label>
-              </div>
-              <label>
-                Result
-                <select name="result">
-                  <option>Sent</option>
-                  <option>Project</option>
-                </select>
-              </label>
-              <label>
-                Notes
-                <textarea name="notes" rows={3} placeholder="What did you learn?" />
-              </label>
-              {error && (
-                <p className="feedback error" role="alert">
-                  {error}
-                </p>
-              )}
-              <Button type="submit" disabled={!hydrated || pending}>
-                <Check />
-                {pending ? "Saving…" : "Save entry"}
-              </Button>
-            </form>
-          </section>
-        </div>
+        <LogClimbModal
+          open={open}
+          onClose={() => setOpen(false)}
+          onSuccess={(text) => setMessage(text)}
+        />
       )}
     </MemberShell>
   );

@@ -313,7 +313,13 @@ export function DashboardOverview({ dashboard }: { dashboard: MemberDashboard })
 }
 
 /** The member is signed in but has not logged anything yet. */
-export function DashboardWelcome({ activeRoutes }: { activeRoutes: number }) {
+export function DashboardWelcome({
+  activeRoutes,
+  onLogAttempt,
+}: {
+  activeRoutes: number;
+  onLogAttempt: () => void;
+}) {
   return (
     <div className="dashboard-empty">
       <Mountain size={26} />
@@ -324,11 +330,9 @@ export function DashboardWelcome({ activeRoutes }: { activeRoutes: number }) {
           : "Log what you climb and this page fills up with your sends, your first tries and your projects."}
       </p>
       <div className="dashboard-empty-actions">
-        <Button asChild>
-          <Link to="/member/logbook">
-            <Plus />
-            Log an attempt
-          </Link>
+        <Button onClick={onLogAttempt}>
+          <Plus />
+          Log an attempt
         </Button>
         <Button asChild variant="outline">
           <Link to="/routes">
