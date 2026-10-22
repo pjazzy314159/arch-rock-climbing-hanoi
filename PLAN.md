@@ -1882,8 +1882,62 @@ colour alone.
 - There is still no undo in the editor and no PostgreSQL evidence for the
   feature.
 
-**Next:** the full regression sweep across the backend and frontend, then
-PostgreSQL verification on a disposable instance.
+### Phase 2B — Cross-feature regression sweep (`DONE`)
+
+The editor, the member overlay and the existing member pages were checked
+together against the real development backend.
+
+**Automated checks**
+
+- Backend: `uv run ruff check .` and `uv run ruff format --check .` are clean;
+  `uv run alembic check` reports no new upgrade operations; `uv run pytest -q`
+  passes **212 tests**.
+- Frontend: `bun run typecheck` is clean; `bun run lint` has 0 errors and the
+  same 7 pre-existing `react-refresh` warnings; `bun run test` passes **150
+  tests in 16 files**; `bun run build` succeeds.
+
+**Browser checks**
+
+- `scripts/check-route-overlay.mjs` — **26/26** at 1440×900 and 390×844.
+- `scripts/check-member-regression.mjs` — **19/19**. Signed in as the demo
+  member, it loaded the dashboard (6 metrics), the logbook (8 existing rows),
+  the progress page (not empty), the published route (overlay plus all three
+  vote buttons and the log control), the beta page with route 1 preselected,
+  and the leaderboard (5 ranked rows plus the ranking explanation). The phone
+  pass had 0px overflow and all three boxes. It never pressed a vote, log or
+  delete control.
+- The editor was checked read-only after the overlay changes: the three
+  published steps and three canvas boxes loaded, the state read `no draft |
+  published`, Save draft and Publish to members were correctly disabled, and
+  there were no console or page errors. The write-path editor check remains
+  the earlier 27/27 run.
+- Screenshots inspected: `regression-member-dashboard.png`,
+  `regression-member-logbook.png`, `regression-member-route.png`,
+  `regression-leaderboard.png`, `regression-member-mobile.png` and
+  `regression-editor-readonly.png`.
+
+**Demo data preservation**
+
+- A final transactional backup was verified before the sweep:
+  `var/backups/arch_dev-final-pre-regression-20261023-010043.db` (integrity
+  `ok`; ignored by Git).
+- Counts were identical before and after the sweep: users 8, routes 6,
+  achievements 12, votes 6, agreements 8, walls 3, wall holds 3, hold sets 1,
+  route holds 3, staff tasks 3, checklist items 0. The live database integrity
+  check is `ok`.
+- The older mutating scripts were deliberately **not** re-run.
+  `check-member-flows.mjs` logs two real climbs and `check-staff-flows.mjs`
+  creates a route, task and checklist item. Re-running them would change the
+  demo attempts and the leaderboard, contrary to the requirement to preserve
+  the historical record. Their write paths remain covered by the 212 backend
+  tests, and the new read-only script covers the member-visible regressions.
+  They can be run on a disposable database when that is desirable.
+- No restore or reset was performed; the live database still contains the
+  published route-1 annotation and the original demo climbs and votes.
+
+**Next:** decide and verify PostgreSQL on a disposable instance. Phase 2
+itself remains `IN_PROGRESS` until undo is addressed or explicitly waived; the
+overlay, editor and regression sweep are complete.
 
 ---
 
