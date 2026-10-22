@@ -2222,6 +2222,34 @@
   color: var(--color-muted-foreground);
 }
 
+.filter-clear {
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  /* On a phone the filters stack, so each one is a full-width control that is
+     easy to tap and does not shrink into an unreadable width. */
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-bar select,
+  .filter-bar .search-field,
+  .filter-bar .check-filter {
+    width: 100%;
+  }
+
+  .filter-bar select {
+    height: 2.75rem;
+  }
+
+  .filter-clear {
+    margin-left: 0;
+    justify-content: center;
+  }
+}
+
 .result-count {
   display: flex;
   flex-wrap: wrap;

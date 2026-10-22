@@ -31,6 +31,7 @@ import type {
   ApiGym,
   ApiLeaderboardEntry,
   ApiPrice,
+  ApiRouteFilterOptions,
   ApiRouteSummary,
   ApiRule,
   ApiService,
@@ -48,6 +49,47 @@ export const API_BASE_URL = (import.meta.env["VITE_API_BASE_URL"] ?? "").replace
 
 /** True when the frontend has been pointed at a backend. */
 export const isApiConfigured = API_BASE_URL.length > 0;
+
+/**
+ * The filters the route directory can be narrowed by.
+ *
+ * They are passed to the backend, which applies them in the database. Every
+ * value is a plain one: a React Query context object is never mistaken for a
+ * filter.
+ */
+export type RouteFilterParams = {
+  grade?: string | null;
+  wall?: string | null;
+  wallId?: number | null;
+  wallType?: string | null;
+  status?: string | null;
+  search?: string | null;
+  freshOnly?: boolean;
+};
+
+/**
+ * Build the query string for the route directory.
+ *
+ * Empty values are left out entirely, so an unset filter never narrows the
+ * list. The values are encoded, so a grade or a wall name with a space in it
+ * is sent correctly.
+ */
+export function routeQueryString(filters?: RouteFilterParams): string {
+  if (!filters) return "";
+  const parts: string[] = [];
+  const add = (key: string, value: string | number | boolean | null | undefined) => {
+    if (value === null || value === undefined || value === "") return;
+    parts.push(`${key}=${encodeURIComponent(String(value))}`);
+  };
+  add("grade", filters.grade);
+  add("wall", filters.wall);
+  add("wall_id", filters.wallId);
+  add("wall_type", filters.wallType);
+  add("status", filters.status);
+  add("search", filters.search);
+  if (filters.freshOnly) parts.push("fresh_only=true");
+  return parts.length > 0 ? `?${parts.join("&")}` : "";
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -190,11 +232,10 @@ export const api = {
   rules: () => apiRequest<ApiRule[]>("/api/public/rules"),
   faq: () => apiRequest<ApiFaqEntry[]>("/api/public/faq"),
   products: () => apiRequest<ApiCatalogProduct[]>("/api/public/products"),
-  routes: (options?: { status?: string }) =>
-    apiRequest<ApiRouteSummary[]>(
-      `/api/public/routes${options?.status ? `?status=${encodeURIComponent(options.status)}` : ""}`,
-    ),
+  routes: (options?: RouteFilterParams) =>
+    apiRequest<ApiRouteSummary[]>(`/api/public/routes${routeQueryString(options)}`),
   route: (id: number | string) => apiRequest<ApiRouteSummary>(`/api/public/routes/${id}`),
+  routeFilters: () => apiRequest<ApiRouteFilterOptions>("/api/public/route-filters"),
   walls: () => apiRequest<ApiWall[]>("/api/public/walls"),
   product: (id: number | string) => apiRequest<ApiCatalogProduct>(`/api/public/products/${id}`),
 

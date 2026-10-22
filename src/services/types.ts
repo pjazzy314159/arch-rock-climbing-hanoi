@@ -71,6 +71,26 @@ export type ApiEvent = {
   is_public: boolean;
 };
 
+/** A wall the route directory can be filtered by. */
+export type ApiRouteFilterWall = {
+  id: number;
+  name: string;
+  image_url: string | null;
+};
+
+/**
+ * The values the route directory can be filtered by.
+ *
+ * They come from the routes that exist, so the interface never offers a
+ * filter the gym does not use.
+ */
+export type ApiRouteFilterOptions = {
+  grades: string[];
+  walls: ApiRouteFilterWall[];
+  wall_types: string[];
+  statuses: string[];
+};
+
 export type ApiRule = {
   id: number;
   title: string;

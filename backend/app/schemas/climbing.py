@@ -75,6 +75,28 @@ class RouteSummary(RouteOut):
     is_fresh: bool = False
 
 
+class WallFilterOption(BaseModel):
+    """A wall the route directory can be filtered by."""
+
+    id: int
+    name: str
+    image_url: str | None = None
+
+
+class RouteFilterOptions(BaseModel):
+    """The values the route directory can be filtered by.
+
+    They come from the routes that exist, so the interface never offers a
+    filter the gym does not actually use. A combination of filters may still
+    have no routes behind it; that is an empty result, not an error.
+    """
+
+    grades: list[str] = Field(default_factory=list)
+    walls: list[WallFilterOption] = Field(default_factory=list)
+    wall_types: list[WallType] = Field(default_factory=list)
+    statuses: list[RouteStatus] = Field(default_factory=list)
+
+
 class RouteCreateIn(BaseModel):
     name: str = Field(min_length=1, max_length=140)
     grade: str = Field(min_length=1, max_length=20)

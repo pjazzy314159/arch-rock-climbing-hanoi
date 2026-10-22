@@ -89,6 +89,105 @@ def test_the_route_directory_can_be_filtered(client: TestClient, db, route) -> N
     assert len(client.get("/api/public/routes?search=quiet").json()) == 1
 
 
+def test_the_route_directory_can_be_filtered_by_wall_id(
+    client: TestClient, db, route, wall
+) -> None:
+    from app.models import ClimbRoute
+
+    db.add(ClimbRoute(name="Elsewhere", grade="V1", status="active"))
+    db.commit()
+
+    listed = client.get(f"/api/public/routes?wall_id={wall.id}").json()
+    assert [item["name"] for item in listed] == ["Quiet the Mind"]
+    # A wall that does not exist simply has no routes behind it.
+    assert client.get("/api/public/routes?wall_id=9999").json() == []
+
+
+def test_the_route_directory_filters_combine(client: TestClient, db, route, wall) -> None:
+    from app.models import ClimbRoute, WallType
+
+    db.add(
+        ClimbRoute(
+            name="Steep and Hard",
+            grade="V5",
+            wall_id=wall.id,
+            wall_type=WallType.OVERHANG,
+            status="active",
+        )
+    )
+    db.commit()
+
+    # Every filter narrows the list further.
+    assert len(client.get("/api/public/routes?grade=V5").json()) == 1
+    assert len(client.get("/api/public/routes?grade=V5&wall_type=overhang").json()) == 1
+    assert len(client.get("/api/public/routes?grade=V5&wall_type=slab").json()) == 0
+    assert len(client.get("/api/public/routes?grade=V5&wall_id=9999").json()) == 0
+    # A filter that matches nothing is an empty list, not an error.
+    empty = client.get("/api/public/routes?grade=V9&wall_type=roof")
+    assert empty.status_code == 200
+    assert empty.json() == []
+
+
+def test_the_route_directory_searches_the_wall_and_the_style(
+    client: TestClient, db, route, wall
+) -> None:
+    assert len(client.get("/api/public/routes?search=the+slab").json()) == 1
+    assert len(client.get("/api/public/routes?search=balance").json()) == 1
+    assert len(client.get("/api/public/routes?search=nowhere").json()) == 0
+
+
+def test_the_route_filter_options_come_from_the_routes_that_exist(
+    client: TestClient, db, route, wall
+) -> None:
+    from app.models import ClimbRoute, RouteStatus, WallType
+
+    response = client.get("/api/public/route-filters")
+    assert response.status_code == 200
+    options = response.json()
+    assert options["grades"] == ["V3"]
+    assert options["wall_types"] == ["slab"]
+    assert options["statuses"] == ["active"]
+    assert [item["name"] for item in options["walls"]] == ["The Slab"]
+    assert options["walls"][0]["id"] == wall.id
+
+    # The options follow the data.
+    db.add(
+        ClimbRoute(
+            name="A Second One",
+            grade="V7",
+            wall_type=WallType.ROOF,
+            status=RouteStatus.ARCHIVED,
+        )
+    )
+    db.commit()
+
+    options = client.get("/api/public/route-filters").json()
+    assert options["grades"] == ["V3", "V7"]
+    assert options["wall_types"] == ["roof", "slab"]
+    assert options["statuses"] == ["active", "archived"]
+    # A wall with no routes is not offered as a filter.
+    assert [item["name"] for item in options["walls"]] == ["The Slab"]
+
+
+def test_the_route_filter_options_are_empty_when_there_are_no_routes(client: TestClient) -> None:
+    options = client.get("/api/public/route-filters").json()
+    assert options == {"grades": [], "walls": [], "wall_types": [], "statuses": []}
+
+
+def test_an_archived_route_is_not_listed_as_active(client: TestClient, db, route) -> None:
+    from app.models import RouteStatus
+
+    route.status = RouteStatus.ARCHIVED
+    db.commit()
+
+    # The default listing is the active routes only.
+    assert client.get("/api/public/routes").json() == []
+    # Asking for every status brings the archived route back, with its status.
+    listed = client.get("/api/public/routes?status=all").json()
+    assert len(listed) == 1
+    assert listed[0]["status"] == "archived"
+
+
 def test_an_unknown_wall_type_is_refused(client: TestClient, route) -> None:
     response = client.get("/api/public/routes?wall_type=banana")
     assert response.status_code == 400

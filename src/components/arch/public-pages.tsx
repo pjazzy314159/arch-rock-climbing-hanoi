@@ -1,6 +1,6 @@
-import { useState, useRef, type FormEvent } from "react";
+import { useMemo, useState, useRef, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
   ArrowUpRight,
   ArrowRight,
@@ -16,13 +16,15 @@ import {
   Mountain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { api, ApiError, ApiUnavailableError } from "@/services/api";
 import { PageHeading, RouteCard, ServiceIcon, TextLink } from "./shared";
 import { EmptyNotice, SampleDataBanner } from "./data-state";
 import {
-  allRoutesQuery,
+  filteredRoutesQuery,
   productQuery,
+  routeFilterOptionsQuery,
   routeQuery,
   serviceQuery,
   formatPrice,
@@ -30,8 +32,7 @@ import {
   ROUTE_STATUS_LABELS,
   type DataSource,
   type Product,
-  type RouteStatus,
-  type WallType,
+  type RouteFilters,
 } from "@/services/arch";
 import gymPhoto from "@/assets/arch-gym.jpg";
 import shoePhoto from "@/assets/climbing-shoes.jpg";
@@ -181,30 +182,58 @@ export function TourPage() {
 }
 
 export function RoutesPage() {
-  const { data: routes } = useSuspenseQuery(allRoutesQuery);
-  const [grade, setGrade] = useState("All grades");
-  const [wall, setWall] = useState("All walls");
-  const [wallType, setWallType] = useState("All types");
+  const [grade, setGrade] = useState("");
+  const [wallId, setWallId] = useState("");
+  const [wallType, setWallType] = useState("");
   const [status, setStatus] = useState("active");
   const [query, setQuery] = useState("");
   const [fresh, setFresh] = useState(false);
-  const list = routes.data;
-  const filtered = list.filter(
-    (r) =>
-      (grade === "All grades" || r.grade === grade) &&
-      (wall === "All walls" || r.wall === wall) &&
-      (wallType === "All types" || r.wallType === wallType) &&
-      (status === "all" || r.status === status) &&
-      (!fresh || r.fresh) &&
-      `${r.name} ${r.style} ${r.wall}`.toLowerCase().includes(query.toLowerCase()),
+
+  // The search box is typed, so it waits for a pause before it asks the
+  // backend for a new list. The other filters are applied at once.
+  const search = useDebouncedValue(query);
+
+  const filters = useMemo<RouteFilters>(
+    () => ({
+      grade: grade || null,
+      wallId: wallId ? Number(wallId) : null,
+      wallType: wallType || null,
+      status: status || null,
+      search: search || null,
+      freshOnly: fresh,
+    }),
+    [grade, wallId, wallType, status, search, fresh],
   );
-  const grades = ["All grades", ...Array.from(new Set(list.map((r) => r.grade))).sort()];
-  const walls = [
-    "All walls",
-    ...Array.from(new Set(list.map((r) => r.wall).filter(Boolean))).sort(),
-  ];
-  const wallTypes = ["All types", ...Array.from(new Set(list.map((r) => r.wallType))).sort()];
-  const statuses = ["active", "archived", "pending_reset", "all"];
+
+  // The filters are applied by the backend, so the list is the answer to the
+  // filters and not a list that was narrowed in the browser.
+  const routes = useQuery(filteredRoutesQuery(filters));
+  const options = useQuery(routeFilterOptionsQuery);
+
+  const filterOptions = options.data?.data;
+  const grades = filterOptions?.grades ?? [];
+  const walls = filterOptions?.walls ?? [];
+  const wallTypes = filterOptions?.wallTypes ?? [];
+  const statuses = filterOptions?.statuses ?? [];
+
+  const list = routes.data?.data ?? [];
+  const isFiltered =
+    grade !== "" ||
+    wallId !== "" ||
+    wallType !== "" ||
+    status !== "active" ||
+    query !== "" ||
+    fresh;
+
+  function clearFilters() {
+    setGrade("");
+    setWallId("");
+    setWallType("");
+    setStatus("active");
+    setQuery("");
+    setFresh(false);
+  }
+
   return (
     <main className="page-main">
       <PageHeading
@@ -213,28 +242,34 @@ export function RoutesPage() {
         description="Balance, power, or a little problem-solving. There’s a route with your name on it."
       >
         <span className="sample-badge">
-          {routes.source === "api" ? "LIVE ROUTES" : "SAMPLE ROUTES"}
+          {routes.data?.source === "api" ? "LIVE ROUTES" : "SAMPLE ROUTES"}
         </span>
       </PageHeading>
-      <SampleDataBanner resource={routes} />
+      <SampleDataBanner resource={routes.data ?? { source: "api" }} />
       <div className="filter-bar">
         <label className="search-field">
           <Search size={18} />
           <input
             aria-label="Search routes"
-            placeholder="Search routes or style…"
+            placeholder="Search routes, style or wall…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
         <select aria-label="Filter grade" value={grade} onChange={(e) => setGrade(e.target.value)}>
+          <option value="">All grades</option>
           {grades.map((g) => (
-            <option key={g}>{g}</option>
+            <option key={g} value={g}>
+              {g}
+            </option>
           ))}
         </select>
-        <select aria-label="Filter wall" value={wall} onChange={(e) => setWall(e.target.value)}>
-          {walls.map((w) => (
-            <option key={w}>{w}</option>
+        <select aria-label="Filter wall" value={wallId} onChange={(e) => setWallId(e.target.value)}>
+          <option value="">All walls</option>
+          {walls.map((wall) => (
+            <option key={wall.id} value={wall.id}>
+              {wall.name}
+            </option>
           ))}
         </select>
         <select
@@ -242,9 +277,10 @@ export function RoutesPage() {
           value={wallType}
           onChange={(e) => setWallType(e.target.value)}
         >
+          <option value="">All types</option>
           {wallTypes.map((t) => (
             <option key={t} value={t}>
-              {t === "All types" ? t : WALL_TYPE_LABELS[t as WallType]}
+              {WALL_TYPE_LABELS[t]}
             </option>
           ))}
         </select>
@@ -253,9 +289,10 @@ export function RoutesPage() {
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
+          <option value="all">All statuses</option>
           {statuses.map((s) => (
             <option key={s} value={s}>
-              {s === "all" ? "All statuses" : ROUTE_STATUS_LABELS[s as RouteStatus]}
+              {ROUTE_STATUS_LABELS[s]}
             </option>
           ))}
         </select>
@@ -263,42 +300,53 @@ export function RoutesPage() {
           <input type="checkbox" checked={fresh} onChange={(e) => setFresh(e.target.checked)} />
           New sets only
         </label>
+        {isFiltered && (
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="filter-clear">
+            <RotateCcw size={14} /> Clear filters
+          </Button>
+        )}
       </div>
       <div className="result-count">
-        {filtered.length} routes{" "}
+        {routes.isPending ? (
+          "Loading routes…"
+        ) : routes.data?.isUnavailable ? (
+          "The route list could not be loaded"
+        ) : (
+          <>
+            {list.length} {list.length === 1 ? "route" : "routes"}
+            {isFiltered && " match your filters"}
+          </>
+        )}
         <span>
-          {routes.source === "api" ? "Live from ARCH" : "Sample collection · October 2026"}
+          {routes.data?.source === "api" ? "Live from ARCH" : "Sample collection · October 2026"}
         </span>
       </div>
-      {list.length === 0 ? (
+      {routes.data?.isUnavailable ? (
         <EmptyNotice
-          title="No routes are published yet."
-          description="ARCH has not published the current route list. It will appear here as soon as the setters publish it."
-        />
-      ) : (
-        <div className="route-grid">
-          {filtered.map((r) => (
-            <RouteCard route={r} key={r.id} />
-          ))}
-        </div>
-      )}
-      {list.length > 0 && filtered.length === 0 && (
+          title="The route list could not be loaded."
+          description={
+            routes.data.error ??
+            "The ARCH service could not be reached, so the routes on the wall are unknown right now."
+          }
+        >
+          <Button variant="outline" onClick={() => void routes.refetch()}>
+            <RotateCcw size={16} /> Try again
+          </Button>
+        </EmptyNotice>
+      ) : list.length === 0 && !routes.isPending ? (
         <div className="empty-state">
           <Mountain />
           <h3>No routes match this search.</h3>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setQuery("");
-              setGrade("All grades");
-              setWall("All walls");
-              setWallType("All types");
-              setStatus("active");
-              setFresh(false);
-            }}
-          >
-            Clear filters
+          <p>Try a different grade or wall, or clear the filters to see the whole collection.</p>
+          <Button variant="outline" onClick={clearFilters}>
+            <RotateCcw size={16} /> Clear filters
           </Button>
+        </div>
+      ) : (
+        <div className="route-grid">
+          {list.map((r) => (
+            <RouteCard route={r} key={r.id} />
+          ))}
         </div>
       )}
     </main>

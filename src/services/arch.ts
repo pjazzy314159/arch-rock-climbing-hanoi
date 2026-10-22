@@ -15,6 +15,7 @@
  */
 
 import { api, ApiError, ApiUnavailableError, memberApi } from "./api";
+import type { RouteFilterParams } from "./api";
 import type {
   ApiAgreement,
   ApiAchievement,
@@ -293,6 +294,44 @@ export type Resource<T> = {
   error?: string;
   /** True when the backend answered, but the collection is empty. */
   isEmpty?: boolean;
+  /**
+   * True when the backend could not be reached and there is nothing to show.
+   *
+   * It is different from `isEmpty`: an empty collection is an answer, while
+   * an unavailable one is a failure to answer.
+   */
+  isUnavailable?: boolean;
+};
+
+/** A wall the route directory can be filtered by. */
+export type RouteFilterWall = {
+  id: number;
+  name: string;
+  imageUrl: string | null;
+};
+
+/** The values the route directory can be filtered by. */
+export type RouteFilterOptions = {
+  grades: string[];
+  walls: RouteFilterWall[];
+  wallTypes: WallType[];
+  statuses: RouteStatus[];
+};
+
+/**
+ * The filters the route directory is narrowed by.
+ *
+ * The backend applies them, so each one is a plain value: a React Query
+ * context object is never passed as a filter.
+ */
+export type RouteFilters = {
+  grade?: string | null;
+  wall?: string | null;
+  wallId?: number | null;
+  wallType?: string | null;
+  status?: string | null;
+  search?: string | null;
+  freshOnly?: boolean;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -779,6 +818,33 @@ async function load<T>(
 }
 
 /**
+ * Run a read that answers a filter.
+ *
+ * Unlike `load`, this never substitutes sample data: a sample collection
+ * would not honour the filter that was asked for. An empty answer and a
+ * failure are reported apart, so the interface can show "no routes match"
+ * and "the route list could not be loaded" as the different things they are.
+ */
+async function loadFiltered<T>(
+  subject: string,
+  fetcher: () => Promise<T>,
+  empty: T,
+): Promise<Resource<T>> {
+  try {
+    const data = await fetcher();
+    const isEmpty = Array.isArray(data) && data.length === 0;
+    return { data, source: "api", isEmpty };
+  } catch (error) {
+    return {
+      data: empty,
+      source: "sample",
+      error: describeFailure(error, subject),
+      isUnavailable: true,
+    };
+  }
+}
+
+/**
  * Run a read that needs a signed-in member.
  *
  * Unlike `load`, this never substitutes sample data: a member's own records
@@ -824,13 +890,34 @@ export const archService = {
       (routes) => routes.length === 0,
     ),
 
-  /** Every route, including the archived ones. */
-  listAllRoutes: (): Promise<Resource<ClimbRoute[]>> =>
-    load(
-      "The route list",
-      async () => (await api.routes({ status: "all" })).map(toClimbRoute),
-      mockRoutes,
-      (routes) => routes.length === 0,
+  /**
+   * The route directory, narrowed by the filters the member chose.
+   *
+   * There is no sample fallback here on purpose: sample routes would not
+   * answer the filter that was asked for, so an empty list and a failure are
+   * kept apart instead.
+   */
+  listFilteredRoutes: (filters: RouteFilters): Promise<Resource<ClimbRoute[]>> =>
+    loadFiltered("The route list", async () => (await api.routes(filters)).map(toClimbRoute), []),
+
+  /** The values the route directory can be filtered by. */
+  listRouteFilterOptions: (): Promise<Resource<RouteFilterOptions>> =>
+    loadFiltered(
+      "The route filters",
+      async () => {
+        const options = await api.routeFilters();
+        return {
+          grades: options.grades,
+          walls: options.walls.map((wall) => ({
+            id: wall.id,
+            name: wall.name,
+            imageUrl: wall.image_url,
+          })),
+          wallTypes: options.wall_types.map((value) => toWallType(value)),
+          statuses: options.statuses.map((value) => toRouteStatus(value)),
+        };
+      },
+      { grades: [], walls: [], wallTypes: [], statuses: [] },
     ),
 
   listProducts: (): Promise<Resource<Product[]>> =>
@@ -1042,11 +1129,24 @@ export const shareOf = (count: number, total: number): number =>
   total > 0 ? Math.round((count / total) * 100) : 0;
 
 export const routeQuery = { queryKey: ["arch", "routes"], queryFn: archService.listRoutes };
-/** Every route, including the archived ones, for the directory's status filter. */
-export const allRoutesQuery = {
-  queryKey: ["arch", "routes", "all"],
-  queryFn: archService.listAllRoutes,
+/** The values the route directory can be filtered by. */
+export const routeFilterOptionsQuery = {
+  queryKey: ["arch", "route-filters"],
+  queryFn: archService.listRouteFilterOptions,
 };
+
+/**
+ * The route directory, narrowed by the member's filters.
+ *
+ * The filters are part of the query key, so changing one asks the backend for
+ * a different list rather than filtering the list already in hand.
+ */
+export function filteredRoutesQuery(filters: RouteFilters) {
+  return {
+    queryKey: ["arch", "routes", "filtered", filters] as const,
+    queryFn: () => archService.listFilteredRoutes(filters),
+  };
+}
 export const productQuery = { queryKey: ["arch", "products"], queryFn: archService.listProducts };
 export const memberQuery = { queryKey: ["arch", "member"], queryFn: archService.getMember };
 export const logbookQuery = { queryKey: ["arch", "logbook"], queryFn: archService.getLogbook };

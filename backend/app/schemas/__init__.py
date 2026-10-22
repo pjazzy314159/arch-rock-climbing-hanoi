@@ -21,6 +21,7 @@ from app.schemas.climbing import (
     AchievementOut,
     LeaderboardEntry,
     RouteCreateIn,
+    RouteFilterOptions,
     RouteOut,
     RouteSummary,
     RouteUpdateIn,
@@ -28,6 +29,7 @@ from app.schemas.climbing import (
     VoteOut,
     VoteTally,
     WallCreateIn,
+    WallFilterOption,
     WallOut,
 )
 from app.schemas.common import (
@@ -102,6 +104,7 @@ __all__ = [
     "RecentAttempt",
     "RegisterIn",
     "RouteCreateIn",
+    "RouteFilterOptions",
     "RouteOut",
     "RouteSummary",
     "RouteUpdateIn",
@@ -119,5 +122,6 @@ __all__ = [
     "VoteOut",
     "VoteTally",
     "WallCreateIn",
+    "WallFilterOption",
     "WallOut",
 ]

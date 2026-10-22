@@ -1,4 +1,4 @@
-﻿# ARCH Climbing Gym Platform — Implementation Plan
+# ARCH Climbing Gym Platform — Implementation Plan
 
 Source of truth for implementation progress. Statuses: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`.
 
@@ -116,7 +116,7 @@ Every phase keeps the public website and the backend working.
 | --- | -------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1.1 | `walls` table, `wall_type` on routes, route status published                                                               | `DONE`        | Migration applies and rolls back; existing routes keep their wall name; seeded walls have a type and a photograph reference.               |
 | 1.2 | Dashboard response: outcome distribution, statistics by grade, ranking and percentile, recent attempts, active route count | `DONE`        | Every field comes from the member's own rows; a flash is a send with one attempt; the ranking uses the documented leaderboard calculation. |
-| 1.3 | Route directory filters: grade, wall, wall type, status                                                                    | `TODO`        | Each filter narrows the list server-side; the available options come from the data, not from a hard-coded list.                            |
+| 1.3 | Route directory filters: grade, wall, wall type, status                                                                    | `DONE`        | Each filter narrows the list server-side; the available options come from the data, not from a hard-coded list.                            |
 | 1.4 | The member dashboard                                                                                                       | `DONE`        | Real data only; empty, loaded and unavailable states are visibly different; no sample achievements are shown as real.                      |
 | 1.5 | Route card and route page: wall, wall type, status, imagery                                                                | `TODO`        | The card states the wall and the status; a placeholder photograph is labelled as one.                                                      |
 | 1.6 | Log an attempt from the dashboard and from a route                                                                         | `TODO`        | The attempt is stored by the backend, survives a refresh and a sign-in, and a member cannot change another member's records.               |
@@ -1215,6 +1215,99 @@ work was kept and finished, but four things needed fixing:
 
 **Next:** task 1.3 (server-side route directory filters), then 1.5, 1.6 and
 1.7.
+
+---
+
+### Task 1.3 — The route directory filters (`DONE`)
+
+**The change**
+
+The route directory used to fetch every route and narrow the list in the
+browser. The filters are now applied by the backend, in the database, and the
+page shows the answer the backend gave.
+
+- `backend/app/api/public.py` — `list_routes` takes `grade`, `wall`,
+  `wall_id`, `wall_type`, `status`, `search` and `fresh_only`, and applies
+  them to the query. The wall is joined once, with an outer join, so the
+  search can look at the wall's name as well as the route's name and style.
+- `backend/app/api/public.py` — **`GET /api/public/route-filters`** (new): the
+  grades, walls, wall types and statuses that exist, so the interface offers
+  the filters the gym actually uses instead of a hard-coded list. A wall with
+  no routes is not offered.
+- `backend/app/schemas/climbing.py` — `RouteFilterOptions` and
+  `WallFilterOption` (new).
+- `src/services/api.ts` — `RouteFilterParams` and `routeQueryString` (new):
+  the filters are turned into a query string explicitly, each one a plain
+  value. An unset filter is left out rather than sent as an empty string.
+- `src/services/arch.ts` — `listFilteredRoutes` and `listRouteFilterOptions`
+  (new), the `RouteFilters`/`RouteFilterOptions` types, and
+  `filteredRoutesQuery(filters)`, whose key carries the filters, so a
+  different filter is a different question. `Resource` gained
+  `isUnavailable`, so "the list could not be loaded" is a state of its own.
+  `allRoutesQuery`/`listAllRoutes` were removed: the status filter asks the
+  backend for the statuses it wants.
+- `src/components/arch/public-pages.tsx` — the directory page uses the
+  filtered query, the options from the API, and a **Clear filters** button
+  that appears as soon as a filter is set.
+- `src/hooks/use-debounced-value.ts` (new) — the search box waits for a pause
+  before it asks for a new list. The other filters are chosen, not typed, and
+  are applied at once.
+- `src/styles.css` — on a phone the filter bar stacks and each control is
+  full width, so it can be tapped.
+
+**The decisions**
+
+- **A filtered list never falls back to sample data.** Sample routes would not
+  answer the filter that was asked for, so the directory says the list could
+  not be loaded instead. An empty result and a failure are different states,
+  and both are shown as such.
+- **The count is the count of the answer.** The page says "6 routes" because
+  the backend returned six, never a number taken from somewhere else.
+- **An archived route is not shown as active.** The default listing is the
+  active routes; "All statuses" brings the archived ones back with their own
+  status, which the route card shows (task 1.5).
+- **The search covers the name, the style and the wall**, which is what the
+  search box promised before it moved to the backend.
+
+**Verification**
+
+- Backend: `ruff check` clean, `ruff format --check` clean, **192 tests pass**
+  (186 before). Six new tests in `backend/tests/test_public_api.py`: filtering
+  by wall id, filters that combine, a filter combination with no routes behind
+  it, the search reaching the wall and the style, the filter options coming
+  from the data, and the filter options being empty when there are no routes.
+- Frontend: `bun run typecheck` clean, `bun run lint` 0 errors (the 7
+  pre-existing `react-refresh` warnings), `bun run test` → **83 tests pass in
+  8 files** (74 before), `bun run build` succeeds.
+- `src/test/route-directory.test.tsx` (new, 9 tests) — the query string
+  leaves out an unset filter, passes each filter as a plain value and
+  combines them; the page offers the options the backend reports; a filter
+  reaches the backend; the count is the number of matching routes; an empty
+  result and a failure are told apart; and clearing the filters brings the
+  whole collection back.
+- `node scripts/check-route-directory.mjs http://localhost:8090` against the
+  production build: **all checks passed, no console or page errors.** It
+  watches the requests the page makes as well as what it shows: each filter
+  on its own asks the backend and shows only matching routes, filters
+  combine, a search with no match says so, clearing the filters restores the
+  whole collection, an archived route is not listed as active, the failure
+  state offers a retry, and horizontal overflow measured **0px** at 1440×900
+  and 390×844.
+- Screenshots reviewed at both widths:
+  `var/screenshots/route-directory-desktop.png` and
+  `route-directory-mobile.png`.
+
+**Limitations**
+
+- The filter options are read from the routes that exist, so a grade that
+  only appears on an archived route is still offered. Choosing it with the
+  default status gives an empty result, which is the honest answer.
+- The search is sent to the backend after a short pause rather than on every
+  keystroke.
+- The route card does not yet show the wall type or the status; that is task
+  1.5.
+
+**Next:** task 1.5 — the route card and route page.
 
 ---
 

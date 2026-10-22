@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 # parameter called ``status``, which would otherwise shadow the module.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -39,9 +39,11 @@ from app.schemas import (
     OpeningHourOut,
     PriceOut,
     ProductOut,
+    RouteFilterOptions,
     RouteSummary,
     RuleOut,
     ServiceOut,
+    WallFilterOption,
     WallOut,
 )
 from app.services.climbing import build_route_summary
@@ -147,11 +149,42 @@ def get_product(product_id: int, db: Session = Depends(get_db)) -> ProductOut:
     return ProductOut.model_validate(product)
 
 
+@router.get("/route-filters", response_model=RouteFilterOptions)
+def route_filter_options(db: Session = Depends(get_db)) -> RouteFilterOptions:
+    """The values the route directory can be filtered by.
+
+    The options are read from the routes that exist, so the interface never
+    offers a filter the gym does not use. A combination of filters may still
+    have no routes behind it; that is an empty result, not an error.
+    """
+    grades = db.scalars(select(ClimbRoute.grade).distinct().order_by(ClimbRoute.grade)).all()
+    wall_types = db.scalars(
+        select(ClimbRoute.wall_type).distinct().order_by(ClimbRoute.wall_type)
+    ).all()
+    statuses = db.scalars(select(ClimbRoute.status).distinct().order_by(ClimbRoute.status)).all()
+    # Only walls that carry at least one route are offered.
+    walls = db.scalars(
+        select(Wall)
+        .join(ClimbRoute, ClimbRoute.wall_id == Wall.id)
+        .distinct()
+        .order_by(Wall.sort_order, Wall.id)
+    ).all()
+    return RouteFilterOptions(
+        grades=list(grades),
+        walls=[
+            WallFilterOption(id=wall.id, name=wall.name, image_url=wall.image_url) for wall in walls
+        ],
+        wall_types=list(wall_types),
+        statuses=list(statuses),
+    )
+
+
 @router.get("/routes", response_model=list[RouteSummary])
 def list_routes(
     db: Session = Depends(get_db),
     grade: str | None = Query(default=None),
     wall: str | None = Query(default=None),
+    wall_id: int | None = Query(default=None),
     wall_type: str | None = Query(default=None),
     status: str | None = Query(default=None),
     search: str | None = Query(default=None),
@@ -162,8 +195,11 @@ def list_routes(
     Only active routes are listed by default. A status can be asked for
     explicitly, and an archived route keeps its place in the directory with its
     status shown, rather than silently disappearing.
+
+    The filters are applied in the database, so a combination of them narrows
+    the list rather than filtering an already-fetched one.
     """
-    statement = select(ClimbRoute)
+    statement = select(ClimbRoute).outerjoin(Wall, ClimbRoute.wall_id == Wall.id)
     if status == "all":
         # Every status is asked for, so no status filter is applied.
         pass
@@ -181,7 +217,9 @@ def list_routes(
     if grade:
         statement = statement.where(ClimbRoute.grade == grade)
     if wall:
-        statement = statement.join(Wall).where(Wall.name == wall)
+        statement = statement.where(Wall.name == wall)
+    if wall_id is not None:
+        statement = statement.where(ClimbRoute.wall_id == wall_id)
     if wall_type:
         try:
             wanted_type = WallType(wall_type)
@@ -191,7 +229,14 @@ def list_routes(
             ) from None
         statement = statement.where(ClimbRoute.wall_type == wanted_type)
     if search:
-        statement = statement.where(ClimbRoute.name.ilike(f"%{search}%"))
+        pattern = f"%{search}%"
+        statement = statement.where(
+            or_(
+                ClimbRoute.name.ilike(pattern),
+                ClimbRoute.style.ilike(pattern),
+                Wall.name.ilike(pattern),
+            )
+        )
     if fresh_only:
         statement = statement.where(
             ClimbRoute.set_at >= datetime.now(UTC).date() - timedelta(days=7)
