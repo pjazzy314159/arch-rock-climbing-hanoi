@@ -18,7 +18,14 @@ import { api, memberApi, ApiError, ApiUnavailableError } from "@/services/api";
 import { useSession } from "@/services/session";
 import { EmptyNotice, SampleDataBanner } from "./data-state";
 import { PageHeading, RouteCard, TextLink } from "./shared";
-import { leaderboardQuery, routeQuery, toClimbRoute, type Resource } from "@/services/arch";
+import {
+  leaderboardQuery,
+  routeQuery,
+  toClimbRoute,
+  WALL_TYPE_LABELS,
+  ROUTE_STATUS_LABELS,
+  type Resource,
+} from "@/services/arch";
 import type { ApiVoteTally, ApiRouteSummary } from "@/services/types";
 
 const VOTE_OPTIONS = [
@@ -150,7 +157,13 @@ export function RouteDetailPage({ routeId }: { routeId: string }) {
       </div>
       <PageHeading eyebrow={card.wall.toUpperCase()} title={found.name} description={found.style}>
         <span className="sample-badge">
-          {route.data.source === "api" ? "LIVE ROUTE" : "SAMPLE ROUTE"}
+          {found.status === "archived"
+            ? "ARCHIVED ROUTE"
+            : found.status === "pending_reset"
+              ? "BEING RESET"
+              : route.data.source === "api"
+                ? "LIVE ROUTE"
+                : "SAMPLE ROUTE"}
         </span>
       </PageHeading>
       <SampleDataBanner resource={route.data as Resource<unknown>} />
@@ -163,6 +176,22 @@ export function RouteDetailPage({ routeId }: { routeId: string }) {
               <span>Official grade</span>
               <strong>{found.grade}</strong>
               <small>Set by {found.setter}</small>
+            </div>
+            <div>
+              <span>Wall type</span>
+              <strong>{WALL_TYPE_LABELS[card.wallType]}</strong>
+              <small>{found.wall || "Wall to be confirmed"}</small>
+            </div>
+            <div>
+              <span>Status</span>
+              <strong>{ROUTE_STATUS_LABELS[card.status]}</strong>
+              <small>
+                {found.status === "active"
+                  ? "On the wall right now"
+                  : found.status === "archived"
+                    ? "Taken down by the setters"
+                    : "Being reset by the setters"}
+              </small>
             </div>
             <div>
               <span>Community says</span>

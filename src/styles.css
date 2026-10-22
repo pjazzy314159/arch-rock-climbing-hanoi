@@ -1521,6 +1521,63 @@
   letter-spacing: 0.14em;
 }
 
+.route-card-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.route-type-tag {
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-secondary);
+  color: var(--color-muted-foreground);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+}
+
+.route-status-tag {
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.status-archived {
+  background: rgb(255 107 74 / 0.14);
+  color: var(--color-hold-coral);
+}
+
+.status-resetting {
+  background: rgb(255 210 63 / 0.14);
+  color: var(--color-hold-yellow);
+}
+
+.route-card-archived {
+  opacity: 0.72;
+}
+
+.route-card-archived .route-card-bottom h3 {
+  color: var(--color-muted-foreground);
+}
+
+.photo-note {
+  position: absolute;
+  left: 0.9rem;
+  bottom: 0.9rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: rgb(0 0 0 / 0.45);
+  color: var(--color-muted-foreground);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .route-card-art {
   position: relative;
   height: 9.5rem;

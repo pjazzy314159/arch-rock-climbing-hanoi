@@ -129,6 +129,8 @@ export type ApiRouteSummary = {
   /** The name of the wall the route is set on. */
   wall: string;
   wall_id: number | null;
+  /** The photograph of the wall, when the gym has published one. */
+  wall_image_url: string | null;
   wall_type: "slab" | "vertical" | "overhang" | "roof" | "boulder";
   color: string;
   style: string;

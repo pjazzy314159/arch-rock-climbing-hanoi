@@ -30,6 +30,7 @@ const apiRoute: ApiRouteSummary = {
   set_at: "2026-10-14",
   beta: null,
   image_url: null,
+  wall_image_url: null,
   sends: 12,
   vote_count: 4,
   easier_votes: 1,
@@ -86,6 +87,17 @@ describe("route mapping", () => {
     expect(toClimbRoute({ ...apiRoute, image_url: "https://example.com/route.jpg" }).imageUrl).toBe(
       "https://example.com/route.jpg",
     );
+  });
+
+  it("carries the wall's photograph beside the route's own", () => {
+    expect(toClimbRoute(apiRoute).wallImageUrl).toBeNull();
+    const route = toClimbRoute({
+      ...apiRoute,
+      image_url: "https://example.com/route.jpg",
+      wall_image_url: "https://example.com/wall.jpg",
+    });
+    expect(route.imageUrl).toBe("https://example.com/route.jpg");
+    expect(route.wallImageUrl).toBe("https://example.com/wall.jpg");
   });
 
   it("falls back to a known wall type and status for an unknown one", () => {

@@ -118,7 +118,7 @@ Every phase keeps the public website and the backend working.
 | 1.2 | Dashboard response: outcome distribution, statistics by grade, ranking and percentile, recent attempts, active route count | `DONE`        | Every field comes from the member's own rows; a flash is a send with one attempt; the ranking uses the documented leaderboard calculation. |
 | 1.3 | Route directory filters: grade, wall, wall type, status                                                                    | `DONE`        | Each filter narrows the list server-side; the available options come from the data, not from a hard-coded list.                            |
 | 1.4 | The member dashboard                                                                                                       | `DONE`        | Real data only; empty, loaded and unavailable states are visibly different; no sample achievements are shown as real.                      |
-| 1.5 | Route card and route page: wall, wall type, status, imagery                                                                | `TODO`        | The card states the wall and the status; a placeholder photograph is labelled as one.                                                      |
+| 1.5 | Route card and route page: wall, wall type, status, imagery                                                                | `DONE`        | The card states the wall and the status; a placeholder photograph is labelled as one.                                                      |
 | 1.6 | Log an attempt from the dashboard and from a route                                                                         | `TODO`        | The attempt is stored by the backend, survives a refresh and a sign-in, and a member cannot change another member's records.               |
 | 1.7 | Ranking rule stated on the dashboard and the leaderboard                                                                   | `TODO`        | The page states the scoring rule and the displayed rank matches the backend.                                                               |
 | 1.8 | Tests                                                                                                                      | `TODO`        | Backend: the new response, the filters, the flash derivation, the ranking. Frontend: the mapping.                                          |
@@ -1308,6 +1308,83 @@ page shows the answer the backend gave.
   1.5.
 
 **Next:** task 1.5 — the route card and route page.
+
+---
+
+### Task 1.5 — The route cards and the route page (`DONE`)
+
+**The change**
+
+A route card used to say the wall and the style and little else. It now says
+what the route *is*: its wall, wall type and status, with the best photograph
+that exists — and it says so honestly when none does.
+
+- `backend/app/schemas/climbing.py`, `backend/app/services/climbing.py` —
+  `RouteOut` gains `wall_image_url`, filled from the wall the route is set on.
+- `src/services/types.ts`, `src/services/arch.ts` — `ApiRouteSummary.wall_image_url`
+  and `ClimbRoute.wallImageUrl`, mapped in `toClimbRoute`. The six sample
+  routes carry `wallImageUrl: null`.
+- `src/components/arch/shared.tsx` — `RouteCard`:
+  - Imagery priority: the route's own picture, then the wall's photograph,
+    then a **labelled placeholder** ("No photo yet"). A picture that fails to
+    load (`onError`) is dropped from the candidates and the next one is used,
+    so a broken URL never leaves a broken image on screen.
+  - The card shows the wall type next to the wall name and a status tag:
+    "NEW SET" for a fresh route, "ARCHIVED" for an archived one (never shown
+    as new), "BEING RESET" while a reset is pending.
+  - An archived card is dimmed (`route-card-archived`); its title is muted
+    but readable.
+  - The grade stays visible and the card remains a single keyboard-focusable
+    link to the route page.
+- `src/components/arch/route-pages.tsx` — `RouteDetailPage` keeps the card and
+  adds a **wall type** block and a **status** block to the grade block, and the
+  page badge now distinguishes "ARCHIVED ROUTE" / "BEING RESET" / "LIVE ROUTE".
+  The status line says plainly what each one means ("On the wall right now",
+  "Taken down by the setters", "Being reset by the setters"). The vote panel,
+  breadcrumb and beta links are unchanged, so nothing the member could already
+  do on a route page was moved.
+- `src/styles.css` — `.route-card-tags`, `.route-type-tag`, `.route-status-tag`,
+  `.status-archived`, `.status-resetting`, `.route-card-archived` and
+  `.photo-note`, in the existing tag and card conventions.
+- Only real fields are displayed. No hold overlay or other route-setting
+  annotation is fabricated: there is no annotation data model yet, so the page
+  shows none (that arrives with Phase 2).
+
+**Verification**
+
+- Frontend: `bun run typecheck` clean, `bun run lint` 0 errors (the 7
+  pre-existing `react-refresh` warnings), `bun run test` → **95 tests pass in
+  9 files** (83 before), `bun run build` succeeds.
+- Backend: **192 tests pass**, `ruff check` and `ruff format --check` clean.
+- `src/test/route-card.test.tsx` (new, 12 tests) — the name, grade, wall and
+  wall type; the link to the route page; a missing wall ("Wall to be
+  confirmed"); fresh / archived / reset states (an archived route is never
+  marked new, and never active); the route picture, the fallback to the wall
+  picture, the labelled placeholder, a picture that fails falling back to the
+  wall picture, and the placeholder when every picture fails.
+- `src/test/service-mapping.test.ts` — the mapper now carries the wall's
+  photograph beside the route's own.
+- `node scripts/check-route-cards.mjs http://localhost:8090` against the
+  production build: **all checks passed, no console or page errors.** It
+  confirmed the cards list wall and wall type, that every card shows a picture
+  or a labelled placeholder (never a bare card), and that the route page
+  states the wall type, status and official grade while keeping the vote
+  panel. Horizontal overflow measured **0px** at 1440×900 and 390×844.
+- Screenshots captured at both widths:
+  `var/screenshots/route-directory-cards-desktop.png`,
+  `route-directory-cards-mobile.png`, `route-detail-desktop.png` and
+  `route-detail-mobile.png`. They were verified through the assertions above,
+  not by reading the pixels: the model attached to this session cannot view
+  images, so those four files remain for a human reviewer.
+
+**Limitations**
+
+- No archived route exists in the seeded development data, so the archived
+  card's dimmed styling was verified by tests rather than in a screenshot.
+- The wall photograph drives most cards today because the seeded routes have
+  no picture of their own; the fallback order is still exercised by tests.
+
+**Next:** task 1.6 — context-aware attempt logging.
 
 ---
 

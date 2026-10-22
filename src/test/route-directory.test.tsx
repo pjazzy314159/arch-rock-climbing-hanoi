@@ -36,6 +36,7 @@ const ROUTE: ApiRouteSummary = {
   set_at: "2026-10-20",
   beta: null,
   image_url: null,
+  wall_image_url: null,
   sends: 4,
   vote_count: 2,
   easier_votes: 0,

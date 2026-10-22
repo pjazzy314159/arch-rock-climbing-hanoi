@@ -46,6 +46,8 @@ export type ClimbRoute = {
   /** The wall the route is set on. */
   wall: string;
   wallId: number | null;
+  /** The photograph of the wall, when the gym has published one. */
+  wallImageUrl: string | null;
   /** The kind of surface the problem is set on. */
   wallType: WallType;
   color: "lime" | "coral" | "blue" | "yellow";
@@ -356,6 +358,7 @@ export const mockRoutes: ClimbRoute[] = [
     perceivedGrade: null,
     status: "active",
     imageUrl: null,
+    wallImageUrl: null,
   },
   {
     id: "r2",
@@ -374,6 +377,7 @@ export const mockRoutes: ClimbRoute[] = [
     perceivedGrade: null,
     status: "active",
     imageUrl: null,
+    wallImageUrl: null,
   },
   {
     id: "r3",
@@ -392,6 +396,7 @@ export const mockRoutes: ClimbRoute[] = [
     perceivedGrade: null,
     status: "active",
     imageUrl: null,
+    wallImageUrl: null,
   },
   {
     id: "r4",
@@ -410,6 +415,7 @@ export const mockRoutes: ClimbRoute[] = [
     perceivedGrade: null,
     status: "active",
     imageUrl: null,
+    wallImageUrl: null,
   },
   {
     id: "r5",
@@ -428,6 +434,7 @@ export const mockRoutes: ClimbRoute[] = [
     perceivedGrade: null,
     status: "active",
     imageUrl: null,
+    wallImageUrl: null,
   },
   {
     id: "r6",
@@ -446,6 +453,7 @@ export const mockRoutes: ClimbRoute[] = [
     perceivedGrade: null,
     status: "active",
     imageUrl: null,
+    wallImageUrl: null,
   },
 ];
 
@@ -645,6 +653,7 @@ export function toClimbRoute(route: ApiRouteSummary): ClimbRoute {
     voteCount: route.vote_count,
     perceivedGrade: route.perceived_grade,
     imageUrl: route.image_url ?? null,
+    wallImageUrl: route.wall_image_url ?? null,
   };
 }
 

@@ -38,6 +38,9 @@ class RouteOut(ORMModel):
     #: The wall the route is set on. Empty when the route is not linked to one.
     wall: str = ""
     wall_id: int | None = None
+    #: The photograph of the wall the route is set on, when the gym has one.
+    #: The route's own picture takes precedence over it.
+    wall_image_url: str | None = None
     wall_type: WallType = WallType.VERTICAL
     color: str
     style: str

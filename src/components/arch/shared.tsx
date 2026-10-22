@@ -18,7 +18,7 @@ import {
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { gymQuery, serviceStatusQuery, type ClimbRoute } from "@/services/arch";
+import { gymQuery, serviceStatusQuery, type ClimbRoute, WALL_TYPE_LABELS } from "@/services/arch";
 import { useSession } from "@/services/session";
 
 const nav = [
@@ -174,26 +174,51 @@ export function PageHeading({
   );
 }
 export function RouteCard({ route }: { route: ClimbRoute }) {
+  // An image is only worth showing when it actually loads. Try the route's
+  // own picture first, then the wall's photograph, then the placeholder.
+  const candidates = [route.imageUrl, route.wallImageUrl].filter(
+    (value): value is string => typeof value === "string" && value.length > 0,
+  );
+  const [failed, setFailed] = useState<string[]>([]);
+  const photo = candidates.find((url) => !failed.includes(url)) ?? null;
+
+  const isArchived = route.status === "archived";
+  const isResetting = route.status === "pending_reset";
+
   return (
     <Link
       to="/routes/$routeId"
       params={{ routeId: route.id }}
-      className={`route-card hold-${route.color}`}
+      className={`route-card hold-${route.color}${isArchived ? " route-card-archived" : ""}`}
     >
       <div className="route-card-top">
         <span className="route-dot" />
         <span>{route.wall || "Wall to be confirmed"}</span>
-        {route.fresh && <span className="fresh-tag">NEW SET</span>}
+        <span className="route-card-tags">
+          {route.wallType && (
+            <span className="route-type-tag">{WALL_TYPE_LABELS[route.wallType]}</span>
+          )}
+          {route.fresh && !isArchived && <span className="fresh-tag">NEW SET</span>}
+          {isArchived && <span className="route-status-tag status-archived">ARCHIVED</span>}
+          {isResetting && <span className="route-status-tag status-resetting">BEING RESET</span>}
+        </span>
       </div>
-      <div className="route-card-art" aria-hidden="true">
-        {route.imageUrl ? (
-          <img className="route-photo" src={route.imageUrl} alt="" loading="lazy" />
+      <div className="route-card-art">
+        {photo ? (
+          <img
+            className="route-photo"
+            src={photo}
+            alt=""
+            loading="lazy"
+            onError={() => setFailed((previous) => [...previous, photo])}
+          />
         ) : (
           <>
-            <span className="hold hold-one" />
-            <span className="hold hold-two" />
-            <span className="hold hold-three" />
-            <span className="hold hold-four" />
+            <span className="hold hold-one" aria-hidden="true" />
+            <span className="hold hold-two" aria-hidden="true" />
+            <span className="hold hold-three" aria-hidden="true" />
+            <span className="hold hold-four" aria-hidden="true" />
+            <span className="photo-note">No photo yet</span>
           </>
         )}
         <span className="route-grade-art">{route.grade}</span>
@@ -206,9 +231,12 @@ export function RouteCard({ route }: { route: ClimbRoute }) {
         <ArrowUpRight size={22} />
       </div>
       <div className="route-meta">
-        <span>Set by {route.setter}</span>
         <span>
-          {route.sends} sends
+          {WALL_TYPE_LABELS[route.wallType]} type
+          {route.setter ? ` · Set by ${route.setter}` : ""}
+        </span>
+        <span>
+          {route.sends} {route.sends === 1 ? "send" : "sends"}
           {route.voteCount > 0 && ` · ${route.voteCount} vote${route.voteCount === 1 ? "" : "s"}`}
         </span>
       </div>

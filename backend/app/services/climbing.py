@@ -233,6 +233,7 @@ def build_route_summary(db: Session, route: ClimbRoute) -> RouteSummary:
     """
     summary = RouteSummary.model_validate(route)
     summary.wall = route.wall.name if route.wall else ""
+    summary.wall_image_url = route.wall.image_url if route.wall else None
     tally = tally_votes(route.id, route.grade, [vote.value for vote in route.votes])
     summary.vote_count = tally.total
     summary.easier_votes = tally.easier
