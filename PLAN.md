@@ -1766,7 +1766,9 @@ until that publish step, and no member page reads a draft.
 
 **Limitations**
 
-- Phase 2 is still `IN_PROGRESS`: the member route-detail overlay is next.
+- Phase 2 is still `IN_PROGRESS`: the member overlay is now verified, but there
+  is no undo stack and the final cross-feature regression sweep and PostgreSQL
+  check are still open.
 - The pre-existing Phase 2 acceptance bullet "undo and reorder" is only half
   met. Reordering is implemented; there is no undo stack. Deleting a box is
   immediate and the backend refuses to delete a box a published set uses.
@@ -1790,9 +1792,98 @@ until that publish step, and no member page reads a draft.
   schema do not use SQLite-specific frontend behaviour, but that is not
   evidence of PostgreSQL compatibility.
 
-**Next:** add the published-hold overlay to the member route detail page,
-keeping voting, logging and navigation unchanged, then run the full regression
-sweep.
+**Next:** the full regression sweep, then PostgreSQL verification on a
+disposable instance.
+
+---
+
+### Phase 2B — Member published overlay (`DONE`)
+
+The route detail page now shows the setter's published hold sequence to
+anyone, signed in or not. It reads only the public endpoint, whose response
+has no draft field, so a saved draft cannot appear on a member page.
+
+**What was added**
+
+- `src/components/arch/published-holds.tsx` — a read-only overlay with its own
+  loading, unpublished, published, empty, missing-image and failed-image
+  states. It never invents a box and never offers a staff control.
+- `src/services/api.ts` — `api.routeHolds()` calls
+  `GET /api/public/routes/{id}/holds` with `auth: false`. The test sets a
+  member token and proves the request still carries no `Authorization`
+  header.
+- `src/components/arch/route-pages.tsx` — the section sits inside the route
+  body directly after the grade block and before the community vote bars. The
+  existing voting, logbook, beta and navigation blocks are unchanged.
+- `src/styles.css` — overlay, box, start/finish marker, numbered badge, legend
+  and phone layout classes.
+- `src/test/published-holds.test.tsx` — 8 tests for published rendering,
+  defensive unpublished handling, an empty published set, request failure,
+  broken photograph, missing photograph, loading and an inactive route.
+- `src/test/route-detail-overlay.test.tsx` — 1 integration test that renders
+  the real member route page and checks the overlay arrives with the grade,
+  voting and signed-out logbook entry point, and that no staff endpoint is
+  called.
+
+**How the alignment works**
+
+The frame's height is the photograph's own rendered height (`width: 100%;
+height: auto`), and each box is absolutely positioned in percentages of that
+frame. Because the image fills the frame exactly, there is no letterbox strip
+to compensate for, and the boxes cannot drift when the page is resized. The
+editor still needs the pixel-to-fraction maths for drawing; the member view
+does not.
+
+The visual layer is `aria-hidden`. The ordered list below the image is the
+accessible version, with the position and the words Start, Hold N of M and
+Finish. The green start and orange finish are therefore not communicated by
+colour alone.
+
+**Verification**
+
+- `bun run typecheck` — clean.
+- `bun run lint` — 0 errors; the same 7 pre-existing `react-refresh` warnings.
+- `bun run test` — **150 tests in 16 files pass** (141 before the overlay).
+- `bun run build` — succeeds.
+- Browser: `node scripts/check-route-overlay.mjs http://localhost:8090
+  http://localhost:8000` — **26/26 checks passed**.
+  - 1440×900, signed out: the overlay appeared from the public API, all three
+    boxes measured within 2px of their normalised coordinates and stayed
+    inside the 1246px photograph, the legend read Start / Hold 2 of 3 /
+    Finish, the decorative layer was hidden from assistive technology, no
+    staff controls were present, voting and the logbook entry point remained,
+    and the "All routes" link still navigated to the directory.
+  - 390×844, signed out: 0px horizontal overflow, a 348px photograph, every
+    box again within 2px of its coordinates and inside the image, and the
+    legend visible.
+  - Active route 2 (no published set): the page said the setters had not
+    published an overlay, with no boxes and no invented image.
+  - Screenshots inspected: `var/screenshots/route-overlay-desktop.png`,
+    `-desktop-viewport.png`, `-mobile.png`, `-mobile-viewport.png` and
+    `-empty.png` (all ignored by Git).
+- The member view performs no writes. The editor's browser run remains the
+  only source of the demo annotation: route 1, "Quiet the Mind", three boxes
+  and one published set.
+
+**Limitations**
+
+- Only active routes ask for an overlay. Archived and pending-reset routes do
+  not render the section; the backend also treats an archived route as
+  unpublished.
+- The photograph is whatever URL the published set stores. The demo uses
+  `/walls/placeholder-gym.jpg`; a real deployment must serve that URL to the
+  member frontend, not only to the API.
+- The global "Ask ARCH" floating button can overlap the bottom-right of the
+  page on a phone, as it does elsewhere on the site.
+- The published sequence still references the wall-level hold rows. Moving a
+  box in the editor changes every route that uses it immediately, including
+  this member overlay; the editor warns before the edit. Snapshotting
+  geometry per set remains an open product decision.
+- There is still no undo in the editor and no PostgreSQL evidence for the
+  feature.
+
+**Next:** the full regression sweep across the backend and frontend, then
+PostgreSQL verification on a disposable instance.
 
 ---
 

@@ -241,6 +241,8 @@ export const api = {
   routes: (options?: RouteFilterParams) =>
     apiRequest<ApiRouteSummary[]>(`/api/public/routes${routeQueryString(options)}`),
   route: (id: number | string) => apiRequest<ApiRouteSummary>(`/api/public/routes/${id}`),
+  routeHolds: (id: number | string) =>
+    apiRequest<ApiPublicRouteHolds>(`/api/public/routes/${id}/holds`, { auth: false }),
   routeFilters: () => apiRequest<ApiRouteFilterOptions>("/api/public/route-filters"),
   walls: () => apiRequest<ApiWall[]>("/api/public/walls"),
   product: (id: number | string) => apiRequest<ApiCatalogProduct>(`/api/public/products/${id}`),
@@ -462,11 +464,5 @@ export const routeSettingApi = {
   publishHoldSet: (routeId: number) =>
     apiRequest<ApiRouteHoldSet>(`/api/staff/routes/${routeId}/hold-set/publish`, {
       method: "POST",
-    }),
-
-  /** The published annotation of an active route, readable without a token. */
-  publicHolds: (routeId: number) =>
-    apiRequest<ApiPublicRouteHolds>(`/api/public/routes/${routeId}/holds`, {
-      auth: false,
     }),
 };

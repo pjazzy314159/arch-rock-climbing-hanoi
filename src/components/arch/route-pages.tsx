@@ -20,6 +20,7 @@ import { useSession } from "@/services/session";
 import { EmptyNotice, SampleDataBanner } from "./data-state";
 import { PageHeading, RouteCard, TextLink } from "./shared";
 import { LogClimbModal } from "./log-climb-modal";
+import { PublishedRouteHolds } from "./published-holds";
 import {
   leaderboardQuery,
   leaderboardRulesQuery,
@@ -208,6 +209,12 @@ export function RouteDetailPage({ routeId }: { routeId: string }) {
               </small>
             </div>
           </div>
+
+          <PublishedRouteHolds
+            routeId={found.id}
+            routeName={found.name}
+            active={found.status === "active"}
+          />
 
           {tallies && tallies.total > 0 && (
             <div className="vote-bars">
