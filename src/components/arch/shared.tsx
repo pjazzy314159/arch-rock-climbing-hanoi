@@ -233,7 +233,8 @@ export function TextLink({
     | "/shop"
     | "/contact"
     | "/member"
-    | "/member/logbook";
+    | "/member/logbook"
+    | "/leaderboard";
   children: ReactNode;
 }) {
   return (

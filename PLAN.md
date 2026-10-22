@@ -117,7 +117,7 @@ Every phase keeps the public website and the backend working.
 | 1.1 | `walls` table, `wall_type` on routes, route status published                                                               | `DONE`        | Migration applies and rolls back; existing routes keep their wall name; seeded walls have a type and a photograph reference.               |
 | 1.2 | Dashboard response: outcome distribution, statistics by grade, ranking and percentile, recent attempts, active route count | `DONE`        | Every field comes from the member's own rows; a flash is a send with one attempt; the ranking uses the documented leaderboard calculation. |
 | 1.3 | Route directory filters: grade, wall, wall type, status                                                                    | `TODO`        | Each filter narrows the list server-side; the available options come from the data, not from a hard-coded list.                            |
-| 1.4 | The member dashboard                                                                                                       | `TODO`        | Real data only; empty, loaded and unavailable states are visibly different; no sample achievements are shown as real.                      |
+| 1.4 | The member dashboard                                                                                                       | `DONE`        | Real data only; empty, loaded and unavailable states are visibly different; no sample achievements are shown as real.                      |
 | 1.5 | Route card and route page: wall, wall type, status, imagery                                                                | `TODO`        | The card states the wall and the status; a placeholder photograph is labelled as one.                                                      |
 | 1.6 | Log an attempt from the dashboard and from a route                                                                         | `TODO`        | The attempt is stored by the backend, survives a refresh and a sign-in, and a member cannot change another member's records.               |
 | 1.7 | Ranking rule stated on the dashboard and the leaderboard                                                                   | `TODO`        | The page states the scoring rule and the displayed rank matches the backend.                                                               |
@@ -1066,6 +1066,155 @@ Both were wrong expectations in new tests, not faults in the product:
   response; stating it on the leaderboard page is task 1.7.
 - The dashboard interface itself is unchanged. The data is ready for it; the
   page that shows it is task 1.4.
+
+---
+
+### Task 1.4 — The member dashboard (`DONE`)
+
+**The change**
+
+`/member` was four metric tiles. It is now the member's own picture of their
+climbing: a headline row, how the climbs went, what they have done by grade,
+where they stand and what they did last — with the route list underneath.
+
+- `src/components/arch/member-shell.tsx` (new) — the workspace frame
+  (`MemberShell`) and the small shared pieces (`SignInPrompt`,
+  `MemberLoading`, `MemberError`, `Metric`), moved out of `member-pages.tsx`
+  so the dashboard can use them without a circular import. `MemberError`
+  gained an optional `onRetry`.
+- `src/components/arch/member-dashboard.tsx` (new) — `DashboardOverview`,
+  `DashboardWelcome` and `DashboardUnavailable`, with the headline metrics,
+  outcome distribution, grade statistics, ranking card and recent attempts.
+- `src/components/arch/member-pages.tsx` — `/member` delegates to those three
+  states. The section that used to be called "Projects to come back to" (it
+  showed the first two routes in the directory, which were **not** the
+  member's projects) is now "Fresh on the wall": the gym's own recently set
+  routes, or the active list when nothing is fresh.
+- `src/styles.css` — the dashboard cards, outcome and grade bars, rank tiles,
+  attempt list and the two message states, in the existing dark/lime system.
+- `src/services/arch.ts` — `formatClimbDate`, `shareOf` and `ROLE_LABELS`,
+  placed here so the component files stay component-only and do not add new
+  `react-refresh` warnings.
+- `src/components/arch/shared.tsx` — `TextLink` accepts `/leaderboard`.
+- `src/routes/member.tsx` — the page title and description no longer call
+  themselves a sample preview; the page shows real records.
+- `scripts/check-member-dashboard.mjs` (new) — the browser check below.
+
+**What the member sees, and what each number means**
+
+- **Headline row** — routes on the wall, sends, flashes, projects, best grade
+  and sessions. Each card carries its own definition: "Routes set in the gym",
+  "Climbs you have sent", "Sent on the first try", "Still to crack",
+  "Your hardest send" and **"Days you have logged a climb"**.
+  - *Sessions* is the backend's `total_sessions`, which is the number of
+    **distinct days** a climb was logged — not a count of attempts and not a
+    count of visits with no climbs. The card says so.
+  - *On the wall* is the gym's active route count, not the member's own; the
+    card says "Routes set in the gym" so it cannot be read as personal.
+  - A missing best grade is em-dash, never `0`.
+- **How your climbing went** — Sent, Flashed and Projecting, each with its own
+  denominator spelled out, because the three do not share one: sends and
+  projects are shares of the member's logged climbs, flashes are a share of
+  their sends. The card states that a flash sits **inside** sends. Percentages
+  are derived from the backend's counts with a zero-safe helper, so a record
+  with no attempts shows `0%` and "no climbs logged yet" rather than dividing
+  by zero.
+- **Your recent attempts** — route (linked to the route page when the record
+  has a route id, plain text when it does not), grade, date, number of
+  attempts, sent/project, and a FIRST TRY tag on flashes. Dates are formatted
+  without a timezone so the server and browser agree.
+- **Your record by grade** — one row per grade, easiest first, in the order
+  the backend returns. The bar length is the member's **sends** at that grade
+  and the text repeats every value ("5 sends · 2 flashed · 1 project"), so
+  nothing is carried by colour alone. A grade the member has only projected is
+  still listed, with no bar and "0 sends · 1 project".
+- **Where you stand** — rank, ranked climbers, climbers ahead and percentile,
+  followed by the backend's `ranking.scoring_rule` and
+  `ranking.percentile_rule` **verbatim**. The page does not keep its own copy
+  of the rules. The percentile rule is shown only when there is a percentile
+  to explain. An unranked member reads "You are not on the leaderboard yet.
+  Climbers are ranked once they have logged a send." — no `#0` and no 0th
+  percentile. The leaderboard is linked from the card.
+- **Route directory** — "Fresh on the wall" cards link to route pages and to
+  the full directory, and are labelled from the gym's data rather than member
+  preferences. If the gym has no active routes the section says so instead of
+  rendering an empty grid.
+- **Log an attempt** — the primary action in the page heading (and in the
+  welcome state) opens `/member/logbook`, where the real, persisting form
+  lives. No second form was invented.
+
+**The three states**
+
+1. `hasActivity === true` → `DashboardOverview`.
+2. `hasActivity === false` → `DashboardWelcome`: a welcome, the live count of
+   routes on the wall, and the two ways to begin. No sample achievements and
+   no row of zeroes that reads like a record of failure.
+3. `data === null` with an `error` → `DashboardUnavailable`: what happened,
+   that nothing was lost, and a **Try again** button that refetches. It is
+   never rendered as an empty history.
+
+**Corrections made while finishing the interrupted work**
+
+The session that started this task stopped with the change uncommitted. Its
+work was kept and finished, but four things needed fixing:
+
+- The moved `MemberShell` had **lost the Sign out button**; restored.
+- The new dashboard classes had **no CSS**; added.
+- The grade bars were scaled on all logged climbs, so a grade the member had
+  only projected drew a **full bar**. The bars now encode sends, and a grade
+  with no sends draws no bar.
+- The outcome text said "of your 1 logged climbs"; singular fixed.
+
+**Verification**
+
+- Frontend: `bun run typecheck` clean, `bun run lint` 0 errors (the 7
+  pre-existing `react-refresh` warnings, none new), `bun run test` → **74 tests
+  pass in 7 files** (59 before), `bun run build` succeeds.
+- Backend, unchanged but re-run: **186 tests pass**, `ruff check` clean.
+- `src/test/member-dashboard.test.tsx` (new, 15 tests) — the populated
+  dashboard, the meaning line under each metric, the outcome denominators and
+  the flash-is-inside-sends note, a single-climb record, a no-attempts record
+  (zero-safe percentages, em-dash best grade, empty grade and attempt
+  notices), the grade rows including a project-only grade with no bar, the
+  rank card, the rules arriving **from the response** rather than the page, an
+  unranked member with no invented rank, a ranked member with a null
+  percentile, route links for recent attempts (and no link when there is no
+  route id), the welcome state with and without routes, the unavailable state
+  with a working retry, and the two formatting helpers.
+- `node scripts/check-member-dashboard.mjs http://localhost:8090` against the
+  production build: **all checks passed, no console or page errors.** It
+  covers an anonymous visitor, a newly registered member with no climbs, that
+  member logging a first climb and seeing it on the dashboard and in their
+  route page, a member with a longer record, keyboard focus and Enter on
+  "Log an attempt", both the API-provided rule texts, and the unavailable
+  state with a working retry. Horizontal overflow measured **0px** at
+  1440×900 and 390×844.
+- Screenshots inspected at desktop and mobile widths:
+  `var/screenshots/member-dashboard-desktop.png`,
+  `member-dashboard-mobile.png`, `member-dashboard-empty-desktop.png`,
+  `member-dashboard-empty-mobile.png`, `member-dashboard-first-climb.png`,
+  `member-dashboard-unavailable.png`. They were reviewed, not merely captured:
+  the empty state, the loaded state and the unavailable state look different,
+  the cards keep the ARCH type and colour system, and nothing overflows.
+
+**Limitations**
+
+- "Log an attempt" navigates to the logbook, where the form is one more click
+  away. Task 1.6 brings the form to the dashboard and to a route.
+- Recent attempts that were stored without a route id (the seeded demo rows)
+  are listed as plain text, not links, because there is no route page to open.
+- The ranking still reads every climber's records, as recorded under task 1.2.
+- The route directory itself is still filtered in the browser (task 1.3), and
+  the route card does not yet show the wall type or route status (task 1.5).
+- The browser check registers a throwaway `dashboard-<timestamp>@example.com`
+  account each run, as the existing member-flow check already does. Those
+  accounts, and the climbs logged by the check, stay in the development
+  database and count towards the leaderboard until it is re-seeded.
+- The other member pages still carry "Preview"/"sample" page titles. That is
+  pre-existing and outside this task.
+
+**Next:** task 1.3 (server-side route directory filters), then 1.5, 1.6 and
+1.7.
 
 ---
 

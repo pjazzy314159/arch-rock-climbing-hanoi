@@ -1,19 +1,14 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
-  LayoutDashboard,
-  BookOpen,
   Mountain,
-  TrendingUp,
   ArrowUpRight,
   Plus,
   X,
   Check,
   Shield,
-  UserCog,
   Users,
-  LogOut,
   Signature,
   Search,
 } from "lucide-react";
@@ -21,186 +16,21 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { authApi, memberApi, ApiError, ApiUnavailableError } from "@/services/api";
-import { initialsFor, useSession } from "@/services/session";
+import { useSession } from "@/services/session";
 import type { ApiUser } from "@/services/types";
 import { PageHeading, RouteCard, TextLink } from "./shared";
 import { EmptyNotice, SampleDataBanner } from "./data-state";
+import { MemberError, MemberLoading, MemberShell, Metric, SignInPrompt } from "./member-shell";
+import { DashboardOverview, DashboardUnavailable, DashboardWelcome } from "./member-dashboard";
 import {
   adminQuery,
   myAgreementQuery,
   myDashboardQuery,
   myLogbookQuery,
   routeQuery,
+  ROLE_LABELS,
   type LogEntry,
 } from "@/services/arch";
-
-const memberNav = [
-  { to: "/member", label: "Overview", icon: LayoutDashboard },
-  { to: "/member/logbook", label: "My logbook", icon: BookOpen },
-  { to: "/member/beta", label: "Route beta", icon: Mountain },
-  { to: "/member/progress", label: "My progress", icon: TrendingUp },
-  { to: "/member/profile", label: "My profile", icon: UserCog },
-] as const;
-
-const ROLE_LABELS: Record<string, string> = {
-  customer: "Member",
-  staff: "Staff",
-  admin: "Administrator",
-};
-
-/* -------------------------------------------------------------------------- */
-/* Shared pieces                                                              */
-/* -------------------------------------------------------------------------- */
-
-function Metric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-}) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </div>
-  );
-}
-
-/** Shown to a visitor who is not signed in. */
-export function SignInPrompt({ what }: { what: string }) {
-  return (
-    <div className="auth-card">
-      <div className="empty-state">
-        <Shield size={26} />
-        <h3>Sign in to see {what}</h3>
-        <p>
-          Your records are private. Sign in with your ARCH account, or create one, and they will
-          appear here.
-        </p>
-        <Button asChild size="lg">
-          <Link to="/signin">
-            Sign in or create an account <ArrowUpRight />
-          </Link>
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/** Placeholder while a member's own records are loading. */
-function MemberLoading() {
-  return (
-    <div className="loading-block" aria-busy="true">
-      <p>Loading your records…</p>
-    </div>
-  );
-}
-
-function MemberError({ message }: { message: string }) {
-  return (
-    <p className="data-banner" role="alert">
-      <span>{message}</span>
-    </p>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Shell                                                                      */
-/* -------------------------------------------------------------------------- */
-
-export function MemberShell({ children, admin = false }: { children: ReactNode; admin?: boolean }) {
-  const { status, user, signOut, error, refresh } = useSession();
-  const signedIn = status === "authenticated" && user !== null;
-
-  return (
-    <div className="workspace">
-      <aside className="workspace-sidebar">
-        <span className="eyebrow">{admin ? "ARCH OPERATIONS" : "YOUR CLIMBING SPACE"}</span>
-        <div className="profile">
-          <span className="avatar">
-            {admin ? <Shield size={22} /> : signedIn ? initialsFor(user.full_name) : "?"}
-          </span>
-          <div>
-            <strong>{admin ? "Admin preview" : signedIn ? user.full_name : "Not signed in"}</strong>
-            <small>
-              {admin
-                ? "Operations workspace"
-                : signedIn
-                  ? `${ROLE_LABELS[user.role] ?? user.role} · ${
-                      user.membership_tier ?? "No membership recorded"
-                    }`
-                  : "Your records are private"}
-            </small>
-          </div>
-        </div>
-        <nav aria-label="Workspace navigation">
-          {admin ? (
-            <Link to="/admin" className="workspace-active">
-              <LayoutDashboard size={18} />
-              Overview
-            </Link>
-          ) : (
-            memberNav.map((n) => (
-              <Link
-                key={n.to}
-                to={n.to}
-                activeProps={{ className: "workspace-active" }}
-                activeOptions={{ exact: true }}
-              >
-                <n.icon size={18} />
-                {n.label}
-              </Link>
-            ))
-          )}
-        </nav>
-        <div className="preview-note">
-          {error && (
-            <p className="session-warning" role="alert">
-              {error}
-              <Button variant="outline" size="sm" onClick={() => void refresh()}>
-                Try again
-              </Button>
-            </p>
-          )}
-          {signedIn && !admin ? (
-            <>
-              <span className="sample-badge">SIGNED IN</span>
-              <p>
-                Signed in as {user.email}. Your records are shown from the ARCH database and are
-                visible only to you.
-              </p>
-              {(user.role === "staff" || user.role === "admin") && (
-                <Link to="/staff">
-                  Staff tools <ArrowUpRight size={14} />
-                </Link>
-              )}
-              <Button variant="outline" size="sm" onClick={signOut}>
-                <LogOut size={14} /> Sign out
-              </Button>
-            </>
-          ) : (
-            <>
-              <span className="sample-badge">SAMPLE PREVIEW</span>
-              <p>
-                {admin
-                  ? "The operations workspace is a preview. Protected administration arrives with the staff tools."
-                  : "Sign in to replace the sample records with your own."}
-              </p>
-              <Link to={admin ? "/member" : "/signin"}>
-                {admin ? "Member area" : "Sign in"} <ArrowUpRight size={14} />
-              </Link>
-            </>
-          )}
-        </div>
-      </aside>
-      <main className="workspace-content">{children}</main>
-    </div>
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /* Overview                                                                   */
@@ -212,13 +42,28 @@ export function MemberPage() {
   const signedIn = status === "authenticated";
   const dashboard = useQuery({ ...myDashboardQuery, enabled: signedIn });
 
+  // The routes currently set in the gym. The freshest ones are shown first,
+  // because they are the ones worth trying today. This is the gym's route
+  // list, not a guess about what the member likes.
+  const fresh = routes.data.filter((route) => route.fresh);
+  const featured = (fresh.length > 0 ? fresh : routes.data).slice(0, 3);
+
   return (
     <MemberShell>
       <PageHeading
         eyebrow="BACK ON THE WALL"
         title={signedIn ? "Your climbing space." : "Sign in to your climbing space."}
         description="Every session is a step forward. Make this one count."
-      />
+      >
+        {signedIn && (
+          <Button asChild>
+            <Link to="/member/logbook">
+              <Plus />
+              Log an attempt
+            </Link>
+          </Button>
+        )}
+      </PageHeading>
       {!signedIn ? (
         <SignInPrompt what="your statistics" />
       ) : (
@@ -226,31 +71,17 @@ export function MemberPage() {
           {dashboard.isPending ? (
             <MemberLoading />
           ) : dashboard.data?.error ? (
-            <MemberError message={dashboard.data.error} />
-          ) : (
-            <div className="metric-grid">
-              <Metric
-                label="Total sends"
-                value={dashboard.data?.data?.totalSends ?? 0}
-                detail="Logged sends"
-              />
-              <Metric
-                label="Sessions"
-                value={dashboard.data?.data?.totalSessions ?? 0}
-                detail="Days you have climbed"
-              />
-              <Metric
-                label="Highest grade"
-                value={dashboard.data?.data?.bestGrade ?? "—"}
-                detail="Your personal best"
-              />
-              <Metric
-                label="Active projects"
-                value={dashboard.data?.data?.activeProjects ?? 0}
-                detail="Still open"
-              />
-            </div>
-          )}
+            <DashboardUnavailable
+              message={dashboard.data.error}
+              onRetry={() => void dashboard.refetch()}
+            />
+          ) : dashboard.data?.data ? (
+            dashboard.data.data.hasActivity ? (
+              <DashboardOverview dashboard={dashboard.data.data} />
+            ) : (
+              <DashboardWelcome activeRoutes={dashboard.data.data.activeRoutes} />
+            )
+          ) : null}
           <AgreementPanel />
         </>
       )}
@@ -271,14 +102,21 @@ export function MemberPage() {
         </Button>
       </div>
       <div className="section-title">
-        <h2>Projects to come back to</h2>
+        <h2>{fresh.length > 0 ? "Fresh on the wall" : "On the wall now"}</h2>
         <TextLink to="/routes">All routes</TextLink>
       </div>
-      <div className="route-grid member-route-grid">
-        {routes.data.slice(0, 2).map((r) => (
-          <RouteCard route={r} key={r.id} />
-        ))}
-      </div>
+      {featured.length === 0 ? (
+        <EmptyNotice
+          title="No routes are set right now."
+          description="The gym's route list is empty. Check back soon — the setters are working on it."
+        />
+      ) : (
+        <div className="route-grid member-route-grid">
+          {featured.map((r) => (
+            <RouteCard route={r} key={r.id} />
+          ))}
+        </div>
+      )}
     </MemberShell>
   );
 }

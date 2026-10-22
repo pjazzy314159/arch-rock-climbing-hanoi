@@ -1014,6 +1014,33 @@ export const archService = {
 export const formatPrice = (price: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(price);
 
+/** The account roles, as they are shown to the member. */
+export const ROLE_LABELS: Record<string, string> = {
+  customer: "Member",
+  staff: "Staff",
+  admin: "Administrator",
+};
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * Format a `YYYY-MM-DD` day as `20 Oct 2026`.
+ *
+ * The day is parsed and formatted without a timezone, so the server and the
+ * browser always show the same day.
+ */
+export const formatClimbDate = (value: string): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  const name = MONTHS[Number(month) - 1] ?? month;
+  return `${Number(day)} ${name} ${year}`;
+};
+
+/** A share of a whole, as a whole percentage. Zero never divides by zero. */
+export const shareOf = (count: number, total: number): number =>
+  total > 0 ? Math.round((count / total) * 100) : 0;
+
 export const routeQuery = { queryKey: ["arch", "routes"], queryFn: archService.listRoutes };
 /** Every route, including the archived ones, for the directory's status filter. */
 export const allRoutesQuery = {
