@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,6 +9,7 @@ import {
   Loader2,
   Save,
   Trash2,
+  Undo2,
   Upload,
   X,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import { HoldCanvas } from "./hold-canvas";
 import { moveItem, roleAt, type HoldBox } from "./hold-geometry";
 import { PageHeading } from "./shared";
 import { PermissionDenied, StaffShell } from "./staff-pages";
+import { pushUndo, remapUndo, type EditorSnapshot, type UndoEntry } from "./undo-history";
 
 /**
  * The staff route-setting tool.
@@ -45,7 +47,7 @@ function errorMessage(caught: unknown, fallback: string): string {
   return fallback;
 }
 
-type Pending = "create" | "update" | "delete" | "save" | "publish" | null;
+type Pending = "create" | "update" | "delete" | "save" | "publish" | "undo" | null;
 
 type Notice = { tone: "success" | "error" | "info"; text: string } | null;
 
@@ -61,6 +63,28 @@ function idsOf(set: ApiRouteHoldSet | null): number[] {
 
 function holdLabel(hold: ApiWallHold | undefined, id: number): string {
   return hold?.label?.trim() || `Hold ${id}`;
+}
+
+function boxOf(hold: ApiWallHold): HoldBox {
+  return { x: hold.x, y: hold.y, width: hold.width, height: hold.height };
+}
+
+function sameBox(a: HoldBox, b: HoldBox): boolean {
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+function sameSequence(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.isContentEditable
+  );
 }
 
 export function RouteSettingPage() {
@@ -109,6 +133,7 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
   const [pending, setPending] = useState<Pending>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [imageFailed, setImageFailed] = useState(false);
+  const [undoHistory, setUndoHistory] = useState<UndoEntry[]>([]);
 
   const wallsQuery = useQuery({
     queryKey: ["route-setting", "walls"],
@@ -135,6 +160,7 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
     // A route belongs to one wall, so a wall change cannot keep the old one.
     setRouteId(null);
     setImageFailed(false);
+    setUndoHistory([]);
   }, [wallId]);
 
   useEffect(() => {
@@ -171,6 +197,9 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
   }, [wallId, holdsReload]);
 
   useEffect(() => {
+    // Undo is scoped to one route's unsaved work. Loading another route (or
+    // reloading this one from the server) starts a new history.
+    setUndoHistory([]);
     if (routeId === null) {
       setDraft(null);
       setPublished(null);
@@ -219,6 +248,8 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
   const selectedIndex = selectedId === null ? -1 : sequence.indexOf(selectedId);
   const dirty = sequence.join(",") !== savedSequence.join(",");
   const busy = pending !== null;
+  const canUndo = undoHistory.length > 0 && !busy;
+  const lastUndo = undoHistory[undoHistory.length - 1] ?? null;
   const inPublished =
     selectedId !== null &&
     (published?.holds.some((hold) => hold.wall_hold_id === selectedId) ?? false);
@@ -239,12 +270,26 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
     sequence.length >= 2 &&
     pending === null;
 
+  function snapshotEditor(): EditorSnapshot {
+    return { holds, sequence, selectedId };
+  }
+
+  function rememberEdit(
+    snapshot: EditorSnapshot,
+    label: string,
+    affectedHoldId: number | null = null,
+  ) {
+    setUndoHistory((current) => pushUndo(current, snapshot, label, affectedHoldId));
+  }
+
   async function createHold(box: HoldBox) {
     if (wallId === null || busy) return;
+    const before = snapshotEditor();
     setPending("create");
     setNotice(null);
     try {
       const created = await routeSettingApi.createHold(wallId, box);
+      rememberEdit(before, "adding a box", created.id);
       setHolds((previous) => [...previous, created]);
       setSelectedId(created.id);
       setNotice({
@@ -261,13 +306,18 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
   async function updateHold(id: number, box: HoldBox) {
     if (busy) return;
     const previous = holds.find((hold) => hold.id === id);
-    if (!previous) return;
+    if (!previous || sameBox(boxOf(previous), box)) return;
+    const before = snapshotEditor();
     const wasPublished = published?.holds.some((hold) => hold.wall_hold_id === id) ?? false;
+    const moved = previous.x !== box.x || previous.y !== box.y;
+    const resized = previous.width !== box.width || previous.height !== box.height;
+    const label = moved && resized ? "editing a box" : resized ? "resizing a box" : "moving a box";
     setHolds((rows) => rows.map((hold) => (hold.id === id ? { ...hold, ...box } : hold)));
     setPending("update");
     setNotice(null);
     try {
       const saved = await routeSettingApi.updateHold(id, box);
+      rememberEdit(before, label, id);
       setHolds((rows) => rows.map((hold) => (hold.id === id ? saved : hold)));
       if (wasPublished) {
         setNotice({
@@ -306,10 +356,12 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
       });
       return;
     }
+    const before = snapshotEditor();
     setPending("delete");
     setNotice(null);
     try {
       await routeSettingApi.deleteHold(id);
+      rememberEdit(before, "deleting a box", id);
       setHolds((rows) => rows.filter((hold) => hold.id !== id));
       setSelectedId(null);
       setNotice({ tone: "success", text: "Box deleted from the wall." });
@@ -323,26 +375,135 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
+  function commitSequence(next: number[], label: string) {
+    if (sameSequence(next, sequence)) return;
+    rememberEdit(snapshotEditor(), label);
+    setSequence(next);
+  }
+
   function addSelectedToRoute() {
     if (selectedId === null || sequence.includes(selectedId)) return;
-    setSequence((current) => [...current, selectedId]);
+    commitSequence([...sequence, selectedId], "adding a hold to the route");
     setNotice({ tone: "info", text: "Added to the route. Save the draft to keep it." });
   }
 
   function removeFromRoute(id: number) {
-    setSequence((current) => current.filter((holdId) => holdId !== id));
+    commitSequence(
+      sequence.filter((holdId) => holdId !== id),
+      "removing a hold from the route",
+    );
   }
 
   function moveStep(index: number, delta: number) {
-    setSequence((current) => moveItem(current, index, index + delta));
+    commitSequence(moveItem(sequence, index, index + delta), "reordering the holds");
   }
 
   function makeStart(id: number) {
-    setSequence((current) => [id, ...current.filter((holdId) => holdId !== id)]);
+    commitSequence([id, ...sequence.filter((holdId) => holdId !== id)], "changing the start hold");
   }
 
   function makeFinish(id: number) {
-    setSequence((current) => [...current.filter((holdId) => holdId !== id), id]);
+    commitSequence([...sequence.filter((holdId) => holdId !== id), id], "changing the finish hold");
+  }
+
+  async function undoLastEdit() {
+    if (busy || undoHistory.length === 0) return;
+    const entry = undoHistory[undoHistory.length - 1]!;
+    const target = entry.snapshot;
+    const affectedHoldId = entry.affectedHoldId;
+    const currentById = new Map(holds.map((hold) => [hold.id, hold]));
+    const targetById = new Map(target.holds.map((hold) => [hold.id, hold]));
+    const changed =
+      affectedHoldId === null
+        ? []
+        : target.holds.filter((wanted) => {
+            if (wanted.id !== affectedHoldId) return false;
+            const current = currentById.get(wanted.id);
+            return current !== undefined && !sameBox(boxOf(current), boxOf(wanted));
+          });
+    const missing =
+      affectedHoldId === null
+        ? []
+        : target.holds.filter(
+            (wanted) => wanted.id === affectedHoldId && !currentById.has(wanted.id),
+          );
+    const extra =
+      affectedHoldId === null
+        ? []
+        : holds.filter((hold) => hold.id === affectedHoldId && !targetById.has(hold.id));
+    const needsWallWrite = changed.length > 0 || missing.length > 0 || extra.length > 0;
+
+    if (!needsWallWrite) {
+      // Membership, order and role changes are local; preserve boxes exactly as
+      // they are now rather than reverting unrelated concurrent work.
+      setSequence([...target.sequence]);
+      setSelectedId(target.selectedId);
+      setUndoHistory((current) => current.slice(0, -1));
+      setNotice({ tone: "info", text: `Undid ${entry.label}.` });
+      return;
+    }
+
+    setPending("undo");
+    setNotice(null);
+    const idMap = new Map<number, number>();
+    try {
+      const nextById = new Map(holds.map((hold) => [hold.id, hold]));
+      for (const wanted of target.holds) {
+        if (wanted.id !== affectedHoldId) continue;
+        const current = currentById.get(wanted.id);
+        if (current === undefined) {
+          const created = await routeSettingApi.createHold(wanted.wall_id, {
+            ...boxOf(wanted),
+            ...(wanted.label ? { label: wanted.label } : {}),
+          });
+          idMap.set(wanted.id, created.id);
+          nextById.set(created.id, created);
+        } else if (!sameBox(boxOf(current), boxOf(wanted))) {
+          const saved = await routeSettingApi.updateHold(wanted.id, {
+            ...boxOf(wanted),
+            ...(wanted.label ? { label: wanted.label } : {}),
+          });
+          nextById.set(wanted.id, saved);
+        }
+      }
+      for (const unwanted of extra) {
+        await routeSettingApi.deleteHold(unwanted.id);
+        nextById.delete(unwanted.id);
+      }
+
+      const publishedIds = new Set(published?.holds.map((hold) => hold.wall_hold_id) ?? []);
+      const touchesPublished = [...changed, ...missing, ...extra].some((hold) =>
+        publishedIds.has(hold.id),
+      );
+      setHolds([...nextById.values()]);
+      setSequence(target.sequence.map((id) => idMap.get(id) ?? id));
+      setSelectedId(
+        target.selectedId === null ? null : (idMap.get(target.selectedId) ?? target.selectedId),
+      );
+      setUndoHistory((current) => remapUndo(current, idMap).slice(0, -1));
+      setNotice({
+        tone: "info",
+        text: touchesPublished
+          ? `Undid ${entry.label}. A box in the published route changed too, so members see the restored position now.`
+          : `Undid ${entry.label}.`,
+      });
+    } catch (caught) {
+      setNotice({
+        tone: "error",
+        text: errorMessage(caught, "The last edit could not be undone."),
+      });
+    } finally {
+      setPending(null);
+    }
+  }
+
+  function handleEditorKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+    if (event.key.toLowerCase() !== "z") return;
+    if (isEditableTarget(event.target)) return;
+    if (!canUndo) return;
+    event.preventDefault();
+    void undoLastEdit();
   }
 
   async function saveDraft() {
@@ -358,6 +519,7 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
       setDraft(saved);
       setSequence(ids);
       setSavedSequence(ids);
+      setUndoHistory([]);
       setNotice({
         tone: "success",
         text: "Draft saved. Members still see the published sequence.",
@@ -387,6 +549,7 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
       setPublished(publishedSet);
       setSequence(ids);
       setSavedSequence(ids);
+      setUndoHistory([]);
       setNotice({
         tone: "success",
         text: "Published. Members now see this sequence; the previous one is kept as history.",
@@ -438,7 +601,7 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
   }
 
   return (
-    <>
+    <div className="route-setting-editor" onKeyDown={handleEditorKeyDown}>
       <div className="route-setting-toolbar">
         <label>
           Wall
@@ -476,8 +639,21 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
             type="button"
             variant="outline"
             size="sm"
+            disabled={!canUndo}
+            onClick={() => void undoLastEdit()}
+            title={lastUndo ? `Undo ${lastUndo.label} (Ctrl+Z)` : "Nothing to undo"}
+          >
+            <Undo2 size={15} /> Undo
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             disabled={routeId === null || busy}
-            onClick={() => setSetReload((value) => value + 1)}
+            onClick={() => {
+              setUndoHistory([]);
+              setSetReload((value) => value + 1);
+            }}
           >
             Reload draft
           </Button>
@@ -486,7 +662,10 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
             variant="outline"
             size="sm"
             disabled={wallId === null || busy}
-            onClick={() => setHoldsReload((value) => value + 1)}
+            onClick={() => {
+              setUndoHistory([]);
+              setHoldsReload((value) => value + 1);
+            }}
           >
             Reload holds
           </Button>
@@ -570,7 +749,10 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setHoldsReload((value) => value + 1)}
+                onClick={() => {
+                  setUndoHistory([]);
+                  setHoldsReload((value) => value + 1);
+                }}
               >
                 Try again
               </Button>
@@ -604,7 +786,10 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setSetReload((value) => value + 1)}
+                  onClick={() => {
+                    setUndoHistory([]);
+                    setSetReload((value) => value + 1);
+                  }}
                 >
                   Try again
                 </Button>
@@ -861,6 +1046,6 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
           </section>
         </aside>
       </div>
-    </>
+    </div>
   );
 }

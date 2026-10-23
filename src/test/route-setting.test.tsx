@@ -1,4 +1,4 @@
-﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { SessionProvider } from "@/services/session";
@@ -29,6 +29,67 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
+  });
+}
+
+// jsdom has no PointerEvent, so Testing Library would fall back to a plain
+// Event without clientX/clientY. The canvas tests rely on real pointer geometry.
+if (typeof window.PointerEvent === "undefined") {
+  class PointerEventPolyfill extends MouseEvent {
+    pointerId: number;
+    pointerType: string;
+    isPrimary: boolean;
+
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 1;
+      this.pointerType = init.pointerType ?? "mouse";
+      this.isPrimary = init.isPrimary ?? true;
+    }
+  }
+  Object.defineProperty(window, "PointerEvent", {
+    configurable: true,
+    writable: true,
+    value: PointerEventPolyfill,
+  });
+}
+
+function domRect(width: number, height: number): DOMRect {
+  return {
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: width,
+    bottom: height,
+    width,
+    height,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
+function layoutCanvas(canvas: HTMLElement, width = 800, height = 600) {
+  Object.defineProperty(canvas, "getBoundingClientRect", {
+    configurable: true,
+    value: () => domRect(width, height),
+  });
+  fireEvent(window, new Event("resize"));
+}
+
+function pointer(
+  element: HTMLElement,
+  type: "pointerDown" | "pointerMove" | "pointerUp",
+  x: number,
+  y: number,
+) {
+  fireEvent[type](element, {
+    clientX: x,
+    clientY: y,
+    button: 0,
+    buttons: type === "pointerUp" ? 0 : 1,
+    pointerId: 1,
+    pointerType: "mouse",
+    isPrimary: true,
   });
 }
 
@@ -104,16 +165,21 @@ function holdSet(status: "draft" | "published", wallHoldIds: number[]) {
   };
 }
 
+type Hold = (typeof HOLDS)[number];
+
 type Backend = {
   draft: ReturnType<typeof holdSet> | null;
   published: ReturnType<typeof holdSet> | null;
   holdSetStatus?: number;
   saveStatus?: number;
   wall?: Omit<typeof WALL, "image_url"> & { image_url: string | null };
+  holds?: Hold[];
 };
 
 function mockBackend(backend: Backend) {
   const calls: { method: string; path: string; body?: unknown }[] = [];
+  let holds = (backend.holds ?? HOLDS).map((hold) => ({ ...hold }));
+  let nextHoldId = Math.max(0, ...holds.map((hold) => hold.id)) + 1;
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -126,7 +192,39 @@ function mockBackend(backend: Backend) {
     if (path === "/api/staff/walls") return jsonResponse([backend.wall ?? WALL]);
     if (path === "/api/staff/walls/1/routes") return jsonResponse([ROUTE]);
     if (path === "/api/staff/walls/1/holds" && method === "GET") {
-      return jsonResponse(backend.wall?.image_url === null ? [] : HOLDS);
+      return jsonResponse(backend.wall?.image_url === null ? [] : holds);
+    }
+    if (path === "/api/staff/walls/1/holds" && method === "POST") {
+      const created: Hold = {
+        ...HOLDS[0]!,
+        ...(body as Partial<Hold>),
+        id: nextHoldId,
+        wall_id: 1,
+        label: (body as { label?: string }).label ?? "",
+        created_at: "2026-10-23T00:00:00Z",
+        updated_at: "2026-10-23T00:00:00Z",
+      };
+      nextHoldId += 1;
+      holds = [...holds, created];
+      return jsonResponse(created, 201);
+    }
+    const holdMatch = path.match(/^\/api\/staff\/holds\/(\d+)$/);
+    if (holdMatch && method === "PATCH") {
+      const id = Number(holdMatch[1]);
+      const index = holds.findIndex((hold) => hold.id === id);
+      if (index < 0) return jsonResponse({ detail: "not found" }, 404);
+      const updated: Hold = {
+        ...holds[index]!,
+        ...(body as Partial<Hold>),
+        updated_at: "2026-10-23T00:01:00Z",
+      };
+      holds = holds.map((hold) => (hold.id === id ? updated : hold));
+      return jsonResponse(updated);
+    }
+    if (holdMatch && method === "DELETE") {
+      const id = Number(holdMatch[1]);
+      holds = holds.filter((hold) => hold.id !== id);
+      return new Response(null, { status: 204 });
     }
     if (path === "/api/staff/routes/1/hold-set" && method === "GET") {
       if (backend.holdSetStatus) {
@@ -160,7 +258,7 @@ function mockBackend(backend: Backend) {
   });
 
   vi.stubGlobal("fetch", fetchMock);
-  return { calls, fetchMock };
+  return { calls, fetchMock, getHolds: () => holds };
 }
 
 function wrapper() {
@@ -185,6 +283,25 @@ async function chooseRoute() {
   fireEvent.change(screen.getByLabelText("Route"), { target: { value: "1" } });
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "Save draft" })).toBeInTheDocument(),
+  );
+}
+
+async function openCanvas() {
+  const canvas = await screen.findByTestId("hold-canvas");
+  layoutCanvas(canvas);
+  await waitFor(() => expect(document.querySelectorAll("[data-hold-id]").length).toBe(2));
+  return canvas;
+}
+
+function holdBox(id: number): HTMLElement {
+  const element = document.querySelector<HTMLElement>(`[data-hold-id="${id}"]`);
+  expect(element).not.toBeNull();
+  return element!;
+}
+
+function steps(): string[] {
+  return Array.from(document.querySelectorAll(".hold-step-text strong")).map(
+    (element) => element.textContent ?? "",
   );
 }
 
@@ -282,6 +399,177 @@ describe("route-setting editor", () => {
     expect(screen.getByText("Step 1 · Start")).toBeInTheDocument();
     expect(screen.getByText("Step 2 · Finish")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save draft" })).toBeEnabled();
+
+    // A failed save must not throw the unsaved history away.
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(steps()).toEqual(["Hold 1"]));
+  });
+
+  it("undoes a new box with a compensating wall-hold delete, not a draft save", async () => {
+    const { calls, getHolds } = mockBackend({ draft: null, published: null });
+    render(wrapper());
+
+    const canvas = await openCanvas();
+    pointer(canvas, "pointerDown", 400, 300);
+    pointer(canvas, "pointerUp", 400, 300);
+    await waitFor(() => expect(getHolds()).toHaveLength(3));
+
+    const undo = screen.getByRole("button", { name: "Undo" });
+    expect(undo).toBeEnabled();
+    fireEvent.click(undo);
+
+    await waitFor(() => expect(getHolds()).toHaveLength(2));
+    await screen.findByText("Undid adding a box.");
+    const deletes = calls.filter((call) => call.method === "DELETE");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]?.path).toContain("/api/staff/holds/3");
+    expect(calls.some((call) => call.path.includes("/hold-set"))).toBe(false);
+  });
+
+  it("undoes a move and a resize back to the exact previous geometry", async () => {
+    const { calls, getHolds } = mockBackend({ draft: null, published: null });
+    render(wrapper());
+
+    const canvas = await openCanvas();
+    pointer(holdBox(1), "pointerDown", 192, 144);
+    pointer(canvas, "pointerMove", 272, 204);
+    pointer(canvas, "pointerUp", 272, 204);
+    await waitFor(() => expect(getHolds().find((hold) => hold.id === 1)?.x).toBeCloseTo(0.3));
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(getHolds().find((hold) => hold.id === 1)?.x).toBeCloseTo(0.2));
+    await screen.findByText("Undid moving a box.");
+
+    const handle = document.querySelector<HTMLElement>('[data-corner="se"]');
+    expect(handle).not.toBeNull();
+    pointer(handle!, "pointerDown", 224, 168);
+    pointer(canvas, "pointerMove", 304, 228);
+    pointer(canvas, "pointerUp", 304, 228);
+    await waitFor(() => expect(getHolds().find((hold) => hold.id === 1)?.width).toBeCloseTo(0.18));
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(getHolds().find((hold) => hold.id === 1)?.width).toBeCloseTo(0.08));
+    await screen.findByText("Undid resizing a box.");
+  });
+
+  it("undoes deleting a box by recreating it", async () => {
+    const { getHolds } = mockBackend({ draft: null, published: null });
+    render(wrapper());
+
+    await openCanvas();
+    await selectWallHold(1);
+    fireEvent.click(screen.getByRole("button", { name: "Delete box" }));
+    await waitFor(() => expect(getHolds()).toHaveLength(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(getHolds()).toHaveLength(2));
+    await screen.findByText("Undid deleting a box.");
+    expect(getHolds().find((hold) => hold.x === 0.4)?.id).toBe(3);
+  });
+
+  it("undoes route membership, order and role changes one operation at a time", async () => {
+    const { calls } = mockBackend({ draft: null, published: null });
+    render(wrapper());
+
+    await chooseRoute();
+    await selectWallHold(0);
+    fireEvent.click(screen.getByRole("button", { name: /Add Hold 1 to the route/ }));
+    await selectWallHold(1);
+    fireEvent.click(screen.getByRole("button", { name: /Add Hold 2 to the route/ }));
+    expect(steps()).toEqual(["Hold 1", "Hold 2"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Hold 2 earlier" }));
+    expect(steps()).toEqual(["Hold 2", "Hold 1"]);
+
+    const beforeUndo = calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(steps()).toEqual(["Hold 1", "Hold 2"]);
+    expect(calls.length).toBe(beforeUndo);
+    expect(calls.some((call) => call.method === "POST")).toBe(false);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Make finish" })[0]!);
+    expect(steps()).toEqual(["Hold 2", "Hold 1"]);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(steps()).toEqual(["Hold 1", "Hold 2"]);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Make start" })[1]!);
+    expect(steps()).toEqual(["Hold 2", "Hold 1"]);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(steps()).toEqual(["Hold 1", "Hold 2"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Hold 2 from the route" }));
+    expect(steps()).toEqual(["Hold 1"]);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(steps()).toEqual(["Hold 1", "Hold 2"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(steps()).toEqual(["Hold 1"]);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(steps()).toEqual([]);
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+  });
+
+  it("starts a fresh undo history after a successful save", async () => {
+    const { calls } = mockBackend({ draft: null, published: null });
+    render(wrapper());
+
+    await chooseRoute();
+    await selectWallHold(0);
+    fireEvent.click(screen.getByRole("button", { name: /Add Hold 1 to the route/ }));
+    await selectWallHold(1);
+    fireEvent.click(screen.getByRole("button", { name: /Add Hold 2 to the route/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await screen.findByText(/Draft saved\. Members still see/);
+
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(steps()).toEqual(["Hold 1", "Hold 2"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Hold 1 from the route" }));
+    expect(steps()).toEqual(["Hold 2"]);
+    const beforeUndo = calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(steps()).toEqual(["Hold 1", "Hold 2"]);
+    expect(calls.length).toBe(beforeUndo);
+  });
+
+  it("uses Ctrl+Z only while the editing surface has focus", async () => {
+    const { calls } = mockBackend({ draft: null, published: null });
+    render(wrapper());
+
+    await chooseRoute();
+    const canvas = await openCanvas();
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+    fireEvent.keyDown(canvas, { key: "z", ctrlKey: true });
+    expect(steps()).toEqual([]);
+
+    await selectWallHold(0);
+    fireEvent.click(screen.getByRole("button", { name: /Add Hold 1 to the route/ }));
+    expect(steps()).toEqual(["Hold 1"]);
+
+    const box = holdBox(1);
+    box.focus();
+    fireEvent.keyDown(box, { key: "z", ctrlKey: true });
+    await waitFor(() => expect(steps()).toEqual([]));
+
+    await selectWallHold(0);
+    fireEvent.click(screen.getByRole("button", { name: /Add Hold 1 to the route/ }));
+    expect(steps()).toEqual(["Hold 1"]);
+
+    const routeSelect = screen.getByLabelText("Route");
+    routeSelect.focus();
+    const beforeUndo = calls.length;
+    fireEvent.keyDown(routeSelect, { key: "z", ctrlKey: true });
+    expect(steps()).toEqual(["Hold 1"]);
+    expect(calls.length).toBe(beforeUndo);
+
+    fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+    expect(steps()).toEqual(["Hold 1"]);
+
+    canvas.focus();
+    fireEvent.keyDown(canvas, { key: "z", metaKey: true });
+    await waitFor(() => expect(steps()).toEqual([]));
   });
 
   it("does not offer publication to staff without the administrator role", async () => {

@@ -103,7 +103,7 @@ Every phase keeps the public website and the backend working.
 | ----- | ------------------------------------------------------- | ------------- | --------------------------------------------- |
 | **0** | Audit and planning: `MEMBER_UX_REVIEW.md`, this plan    | `DONE`        | —                                             |
 | **1** | Member dashboard and climbing experience                | `IN_PROGRESS` | Phase 0                                       |
-| **2** | Visual route-setting tool for staff                     | `IN_PROGRESS` | Phase 1 (route and wall data must be settled) |
+| **2** | Visual route-setting tool for staff                     | `DONE`        | Phase 1 (route and wall data must be settled) |
 | **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `TODO`        | Phase 1 (coordinate with any schema change)   |
 | **4** | Admin customer management                               | `TODO`        | Phase 1, Phase 3                              |
 | **5** | Staff operations                                        | `TODO`        | Phase 2, Phase 4                              |
@@ -1766,12 +1766,13 @@ until that publish step, and no member page reads a draft.
 
 **Limitations**
 
-- Phase 2 is still `IN_PROGRESS`: the member overlay is now verified, but there
-  is no undo stack and the final cross-feature regression sweep and PostgreSQL
-  check are still open.
-- The pre-existing Phase 2 acceptance bullet "undo and reorder" is only half
-  met. Reordering is implemented; there is no undo stack. Deleting a box is
-  immediate and the backend refuses to delete a box a published set uses.
+- At this point Phase 2 was still `IN_PROGRESS`: the member overlay and
+  regression sweep were not yet verified, and there was no undo stack. Those
+  items are recorded in the sections below.
+- At this point the pre-existing Phase 2 acceptance bullet "undo and reorder"
+  was only half met. Reordering was implemented; undo was added in the section
+  below. Deleting a box is immediate and the backend refuses to delete a box a
+  published set uses.
 - A published set stores route membership and order, but its boxes reference
   the wall-level `wall_holds` row. Moving or resizing a box therefore updates
   every route that uses it, including a published overlay, without a second
@@ -1879,8 +1880,9 @@ colour alone.
   box in the editor changes every route that uses it immediately, including
   this member overlay; the editor warns before the edit. Snapshotting
   geometry per set remains an open product decision.
-- There is still no undo in the editor and no PostgreSQL evidence for the
-  feature.
+- At the time of the overlay task there was still no undo in the editor;
+  undo was added in the follow-up task below. There is still no PostgreSQL
+  evidence for the feature.
 
 ### Phase 2B — Cross-feature regression sweep (`DONE`)
 
@@ -1935,9 +1937,104 @@ together against the real development backend.
 - No restore or reset was performed; the live database still contains the
   published route-1 annotation and the original demo climbs and votes.
 
-**Next:** decide and verify PostgreSQL on a disposable instance. Phase 2
-itself remains `IN_PROGRESS` until undo is addressed or explicitly waived; the
-overlay, editor and regression sweep are complete.
+**Next:** Phase 3 — verify PostgreSQL 18.6 on a disposable instance. Phase 2
+is complete: the editor, undo, member overlay and regression sweep are done.
+
+---
+
+### Phase 2B.3 — Undo for local editor changes (`DONE`)
+
+The editor now has a bounded, reliable undo stack for the work that is still
+local to the page. It restores the complete editor state captured before each
+operation: the wall boxes, route membership and order, roles derived from that
+order, and the selection. It never calls the draft save or publish endpoints.
+
+**What was added**
+
+- `src/components/arch/undo-history.ts` — immutable editor snapshots, a
+  30-operation cap, and id remapping. Each entry also records the one wall hold
+  that operation touched, so undo cannot delete or overwrite an unrelated box
+  that another session created after the snapshot.
+- `src/components/arch/route-setting.tsx` — snapshots are captured before
+  creating, moving/resizing and deleting a box, and before adding, removing,
+  reordering or changing the start/finish of a route hold. A new box creates a
+  history entry only after the server accepts it; a failed create, update,
+  delete, save or publish adds nothing to the history.
+- Undo uses inverse operations: a created box is deleted, a deleted box is
+  recreated, a moved/resized box is patched back to its previous geometry, and
+  a membership/order/role change is applied locally with no server write.
+  Deleting a box is refused for a published set or a route that still uses it,
+  so undoing a delete cannot silently remove a member-visible hold.
+- Recreating a deleted box produces a new server id. Every older snapshot is
+  remapped to the new id, so the next undo still points at the real row.
+- The Undo button is visible in the editor toolbar and disabled when there is
+  nothing to undo and while any request is in flight. Its tooltip names the
+  operation that will be undone.
+- Ctrl+Z / Command+Z work only while the editing surface has focus and are not
+  intercepted inside inputs, textareas, selects or contenteditable elements.
+  The hold-box key handler now lets Ctrl/Cmd+Z bubble to the editor instead of
+  swallowing it.
+- The history is cleared when a draft save or publish succeeds, when a
+  different route or wall is loaded, when the draft or holds are explicitly
+  reloaded, and when a page reload starts a new baseline. A failed save leaves
+  the history and every edit intact.
+
+**Verification**
+
+- `bun run typecheck` — clean.
+- `bun run lint` — 0 errors; the same 7 pre-existing `react-refresh` warnings.
+- `bun run test` — **158 tests in 17 files pass**. New coverage:
+  - `undo-history.test.ts` — the 30-operation limit and id remapping across
+    older snapshots.
+  - `route-setting.test.tsx` — undo of create (compensating delete, no draft
+    save), move and resize, delete (recreate), membership/order/roles one
+    operation at a time, a fresh history after a successful save, save failure
+    retaining edits and undo, and Ctrl+Z scope. Existing save, publish,
+    permission and load tests still pass.
+- `bun run build` — succeeds.
+- Backend: `uv run ruff check .` is clean and `uv run pytest -q` passes
+  **212 tests**. No backend model or migration changed, so `alembic check` was
+  not needed and was not run.
+- Browser: `node var/verify-undo.mjs http://localhost:8090
+  http://localhost:8000` — **40/40 checks passed** at 1440×900 and 390×844.
+  The flow was draw, move, undo the move, add the restored box to the route,
+  save, reload and read the geometry and membership back from the API. Undo
+  sent only a compensating wall-hold write; it did not save a draft, publish,
+  or alter demo route 1. The phone pass had 0px horizontal overflow.
+- The browser run used a copy at `var/arch_undo_verify.db` (ignored by Git);
+  the original demo database was not written. Screenshots are
+  `var/screenshots/route-setting-undo-desktop.png` and
+  `-phone.png` (both ignored by Git).
+
+**Limitations**
+
+- The shared wall-hold geometry question is still unresolved. A box's geometry
+  lives on the wall row, not on each route's saved set. Undoing a move or
+  resize is therefore a compensating `PATCH` to that shared row, not a local
+  edit: every route that uses the box, including a published overlay, sees the
+  restored geometry immediately. The editor warns when the box is in the
+  published set, but undo cannot restore an independent copy for another
+  route. The product decision remains documented under the shared-holds
+  question in `ROUTE_SETTING_DESIGN.md`.
+- Undoing a delete recreates the box with a new id and remaps this route's
+  history. Other routes that referenced the old row are not restored. The
+  backend's guard against deleting a box used by a published set or a route
+  sequence prevents the common unsafe case, but it is not a full history
+  rewrite.
+- The history is intentionally in memory and is not persisted. Reloading the
+  page, switching route or wall, reloading the draft/holds, or saving starts a
+  new baseline. This prevents undo from crossing a persisted save, as required,
+  but also means undo cannot repair an edit made in another tab or session.
+- Undo has a 30-operation bound. There is no redo, and publication itself is
+  not undoable.
+- Undo of a box is a server write, not a local-only change. If a compensating
+  request fails, the notice says so, the history remains, and the page can be
+  reloaded to compare the server state; the local history is not a server
+  transaction.
+- PostgreSQL remains untested for this feature.
+
+**Next:** Phase 3 — verify PostgreSQL 18.6 on a disposable instance, then run
+the final cross-feature sweep against the chosen database.
 
 ---
 

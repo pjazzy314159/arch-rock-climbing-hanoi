@@ -324,11 +324,12 @@ export function HoldCanvas({
                 }}
                 onPointerDown={(event) => handleHoldPointerDown(event, hold)}
                 onKeyDown={(event) => {
-                  event.stopPropagation();
                   if (event.key === "Delete" || event.key === "Backspace") {
+                    event.stopPropagation();
                     event.preventDefault();
                     onDelete(hold.id);
                   } else if (event.key === "Enter" || event.key === " ") {
+                    event.stopPropagation();
                     event.preventDefault();
                     onSelect(hold.id);
                   }
