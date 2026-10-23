@@ -40,7 +40,10 @@ class Settings(BaseSettings):
     )
 
     database_url: str = Field(
-        default="sqlite:///./arch_dev.db",
+        # PostgreSQL is the normal local development database. SQLite is the
+        # explicit fallback for isolated tests and recovery. The app never
+        # switches to SQLite when a configured PostgreSQL connection fails.
+        default="postgresql+psycopg://arch_dev@127.0.0.1:5432/arch_dev_pg",
         validation_alias=AliasChoices("DATABASE_URL", "ARCH_DATABASE_URL"),
     )
     secret_key: str = Field(

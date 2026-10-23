@@ -45,12 +45,18 @@ A worked example is in [`.env.example`](.env.example).
 ## 2. Database
 
 ```bash
-# On the database host
+# On the production database host: a restricted login role, not a superuser
 createuser arch --pwprompt
 createdb arch --owner arch
 ```
 
-Then point `DATABASE_URL` at it and apply the migrations:
+Grant the role access to the `public` schema in that database, then point
+`DATABASE_URL` at it and apply the migrations:
+
+```sql
+\c arch
+GRANT USAGE, CREATE ON SCHEMA public TO arch;
+```
 
 ```bash
 cd backend
@@ -61,6 +67,13 @@ uv run alembic upgrade head
 `uv run alembic current` shows the applied revision, and
 `uv run alembic check` reports whether the models and the migrations still
 agree. Migrations are reversible: `uv run alembic downgrade -1`.
+
+For local development, PostgreSQL 18.6 is the normal database too. The
+dedicated `arch_dev_pg` database, the restricted `arch_dev` role and the
+SQLite recovery fallback are documented in
+[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) and verified in
+[POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md). Do not point local
+development at the production role.
 
 Load the content the site needs. This only loads what does not invent business
 facts; prices and courses stay empty until ARCH publishes them, and the rules
@@ -89,7 +102,11 @@ uv run gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind
 ```
 
 Health check: `GET /api/health` returns the service status, the database
-dialect and whether the database is reachable.
+dialect and whether the database is reachable. A failed PostgreSQL connection
+is bounded by a five-second connect timeout and reports
+`status: "degraded"` with `database_reachable: false`; the API never falls
+back to SQLite. Automated deployment checks should fail when the health
+response is not `ok`.
 
 **Before opening sign-up to the public**, note that the API has no e-mail
 verification and no rate limiting. Put a rate limiter on `/api/auth/login` and
@@ -146,10 +163,12 @@ VITE_API_BASE_URL=https://api.arch.vn bun run build
 ## 6. What has not been exercised here
 
 This repository was developed and verified on a single machine without Docker
-and without a cloud account. PostgreSQL 18.6 was run locally against disposable
-verification databases; the migrations, repeatable seed, schema inspection and
-live API smoke test are recorded in
-[POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
+and without a cloud account. PostgreSQL 18.6 is the normal local development
+database (`arch_dev_pg`) and was also run against disposable verification
+databases. The migrations, repeatable seed, schema inspection, live API smoke
+test, restart persistence and frontend-to-PostgreSQL check are recorded in
+[POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md). A production
+PostgreSQL deployment has not been exercised.
 
 The following are documented and configuration-correct, but have not been run
 end to end:

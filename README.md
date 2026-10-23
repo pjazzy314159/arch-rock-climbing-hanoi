@@ -177,16 +177,45 @@ A feature should not be considered complete until relevant items below have been
 
 ## 11. Configuration and Local Development
 
-The exact commands depend on the repository recovered from Lovable and whether a backend already exists. After auditing the project, update this section with the actual commands for:
+Normal local development uses **PostgreSQL 18.6**. SQLite is kept for isolated
+tests and as an explicit recovery fallback. The full instructions, including
+the one-time database and role setup, are in
+[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md). The short version:
 
-- Installing frontend dependencies.
-- Starting the frontend development server.
-- Installing backend dependencies and starting FastAPI, if used.
-- Starting or connecting to PostgreSQL.
-- Running migrations and tests.
-- Building and deploying the application.
+```powershell
+# Create arch_dev_pg and the restricted arch_dev role once (LOCAL_DEVELOPMENT.md §3)
+Copy-Item .env.example .env
+# Set DATABASE_URL to postgresql+psycopg://arch_dev:<password>@127.0.0.1:5432/arch_dev_pg
 
-Do not invent commands or environment variable names before inspecting the project. Commit a `.env.example`, never a real `.env` file or real credentials.
+bun.cmd install
+cd backend
+uv sync --extra dev
+uv run alembic upgrade head
+uv run python -m app.seed --demo
+uv run uvicorn app.main:app --reload --port 8000   # terminal 1
+```
+
+```powershell
+# From the repository root, in a second terminal
+bun.cmd run dev
+```
+
+- Website: <http://localhost:8080>
+- API: <http://localhost:8000>
+- Health check: <http://localhost:8000/api/health> — it must report
+  `"database": "postgresql"` and `"database_reachable": true`.
+- API documentation: <http://localhost:8000/docs>
+
+Run the backend checks from `backend/` with `uv run ruff check .`,
+`uv run ruff format --check .`, `uv run pytest` and `uv run alembic check`.
+PostgreSQL integration tests are opt-in through `ARCH_TEST_POSTGRES_URL` and a
+disposable database named `arch_dev_pg_test`. Frontend checks are
+`bun.cmd run typecheck`, `bun.cmd run lint`, `bun.cmd run test` and
+`bun.cmd run build`.
+
+Commit `.env.example`, never a real `.env` file or real credentials. The API
+does not silently fall back to SQLite when a configured PostgreSQL connection
+fails; `/api/health` reports the failure instead.
 
 ## 12. Project Decisions to Confirm with ARCH
 
@@ -205,4 +234,4 @@ Keep an explicit list of open questions and avoid silently deciding business rul
 
 ## Project Status
 
-This README is an initial project brief and implementation guide. It is not proof that any feature has already been implemented. Update it as the repository is inspected and requirements are confirmed with ARCH.
+This README is the project brief and implementation guide. The current verified state, test evidence and remaining work are recorded in [PLAN.md](PLAN.md); local setup is in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md).

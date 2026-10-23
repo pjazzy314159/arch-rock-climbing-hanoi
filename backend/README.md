@@ -13,12 +13,17 @@ leaderboards, staff tasks and schedules, and the customer-support assistant.
 | API framework | FastAPI (Python 3.11+) |
 | ORM | SQLAlchemy 2.0 (declarative, typed) |
 | Migrations | Alembic |
-| Database | PostgreSQL in deployment, SQLite for zero-setup local development |
+| Database | PostgreSQL 18.6 for normal local development and deployment; SQLite for isolated tests and explicit fallback |
 | Auth | bcrypt password hashing + signed JWT access tokens |
 | Validation | Pydantic v2 (request and response schemas) |
 | Tests | pytest + FastAPI `TestClient` |
 
 ## Running it
+
+The normal local database is PostgreSQL 18.6. Create the `arch_dev_pg`
+database and restricted `arch_dev` role once, then set `DATABASE_URL` in
+the repository-root `.env` (see [LOCAL_DEVELOPMENT.md](../LOCAL_DEVELOPMENT.md)
+and [.env.example](../.env.example)). SQLite must be selected explicitly.
 
 ```bash
 # From the repository root
@@ -29,6 +34,8 @@ uv sync --extra dev
 
 # Bring the database to the latest migration
 uv run alembic upgrade head
+uv run alembic current
+uv run alembic check
 
 # Load the content the site needs (no invented business facts)
 uv run python -m app.seed
@@ -41,8 +48,12 @@ uv run uvicorn app.main:app --reload --port 8000
 ```
 
 `python -m app.seed` runs the migrations itself, so it is safe to call on a
-fresh database. Use `--reset` to roll the schema back to an empty database
-first.
+fresh database. Use `--reset` only on a database whose data you intend to
+destroy: it rolls the schema back to an empty database first.
+
+SQLite is an intentional fallback for isolated tests and recovery. Set
+`DATABASE_URL=sqlite:///./arch_dev.db` explicitly if you want it. The API
+never switches to SQLite when a configured PostgreSQL connection fails.
 
 Interactive API documentation is served at <http://localhost:8000/docs> and the
 OpenAPI schema at <http://localhost:8000/openapi.json>.
@@ -69,7 +80,8 @@ repository root). The most important ones:
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | SQLAlchemy connection string. `sqlite:///./arch_dev.db` for local development, `postgresql+psycopg://…` for deployment. |
+| `DATABASE_URL` | SQLAlchemy connection string. Normal local development uses `postgresql+psycopg://arch_dev:<password>@127.0.0.1:5432/arch_dev_pg`; `sqlite:///./arch_dev.db` is the explicit test/recovery fallback. |
+| `ARCH_ENVIRONMENT` | `development` for local work; `production` enables the production safety checks and disables the demo seed. |
 | `ARCH_SECRET_KEY` | Secret used to sign JWT access tokens. Must be unique per environment. |
 | `ARCH_ACCESS_TOKEN_TTL_MINUTES` | Access-token lifetime (default 720 minutes). |
 | `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API. |
@@ -233,6 +245,20 @@ cd backend
 uv run pytest
 ```
 
-The suite covers the voting and leaderboard rules, the authentication flow,
-ownership and role enforcement on every private endpoint, the public API, the
-assistant's grounding and fallback behaviour, and the security configuration.
+The ordinary suite runs on an isolated SQLite database and covers the voting
+and leaderboard rules, the authentication flow, ownership and role
+enforcement on every private endpoint, the public API, the assistant's
+grounding and fallback behaviour, and the security configuration.
+
+PostgreSQL-specific migration, constraint and model coverage is opt-in. It
+requires `ARCH_TEST_POSTGRES_URL` to name a disposable database whose name
+contains `test` or `verify`:
+
+```bash
+cd backend
+ARCH_TEST_POSTGRES_URL="postgresql+psycopg://arch_dev:<password>@127.0.0.1:5432/arch_dev_pg_test" \
+  uv run pytest tests/test_postgresql_integration.py -q
+```
+
+Each test creates and drops a temporary schema, so the seeded public schema
+is untouched.

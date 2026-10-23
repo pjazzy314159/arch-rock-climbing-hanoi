@@ -63,11 +63,12 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 ## 2. Environment and tooling notes
 
 - Node `v24.16.0`, npm `11.13.0` (use `npm.cmd` — PowerShell execution policy blocks `*.ps1` shims), Bun `1.4.3`.
-- Python `3.11.9` / `3.13.9` available, `uv 0.11.7` available for dependency management.
-- **PostgreSQL 18.6 is installed and was verified for Task 3.1.** The `psql`
+- Python `3.12.13` (the backend requires 3.11 or newer), `uv 0.11.7` available for dependency management.
+- **PostgreSQL 18.6 is the normal local development database.** The `psql`
   client and server are installed under `C:\Program Files\PostgreSQL\18`;
-  SQLite remains the default database for fast local development and tests.
-  See [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md) and §6.
+  SQLite remains the isolated test database and the explicit fallback. See
+  [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md),
+  [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md) and §6.
 - `C:\Users\tandu\MattNg\LAB` is a **symlink to `F:\LAB`**. Vite resolves symlinks to their real path, which
   made Vitest externalise the setup file and fail with `Cannot find module '/@fs/F:/…'`. Fixed with
   `scripts/run-tests.mjs`, which re-anchors the working directory to the real path.
@@ -155,6 +156,7 @@ Every phase keeps the public website and the backend working.
 | #   | Task                                                                                     | Status        | Acceptance criteria                                                                                                                                   |
 | --- | ---------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 3.1 | Verify PostgreSQL 18.6 compatibility on a dedicated disposable database                  | `DONE`        | Client/server versions verified; migrations, `alembic check`, repeatable seed, constraints, API operations and permissions exercised on PostgreSQL. |
+| 3.2 | Configure and verify PostgreSQL as the primary local development database                | `DONE`        | Restricted local role and `arch_dev_pg`; PostgreSQL-first docs; repeatable migrations and seed; live HTTP flows; restart persistence; SQLite fallback preserved. |
 
 - The actual client and server versions are verified and recorded.
 - A local PostgreSQL development database is configured through environment
@@ -163,8 +165,10 @@ Every phase keeps the public website and the backend working.
 - Seeding is repeatable and safe.
 - Authentication, member records, attempts, routes, annotations, staff tasks
   and contact messages are tested against PostgreSQL.
-- SQLite stays for fast isolated tests, and is never described as proof of
-  PostgreSQL compatibility.
+- SQLite stays for fast isolated tests and explicit recovery, and is never
+  described as proof of PostgreSQL compatibility.
+- The normal local workflow is PostgreSQL-first: `.env.example` points at
+  `arch_dev_pg`, and `/api/health` reports `database: "postgresql"`.
 - Database creation, migration, seeding, backup and restore are documented.
 
 #### Phase 4–7
@@ -207,8 +211,8 @@ deliberately leaves alone.
 **Open items**
 
 - PostgreSQL 18.6 is available locally and has been verified on a disposable
-  database; SQLite remains the default for development and the ordinary test
-  suite. See Task 3.1 below.
+  database; Task 3.2 makes it the normal local development database. SQLite is
+  the isolated test database and explicit fallback. See Tasks 3.1 and 3.2 below.
 - Placeholder imagery must be replaced with ARCH's real photos.
 - `.env` still holds a real Supabase publishable key from the import; it stays untracked.
 
@@ -1635,9 +1639,10 @@ one from a draft closes up the positions.
 
 **Migration and data safety**
 
-- The development database is `backend/arch_dev.db` (SQLite, the configured
-  default; no `.env` overrides it). Before migrating, a transactionally
-  consistent copy was taken with Python's SQLite backup API to
+- At the time of this task, the development database was `backend/arch_dev.db`
+  (SQLite, then the configured default; no `.env` overrode it). Before
+  migrating, a transactionally consistent copy was taken with Python's SQLite
+  backup API to
   `var/backups/arch_dev-20261023-000541.db` (ignored by Git). The copy passes
   `PRAGMA integrity_check` and contains 6 routes, 12 achievements and 8 users.
 - `alembic upgrade head` applied only the new, additive revision. Afterwards
@@ -2053,8 +2058,10 @@ order, and the selection. It never calls the draft save or publish endpoints.
   verification databases, migrate an empty schema, run `alembic check`, seed
   twice, inspect the resulting schema, exercise the live API, and add opt-in
   PostgreSQL test coverage.
-- Keep SQLite as the primary development database. Do not migrate, reset or
-  overwrite `backend/arch_dev.db`.
+- At the time of this task, keep SQLite as the primary development database.
+  Do not migrate, reset or overwrite `backend/arch_dev.db`. Task 3.2 later makes
+  PostgreSQL the normal local database and keeps SQLite as the test/recovery
+  fallback.
 
 **Verified environment**
 
@@ -2105,14 +2112,16 @@ order, and the selection. It never calls the draft save or publish endpoints.
 - Backend Ruff and formatting are clean.
 - The frontend was unchanged; its existing typecheck, 158 tests and production
   build pass, and lint reports warnings only (0 errors).
-- The SQLite database was not changed: the default setting is still
-  `sqlite+pysqlite:///./arch_dev.db`, and `backend/arch_dev.db` retains its
-  original 8 users, 6 routes, 3 wall holds, 1 hold set and 3 route holds.
+- The SQLite database was not changed. At the end of Task 3.1 the default
+  setting was still `sqlite+pysqlite:///./arch_dev.db`; Task 3.2 later made
+  PostgreSQL the default. `backend/arch_dev.db` retains its original 8 users,
+  6 routes, 3 wall holds, 1 hold set and 3 route holds.
 
 **Limitations**
 
-- SQLite remains the primary local database; PostgreSQL coverage is a separate
-  opt-in/manual check, not part of the default test run.
+- At the end of Task 3.1, SQLite was still the primary local database;
+  Task 3.2 supersedes that decision and makes PostgreSQL the normal local
+  database while leaving PostgreSQL coverage opt-in in the automated tests.
 - Production load, backup/restore and HA behaviour were not part of this task.
 - The shared wall-hold geometry limitation recorded under Task 2B.3 is
   unchanged.
@@ -2120,8 +2129,107 @@ order, and the selection. It never calls the draft save or publish endpoints.
 Full commands, output summaries and the schema evidence are in
 [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
 
-Phase 3 itself remains `IN_PROGRESS`: the final cross-feature regression sweep
-is separate from this verification and was not started.
+---
+
+### Task 3.2 — PostgreSQL as the primary development database (`DONE`)
+
+**Scope**
+
+- Make PostgreSQL 18.6 the normal local database without removing SQLite from
+  the isolated test suite or the documented recovery path.
+- Create a dedicated `arch_dev_pg` database and a restricted `arch_dev` role;
+  preserve `backend/arch_dev.db` and the Task 3.1 verification databases.
+- Verify migrations, repeatable seeding, live HTTP flows, restart persistence,
+  the health check's failure behaviour and the frontend against PostgreSQL.
+
+**Configuration**
+
+- PostgreSQL 18.6 client and server were confirmed again; the
+  `postgresql-x64-18` service is running on `127.0.0.1:5432`.
+- Created `arch_dev_pg` from `template0` (UTF8), owned by `arch_dev`, and
+  created the separate `arch_dev_pg_test` database for opt-in tests. Both were
+  absent before this task; no existing database or role was dropped or
+  recreated.
+- `arch_dev` is `LOGIN`, `NOSUPERUSER`, `NOINHERIT`, `NOCREATEROLE`,
+  `NOCREATEDB`, `NOREPLICATION` and `NOBYPASSRLS`, with `USAGE, CREATE` on the
+  `public` schema of its two databases. It is not an administrative role.
+- The local `.env` points at `arch_dev_pg`. `backend/app/config.py` and
+  `backend/alembic.ini` now default to the local PostgreSQL database (with no
+  password in the default URL); an unconfigured database therefore fails
+  clearly instead of opening SQLite. `.env.example` documents PostgreSQL 18.6
+  as the normal setting and SQLite as the explicit fallback. Passwords remain
+  environment-only and `.env` stays git-ignored.
+- `backend/app/db.py` now gives PostgreSQL a five-second `connect_timeout`.
+  A deliberately unreachable URL returned
+  `{"status":"degraded","database":"postgresql","database_reachable":false,...}`
+  promptly; the API did not switch to SQLite. Two unit tests cover the
+  connection arguments.
+- `uv run alembic upgrade head`, `current` and `check` passed against
+  `arch_dev_pg`; `alembic current` is `83693e68129f (head)` and `check`
+  reported no new operations.
+- `uv run python -m app.seed --demo` ran three times. The row counts before and
+  after the final repeat were identical: 3 users, 3 walls, 6 routes,
+  4 achievements, 6 route votes, 1 staff task, 3 products, 1 course, 1 event,
+  6 services, 6 rules, 12 FAQ entries, 7 opening hours and 1 gym record.
+
+**Live verification**
+
+- The API ran on port `8010` against `arch_dev_pg`; health reported
+  `database: "postgresql"` and `database_reachable: true`.
+- **55 live HTTP checks passed:** public content and route filters; demo-account
+  login; member dashboard; attempt creation and read-back; leaderboard and
+  published rules; route creation and archive; wall-hold create/edit/delete;
+  ordered draft roles; draft privacy; staff publication refusal; admin
+  publication; supersession; published-hold deletion refusal; permission
+  enforcement; contact storage, inbox, refusal and handling.
+- The API was stopped and restarted. **8 post-restart checks passed:** health,
+  the published overlay, the attempt, the created route, the handled contact
+  message and the published hold set all persisted. The verification attempt
+  was then removed.
+- API logs contained no SQL errors, tracebacks or connection warnings during
+  the successful run.
+- The frontend dev server was pointed at the PostgreSQL API. The browser check
+  reported all 20 pages clean (no console, hydration or network errors), and
+  the route directory rendered `LIVE ROUTES`, the six seeded routes and their
+  walls from PostgreSQL. No sample-data badge was shown.
+
+**Verification suite**
+
+- Backend: `214 passed, 2 skipped` (the two opt-in PostgreSQL tests skip by
+  default); Ruff check and format check clean.
+- Opt-in PostgreSQL tests against `arch_dev_pg_test`: `2 passed`; each test
+  creates and drops a temporary schema.
+- Frontend: `bun.cmd run typecheck` clean; `bun.cmd run test` **158 passed in
+  17 files**; `bun.cmd run lint` 0 errors and 7 existing `react-refresh`
+  warnings; `bun.cmd run build` succeeded.
+- SQLite `backend/arch_dev.db` was not written to. It retains 8 users, 6
+  routes, 3 wall holds, 1 hold set, 3 route holds, 12 achievements and 6 votes;
+  its last write time is before this task and its SHA-256 is recorded in
+  [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
+- PostgreSQL was seeded with the three demo users. The SQLite browser-test
+  accounts, achievements, votes and annotations were not imported or merged.
+
+**Verification records**
+
+- `arch_dev_pg` contains one archived `VERIFY PostgreSQL dev route …`, three
+  wall holds and two hold sets (one superseded, one published) on a seeded
+  route, and one handled contact message. These are safe verification records,
+  not real customer data.
+
+**Limitations**
+
+- Production backup/restore, HA, monitoring and a production-scoped role were
+  not part of this task.
+- SQLite remains the ordinary test-suite database; PostgreSQL coverage is the
+  live smoke test plus the opt-in tests.
+- The shared wall-hold geometry limitation recorded under Task 2B.3 is
+  unchanged.
+
+**Next:** the final cross-feature regression sweep that closes Phase 3, then
+Phase 4 (admin customer management).
+
+Phase 3 itself remains `IN_PROGRESS`: Tasks 3.1 and 3.2 are complete, but the
+separate final cross-feature regression sweep has not started.
 
 ---
 
@@ -2131,7 +2239,7 @@ is separate from this verification and was not started.
 | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Keep TanStack Start + Tailwind v4 + TanStack Router                                      | Existing Lovable stack; the brief says not to migrate without cause.                                                              |
 | New Python/FastAPI backend in `backend/`                                                 | The brief and README both prefer FastAPI + PostgreSQL. The existing Supabase scaffold has no tables and is not a working backend. |
-| SQLAlchemy 2.0 + Alembic, PostgreSQL target with SQLite dev fallback                     | PostgreSQL 18.6 is available and verified; SQLite keeps local development and the normal test suite fast.                         |
+| SQLAlchemy 2.0 + Alembic, PostgreSQL 18.6 as the normal local database with SQLite test/recovery fallback | PostgreSQL is the deployment target and now the verified local workflow; SQLite keeps the ordinary test suite fast and isolated. |
 | Frontend talks to the backend through `src/services/api.ts`                              | Keeps mock data isolated behind one replaceable boundary; the existing UI does not need rewriting.                                |
 | Keep the mock adapter as an explicit offline fallback                                    | The site must still render when the backend is not running, and mock data must stay clearly labelled.                             |
 | Passwords hashed with `bcrypt`; JWT access tokens issued by the backend                  | Required by the brief; avoids adding a JS auth dependency to the frontend.                                                        |
@@ -2165,18 +2273,30 @@ is separate from this verification and was not started.
 | Staff          | Own tasks with status controls and checklists                                                      |
 | Administration | Summary, member records, route management, task creation, event publishing                         |
 | Assistant      | Embedded in the site, grounded on the published FAQ, honest about its limits                       |
-| Database       | SQLite default for development/tests; PostgreSQL 18.6 migrations, seed and live API verified       |
-| Backend        | FastAPI, SQLAlchemy 2.0, Alembic migrations, 212 tests                                             |
+| Database       | PostgreSQL 18.6 normal local development; SQLite isolated tests and explicit fallback               |
+| Backend        | FastAPI, SQLAlchemy 2.0, Alembic migrations, 214 tests                                             |
 | Frontend       | 158 tests, typecheck clean, lint has warnings only, production build verified                      |
 
 ### How to run it
 
-```bash
-bun install && cd backend && uv sync --extra dev && cd ..
-cp .env.example .env
-cd backend && uv run python -m app.seed --demo && cd ..
-cd backend && uv run uvicorn app.main:app --port 8000   # terminal 1
-bun run dev                                               # terminal 2
+Create the local `arch_dev_pg` database and `arch_dev` role, then set the
+PostgreSQL `DATABASE_URL` in `.env` (see `LOCAL_DEVELOPMENT.md` §3–4).
+
+```powershell
+bun.cmd install
+cd backend
+uv sync --extra dev
+cd ..
+Copy-Item .env.example .env
+# Set the generated arch_dev password in DATABASE_URL, then:
+cd backend
+uv run python -m app.seed --demo
+uv run uvicorn app.main:app --port 8000   # terminal 1
+```
+
+```powershell
+# From the repository root, in a second terminal
+bun.cmd run dev
 ```
 
 - Website: <http://localhost:8080>
@@ -2187,10 +2307,12 @@ Full instructions are in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) and
 
 ### Known limitations
 
-- **PostgreSQL is verified, but SQLite is still the default.** Migrations,
-  repeatable seeding and a live API smoke test were run against PostgreSQL
-  18.6. The ordinary test suite and local development still use SQLite, and the
-  PostgreSQL tests require an explicitly configured server; see
+- **PostgreSQL is the normal local database, but a production PostgreSQL
+  deployment and PostgreSQL CI are still unexercised.** Migrations, repeatable
+  seeding, live HTTP flows, restart persistence and the frontend were verified
+  against local PostgreSQL 18.6. The ordinary test suite deliberately uses an
+  isolated SQLite database, and the PostgreSQL integration tests require an
+  explicitly configured server; see
   [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
 - **The deployment has not been performed.** The build produces a Cloudflare
   Worker that has not been deployed.
