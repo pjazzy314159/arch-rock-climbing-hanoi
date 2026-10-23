@@ -242,7 +242,11 @@ export type ApiTask = {
   assignee_id: number | null;
   assignee_name: string | null;
   created_by_id: number | null;
+  created_by_name: string | null;
   event_id: number | null;
+  event_title: string | null;
+  event_starts_at: string | null;
+  event_ends_at: string | null;
   created_at: string;
   checklist: ApiChecklistItem[];
 };
@@ -268,6 +272,14 @@ export type ApiAdminSummary = {
   open_tasks: number;
   pending_agreements: number;
   products: number;
+};
+
+/** The minimum identity fields for an assignable staff member or administrator. */
+export type ApiAdminAssignee = {
+  id: number;
+  full_name: string;
+  email: string;
+  role: "staff" | "admin";
 };
 
 /** A customer record, as the administrator sees it. */

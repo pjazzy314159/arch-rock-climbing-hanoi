@@ -16,6 +16,7 @@
 
 import type {
   ApiAchievement,
+  ApiAdminAssignee,
   ApiAdminCustomerDetail,
   ApiAdminCustomerPage,
   ApiAdminMember,
@@ -323,8 +324,18 @@ export const memberApi = {
 export const staffApi = {
   myTasks: (all = false) => apiRequest<ApiTask[]>(`/api/staff/tasks${all ? "?all=true" : ""}`),
 
-  updateTask: (taskId: number, body: { status?: string; title?: string; description?: string }) =>
-    apiRequest<ApiTask>(`/api/staff/tasks/${taskId}`, { method: "PATCH", body }),
+  updateTask: (
+    taskId: number,
+    body: {
+      status?: string;
+      title?: string;
+      description?: string;
+      assignee_id?: number | null;
+      priority?: string;
+      due_at?: string | null;
+      event_id?: number | null;
+    },
+  ) => apiRequest<ApiTask>(`/api/staff/tasks/${taskId}`, { method: "PATCH", body }),
 
   updateTaskStatus: (taskId: number, status: string) =>
     apiRequest<ApiTask>(`/api/staff/tasks/${taskId}/status`, { method: "POST", body: { status } }),
@@ -339,6 +350,14 @@ export const staffApi = {
     apiRequest<ApiChecklistItem>(`/api/staff/checklist/${itemId}`, { method: "PATCH", body }),
 
   shifts: () => apiRequest<ApiShift[]>("/api/staff/shifts"),
+
+  createShift: (body: {
+    staff_id: number;
+    starts_at: string;
+    ends_at: string;
+    role?: string;
+    notes?: string;
+  }) => apiRequest<ApiShift>("/api/staff/shifts", { method: "POST", body }),
 };
 
 /** The endpoints only an administrator may use. */
@@ -349,6 +368,8 @@ export const adminApi = {
     apiRequest<ApiAdminMember[]>(
       `/api/admin/members${search ? `?search=${encodeURIComponent(search)}` : ""}`,
     ),
+
+  assignees: () => apiRequest<ApiAdminAssignee[]>("/api/admin/assignees"),
 
   customers: (
     params: {
@@ -400,6 +421,8 @@ export const adminApi = {
     assignee_id?: number | null;
     priority?: string;
     due_at?: string | null;
+    event_id?: number | null;
+    checklist?: { label: string; position?: number }[];
   }) => apiRequest<ApiTask>("/api/staff/tasks", { method: "POST", body }),
 
   events: () => apiRequest<ApiEvent[]>("/api/admin/events"),

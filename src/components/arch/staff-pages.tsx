@@ -17,11 +17,26 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { adminApi, staffApi, ApiError, ApiUnavailableError } from "@/services/api";
 import { WALL_TYPES, WALL_TYPE_LABELS, type WallType } from "@/services/arch";
 import { useSession } from "@/services/session";
-import type { ApiRouteSummary, ApiTask } from "@/services/types";
+import type {
+  ApiAdminAssignee,
+  ApiEvent,
+  ApiRouteSummary,
+  ApiShift,
+  ApiTask,
+} from "@/services/types";
 import { CustomersDirectoryPanel } from "./customer-pages";
 import { EmptyNotice } from "./data-state";
 import { PageHeading, TextLink } from "./shared";
@@ -36,6 +51,12 @@ const TASK_STATUSES = [
   { value: "done", label: "Done" },
 ] as const;
 
+const TASK_PRIORITIES = [
+  { value: "low", label: "Low" },
+  { value: "normal", label: "Normal" },
+  { value: "high", label: "High" },
+] as const;
+
 function errorMessage(caught: unknown, fallback: string): string {
   if (caught instanceof ApiUnavailableError) {
     return "The ARCH service is not reachable right now. Please try again in a moment.";
@@ -46,6 +67,47 @@ function errorMessage(caught: unknown, fallback: string): string {
     return caught.message;
   }
   return fallback;
+}
+
+function toDateTimeLocal(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function shiftTime(shift: ApiShift): number {
+  const time = new Date(shift.starts_at).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function splitShifts(shifts: ApiShift[]): { upcoming: ApiShift[]; past: ApiShift[] } {
+  const now = Date.now();
+  const sorted = [...shifts].sort((left, right) => shiftTime(left) - shiftTime(right));
+  const upcoming = sorted.filter((shift) => {
+    const end = new Date(shift.ends_at).getTime();
+    return Number.isNaN(end) ? false : end >= now;
+  });
+  const past = sorted
+    .filter((shift) => {
+      const end = new Date(shift.ends_at).getTime();
+      return Number.isNaN(end) ? true : end < now;
+    })
+    .reverse();
+  return { upcoming, past };
 }
 
 /** Shown when the signed-in account may not open the page. */
@@ -194,6 +256,16 @@ function TaskCard({ task }: { task: ApiTask }) {
       </div>
       {task.description && <p className="task-card-description">{task.description}</p>}
 
+      {task.event_title && (
+        <p className="task-card-event">
+          <CalendarDays size={14} />
+          <span>
+            {task.event_title}
+            {task.event_starts_at ? ` · ${formatDateTime(task.event_starts_at)}` : ""}
+          </span>
+        </p>
+      )}
+
       {task.checklist.length > 0 && (
         <ul className="checklist">
           {task.checklist.map((item) => (
@@ -247,6 +319,61 @@ function TaskCard({ task }: { task: ApiTask }) {
   );
 }
 
+function ShiftRow({ shift }: { shift: ApiShift }) {
+  return (
+    <article className="event-row">
+      <div className="event-date">
+        <CalendarDays size={16} />
+        <span>{formatDateTime(shift.starts_at)}</span>
+      </div>
+      <div className="event-detail">
+        <h2>{shift.role || "Shift"}</h2>
+        <p>{shift.staff_name ?? "Staff member"}</p>
+        {shift.notes && <p>{shift.notes}</p>}
+      </div>
+      <div className="event-meta">
+        <span>Ends {formatDateTime(shift.ends_at)}</span>
+      </div>
+    </article>
+  );
+}
+
+function ShiftList({
+  shifts,
+  emptyTitle = "No shifts scheduled.",
+  emptyDescription = "When an administrator adds you to a shift it will appear here.",
+}: {
+  shifts: ApiShift[];
+  emptyTitle?: string;
+  emptyDescription?: string;
+}) {
+  const { upcoming, past } = splitShifts(shifts);
+
+  if (shifts.length === 0) {
+    return <EmptyNotice title={emptyTitle} description={emptyDescription} />;
+  }
+
+  return (
+    <div className="event-list">
+      {upcoming.length === 0 ? (
+        <p className="muted-note">No upcoming shifts. Earlier shifts are listed below.</p>
+      ) : (
+        upcoming.map((shift) => <ShiftRow key={shift.id} shift={shift} />)
+      )}
+      {past.length > 0 && (
+        <details className="content-block">
+          <summary>Earlier shifts ({past.length})</summary>
+          <div className="event-list">
+            {past.map((shift) => (
+              <ShiftRow key={shift.id} shift={shift} />
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 /** The signed-in staff member's own tasks. */
 export function StaffTasksPage() {
   const { status, user } = useSession();
@@ -263,6 +390,13 @@ export function StaffTasksPage() {
     queryFn: () => staffApi.myTasks(),
     // Only ask for staff work once the account is known to be staff: a
     // customer would only ever get a refusal from the backend.
+    enabled: status === "authenticated" && (user?.role === "staff" || user?.role === "admin"),
+    retry: false,
+  });
+
+  const shifts = useQuery({
+    queryKey: ["staff", "shifts"],
+    queryFn: () => staffApi.shifts(),
     enabled: status === "authenticated" && (user?.role === "staff" || user?.role === "admin"),
     retry: false,
   });
@@ -301,6 +435,7 @@ export function StaffTasksPage() {
       setTitle("");
       setDescription("");
       await queryClient.invalidateQueries({ queryKey: ["staff", "tasks"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "tasks"] });
     } catch (caught) {
       setError(errorMessage(caught, "The task could not be created."));
     } finally {
@@ -353,6 +488,27 @@ export function StaffTasksPage() {
         </div>
       )}
 
+      <section className="content-block">
+        <div className="content-block-head">
+          <CalendarDays size={22} />
+          <div>
+            <h2>My shifts</h2>
+            <p>Upcoming shifts first, with earlier shifts kept separate.</p>
+          </div>
+        </div>
+        {shifts.isPending ? (
+          <div className="loading-block">
+            <p>Loading your shifts…</p>
+          </div>
+        ) : shifts.isError ? (
+          <p className="data-banner" role="alert">
+            <span>Your shifts could not be loaded.</span>
+          </p>
+        ) : (
+          <ShiftList shifts={shifts.data ?? []} />
+        )}
+      </section>
+
       {user?.role === "admin" && (
         <section className="content-block">
           <div className="content-block-head">
@@ -399,7 +555,7 @@ export function StaffTasksPage() {
 /* Administration                                                             */
 /* -------------------------------------------------------------------------- */
 
-type AdminTab = "Customers" | "Routes" | "Tasks" | "Events" | "Messages";
+type AdminTab = "Customers" | "Routes" | "Tasks" | "Shifts" | "Events" | "Messages";
 
 function MessagesTab() {
   const queryClient = useQueryClient();
@@ -661,38 +817,575 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
   );
 }
 
-function TasksTab({ tasks }: { tasks: ApiTask[] }) {
+function useTaskOptions() {
+  const assignees = useQuery({
+    queryKey: ["admin", "assignees"],
+    queryFn: () => adminApi.assignees(),
+    retry: false,
+  });
+  const events = useQuery({
+    queryKey: ["admin", "events"],
+    queryFn: () => adminApi.events(),
+    retry: false,
+  });
+  return { assignees, events };
+}
+
+function OptionStatus({
+  label,
+  query,
+}: {
+  label: string;
+  query:
+    ReturnType<typeof useTaskOptions>["assignees"] | ReturnType<typeof useTaskOptions>["events"];
+}) {
+  if (query.isPending) {
+    return <p className="muted-note">Loading {label.toLowerCase()}…</p>;
+  }
+  if (query.isError) {
+    return (
+      <div className="feedback error" role="alert">
+        <span>{label} could not be loaded.</span>{" "}
+        <Button type="button" variant="outline" size="sm" onClick={() => query.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+  if ((query.data ?? []).length === 0) {
+    return <p className="muted-note">No {label.toLowerCase()} available.</p>;
+  }
+  return null;
+}
+
+function TaskForm({
+  task,
+  submitLabel,
+  onSaved,
+}: {
+  task?: ApiTask;
+  submitLabel: string;
+  onSaved?: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const hydrated = useHydrated();
+  const { assignees, events } = useTaskOptions();
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [description, setDescription] = useState(task?.description ?? "");
+  const [assigneeId, setAssigneeId] = useState(task?.assignee_id?.toString() ?? "");
+  const [priority, setPriority] = useState<ApiTask["priority"]>(task?.priority ?? "normal");
+  const [dueAt, setDueAt] = useState(toDateTimeLocal(task?.due_at ?? null));
+  const [eventId, setEventId] = useState(task?.event_id?.toString() ?? "");
+  const [checklistText, setChecklistText] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const optionsPending = assignees.isPending || events.isPending;
+  const optionsError = assignees.isError || events.isError;
+  const submitDisabled = !hydrated || pending || optionsPending || optionsError;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+    if (trimmedTitle.length < 3) {
+      setError("Give the task a title of at least 3 characters.");
+      return;
+    }
+    if (dueAt && Number.isNaN(new Date(dueAt).getTime())) {
+      setError("Choose a valid due date and time.");
+      return;
+    }
+    if (optionsPending) {
+      setError("Wait for the assignee and event options to load.");
+      return;
+    }
+    if (optionsError) {
+      setError("Retry the failed assignee or event options before saving.");
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      if (!task) {
+        const checklist = checklistText
+          .split("\n")
+          .map((label) => label.trim())
+          .filter(Boolean)
+          .map((label) => ({ label }));
+        await adminApi.createTask({
+          title: trimmedTitle,
+          description: trimmedDescription,
+          assignee_id: assigneeId ? Number(assigneeId) : null,
+          priority,
+          due_at: dueAt ? new Date(dueAt).toISOString() : null,
+          event_id: eventId ? Number(eventId) : null,
+          checklist,
+        });
+        setTitle("");
+        setDescription("");
+        setAssigneeId("");
+        setPriority("normal");
+        setDueAt("");
+        setEventId("");
+        setChecklistText("");
+        setSuccess("Task created.");
+      } else {
+        const body: {
+          title?: string;
+          description?: string;
+          assignee_id?: number | null;
+          priority?: string;
+          due_at?: string | null;
+          event_id?: number | null;
+        } = {};
+        if (trimmedTitle !== task.title) body.title = trimmedTitle;
+        if (trimmedDescription !== task.description) body.description = trimmedDescription;
+        if (assigneeId !== (task.assignee_id?.toString() ?? "")) {
+          body.assignee_id = assigneeId ? Number(assigneeId) : null;
+        }
+        if (priority !== task.priority) body.priority = priority;
+        if (dueAt !== toDateTimeLocal(task.due_at)) {
+          body.due_at = dueAt ? new Date(dueAt).toISOString() : null;
+        }
+        if (eventId !== (task.event_id?.toString() ?? "")) {
+          body.event_id = eventId ? Number(eventId) : null;
+        }
+        if (Object.keys(body).length === 0) {
+          setError("No changes to save.");
+          return;
+        }
+        await staffApi.updateTask(task.id, body);
+        onSaved?.();
+      }
+      await queryClient.invalidateQueries({ queryKey: ["admin", "tasks"] });
+      await queryClient.invalidateQueries({ queryKey: ["staff", "tasks"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "summary"] });
+    } catch (caught) {
+      setError(errorMessage(caught, "The task could not be saved."));
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
-    <div className="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Task</th>
-            <th>Assignee</th>
-            <th>Priority</th>
-            <th>Status</th>
-            <th>Due</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tasks.map((task) => (
-            <tr key={task.id}>
-              <td>
-                <strong>{task.title}</strong>
-              </td>
-              <td>{task.assignee_name ?? "Unassigned"}</td>
-              <td>{task.priority}</td>
-              <td>
-                <span className={task.status === "done" ? "status-sent" : "status-project"}>
-                  {task.status.replace("_", " ")}
-                </span>
-              </td>
-              <td>{task.due_at ? task.due_at.slice(0, 10) : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <form className="profile-form" onSubmit={submit}>
+      <div className="form-row">
+        <label>
+          Title
+          <input
+            required
+            value={title}
+            minLength={3}
+            onChange={(event) => setTitle(event.target.value)}
+          />
+        </label>
+        <label>
+          Priority
+          <select
+            value={priority}
+            onChange={(event) => setPriority(event.target.value as ApiTask["priority"])}
+          >
+            {TASK_PRIORITIES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label>
+        Description <span className="label-hint">optional</span>
+        <textarea
+          rows={3}
+          maxLength={4000}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </label>
+      <div className="form-row">
+        <label>
+          Assignee <span className="label-hint">optional</span>
+          <select
+            value={assigneeId}
+            disabled={assignees.isPending || assignees.isError}
+            onChange={(event) => setAssigneeId(event.target.value)}
+          >
+            <option value="">Unassigned</option>
+            {(assignees.data ?? []).map((assignee) => (
+              <option key={assignee.id} value={assignee.id}>
+                {assignee.full_name} ({assignee.email})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Event <span className="label-hint">optional</span>
+          <select
+            value={eventId}
+            disabled={events.isPending || events.isError}
+            onChange={(event) => setEventId(event.target.value)}
+          >
+            <option value="">No event</option>
+            {(events.data ?? []).map((event) => (
+              <option key={event.id} value={event.id}>
+                {event.title} · {formatDateTime(event.starts_at)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <OptionStatus label="Assignee options" query={assignees} />
+      <OptionStatus label="Event options" query={events} />
+      <label>
+        Due date and time <span className="label-hint">optional</span>
+        <input
+          type="datetime-local"
+          value={dueAt}
+          onChange={(event) => setDueAt(event.target.value)}
+        />
+      </label>
+      {!task && (
+        <label>
+          Initial checklist <span className="label-hint">one item per line</span>
+          <textarea
+            rows={3}
+            value={checklistText}
+            placeholder="Collect the holds&#10;Check the lighting"
+            onChange={(event) => setChecklistText(event.target.value)}
+          />
+        </label>
+      )}
+      {task && (
+        <p className="auth-note">
+          Checklist items are managed on the staff task card. This form only changes the task
+          details, assignment and event.
+        </p>
+      )}
+      {error && (
+        <p className="feedback error" role="alert">
+          {error}
+        </p>
+      )}
+      {success && (
+        <p className="feedback" role="status">
+          {success}
+        </p>
+      )}
+      <div className="form-row">
+        <Button type="submit" disabled={submitDisabled}>
+          {pending ? "Saving…" : submitLabel}
+        </Button>
+        {task && (
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Cancel
+            </Button>
+          </DialogClose>
+        )}
+      </div>
+    </form>
+  );
+}
+
+function TaskEditDialog({
+  task,
+  open,
+  onOpenChange,
+}: {
+  task: ApiTask;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit task</DialogTitle>
+          <DialogDescription>
+            Only changed fields are sent to the API. Clearing an optional field sends an explicit
+            null so an unchanged value is never silently removed.
+          </DialogDescription>
+        </DialogHeader>
+        <TaskForm
+          key={task.id}
+          task={task}
+          submitLabel="Save changes"
+          onSaved={() => onOpenChange(false)}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TasksTab({ tasks }: { tasks: ApiTask[] }) {
+  const [editingTask, setEditingTask] = useState<ApiTask | null>(null);
+
+  return (
+    <>
+      {tasks.length === 0 ? (
+        <EmptyNotice
+          title="No tasks yet."
+          description="Create the first task below and assign it to a staff member or administrator."
+        />
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Assignee</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Due</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((task) => (
+                <tr key={task.id}>
+                  <td>
+                    <strong>{task.title}</strong>
+                    <small>Created by {task.created_by_name ?? "an administrator"}</small>
+                    {task.event_title && (
+                      <small>
+                        Event: {task.event_title}
+                        {task.event_starts_at ? ` · ${formatDateTime(task.event_starts_at)}` : ""}
+                      </small>
+                    )}
+                  </td>
+                  <td>{task.assignee_name ?? "Unassigned"}</td>
+                  <td>{task.priority}</td>
+                  <td>
+                    <span className={task.status === "done" ? "status-sent" : "status-project"}>
+                      {task.status.replace("_", " ")}
+                    </span>
+                  </td>
+                  <td>{task.due_at ? formatDateTime(task.due_at) : "—"}</td>
+                  <td>
+                    <Button variant="outline" size="sm" onClick={() => setEditingTask(task)}>
+                      <PenLine size={14} /> Edit
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <section className="content-block">
+        <div className="content-block-head">
+          <Plus size={22} />
+          <div>
+            <h2>Create and assign a task</h2>
+            <p>Assignments, priority, due date and event are optional.</p>
+          </div>
+        </div>
+        <TaskForm submitLabel="Create task" />
+      </section>
+
+      {editingTask && (
+        <TaskEditDialog
+          task={editingTask}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditingTask(null);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function AdminShiftsTab() {
+  const queryClient = useQueryClient();
+  const hydrated = useHydrated();
+  const assignees = useQuery({
+    queryKey: ["admin", "assignees"],
+    queryFn: () => adminApi.assignees(),
+    retry: false,
+  });
+  const shifts = useQuery({
+    queryKey: ["admin", "shifts"],
+    queryFn: () => staffApi.shifts(),
+    retry: false,
+  });
+  const [staffId, setStaffId] = useState("");
+  const [startsAt, setStartsAt] = useState("");
+  const [endsAt, setEndsAt] = useState("");
+  const [role, setRole] = useState("Floor staff");
+  const [notes, setNotes] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const optionsPending = assignees.isPending;
+  const optionsError = assignees.isError;
+  const noStaff = !optionsPending && !optionsError && (assignees.data ?? []).length === 0;
+
+  async function createShift(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    if (!staffId) {
+      setError("Choose a staff member for the shift.");
+      return;
+    }
+    if (!startsAt || !endsAt) {
+      setError("Choose a start and end time.");
+      return;
+    }
+    const start = new Date(startsAt);
+    const end = new Date(endsAt);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      setError("Choose valid start and end times.");
+      return;
+    }
+    if (end <= start) {
+      setError("The shift must end after it starts.");
+      return;
+    }
+    if (optionsPending) {
+      setError("Wait for the staff options to load.");
+      return;
+    }
+    if (optionsError) {
+      setError("Retry the staff options before scheduling.");
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await staffApi.createShift({
+        staff_id: Number(staffId),
+        starts_at: start.toISOString(),
+        ends_at: end.toISOString(),
+        role: role.trim() || "Floor staff",
+        notes: notes.trim(),
+      });
+      setStaffId("");
+      setStartsAt("");
+      setEndsAt("");
+      setRole("Floor staff");
+      setNotes("");
+      setSuccess("Shift scheduled.");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "shifts"] });
+      await queryClient.invalidateQueries({ queryKey: ["staff", "shifts"] });
+    } catch (caught) {
+      setError(errorMessage(caught, "The shift could not be created."));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <>
+      {shifts.isPending ? (
+        <div className="loading-block">
+          <p>Loading shifts…</p>
+        </div>
+      ) : shifts.isError ? (
+        <p className="data-banner" role="alert">
+          <span>Shifts could not be loaded.</span>
+        </p>
+      ) : (
+        <ShiftList
+          shifts={shifts.data ?? []}
+          emptyTitle="No shifts scheduled."
+          emptyDescription="Create a shift below to schedule the team."
+        />
+      )}
+
+      <section className="content-block">
+        <div className="content-block-head">
+          <Plus size={22} />
+          <div>
+            <h2>Schedule a shift</h2>
+            <p>Use the staff options and the shift's actual start and end times.</p>
+          </div>
+        </div>
+        <form className="profile-form" onSubmit={createShift}>
+          <div className="form-row">
+            <label>
+              Staff member
+              <select
+                required
+                value={staffId}
+                disabled={assignees.isPending || assignees.isError || noStaff}
+                onChange={(event) => setStaffId(event.target.value)}
+              >
+                <option value="">Choose a staff member</option>
+                {(assignees.data ?? []).map((assignee) => (
+                  <option key={assignee.id} value={assignee.id}>
+                    {assignee.full_name} ({assignee.email})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Role
+              <input
+                value={role}
+                maxLength={80}
+                onChange={(event) => setRole(event.target.value)}
+              />
+            </label>
+          </div>
+          <OptionStatus label="Staff options" query={assignees} />
+          <div className="form-row">
+            <label>
+              Starts
+              <input
+                required
+                type="datetime-local"
+                value={startsAt}
+                onChange={(event) => setStartsAt(event.target.value)}
+              />
+            </label>
+            <label>
+              Ends
+              <input
+                required
+                type="datetime-local"
+                value={endsAt}
+                onChange={(event) => setEndsAt(event.target.value)}
+              />
+            </label>
+          </div>
+          <label>
+            Notes <span className="label-hint">optional</span>
+            <textarea
+              rows={3}
+              maxLength={2000}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
+          </label>
+          {error && (
+            <p className="feedback error" role="alert">
+              {error}
+            </p>
+          )}
+          {success && (
+            <p className="feedback" role="status">
+              {success}
+            </p>
+          )}
+          <Button
+            type="submit"
+            disabled={!hydrated || pending || optionsPending || optionsError || noStaff}
+          >
+            {pending ? "Scheduling…" : "Schedule shift"}
+          </Button>
+        </form>
+      </section>
+    </>
   );
 }
 
@@ -829,7 +1522,7 @@ export function AdminDashboardPage() {
       <PageHeading
         eyebrow="ARCH OPERATIONS"
         title="The gym, at a glance."
-        description="Customers, routes, tasks and events — with the checks the backend makes on every request."
+        description="Customers, routes, tasks, shifts and events — with the checks the backend makes on every request."
       />
       {sessionLoading ? (
         <div className="loading-block" aria-busy="true">
@@ -880,7 +1573,7 @@ export function AdminDashboardPage() {
 
           <div className="admin-toolbar">
             <div className="category-tabs">
-              {(["Customers", "Routes", "Tasks", "Events", "Messages"] as AdminTab[]).map(
+              {(["Customers", "Routes", "Tasks", "Shifts", "Events", "Messages"] as AdminTab[]).map(
                 (option) => (
                   <Button
                     key={option}
@@ -901,9 +1594,14 @@ export function AdminDashboardPage() {
               <div className="loading-block">
                 <p>Loading tasks…</p>
               </div>
+            ) : tasks.isError ? (
+              <p className="data-banner" role="alert">
+                <span>Tasks could not be loaded.</span>
+              </p>
             ) : (
               <TasksTab tasks={tasks.data ?? []} />
             ))}
+          {tab === "Shifts" && <AdminShiftsTab />}
           {tab === "Events" && <EventsTab />}
           {tab === "Messages" && <MessagesTab />}
         </>
@@ -935,4 +1633,5 @@ function Metric({
   );
 }
 
+export { AdminShiftsTab, ShiftList, TaskEditDialog, TaskForm };
 export { AlertTriangle, Check, Users, X };

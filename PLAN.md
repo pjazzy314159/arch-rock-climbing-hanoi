@@ -186,8 +186,9 @@ questions that still require ARCH confirmation.
 
 #### Phase 5 — Staff operations
 
-**Status:** `IN_PROGRESS` — design completed in Task 5.1 and backend contract
-hardening completed in Task 5.2; Tasks 5.3–5.5 remain.
+**Status:** `IN_PROGRESS` — design completed in Task 5.1, backend contract
+hardening in Task 5.2 and administrator assignment/shift workspace in Task 5.3;
+Tasks 5.4–5.5 remain.
 
 **Design document:** [STAFF_OPERATIONS_DESIGN.md](STAFF_OPERATIONS_DESIGN.md)
 
@@ -203,9 +204,10 @@ hardening completed in Task 5.2; Tasks 5.3–5.5 remain.
   and `GET /api/admin/tasks` lists every task.
 - `GET /api/staff/shifts` already returns the caller's shifts and the whole team
   for administrators; `POST /api/staff/shifts` is administrator-only.
-- The `/staff` page already shows own task cards, status controls and checklist
-  controls. The `/admin` Tasks tab is read-only; there is no assignee selector,
-  no admin task form, and no shift UI anywhere.
+- The `/staff` page shows own task cards with event context, status controls and
+  checklist controls, plus the signed-in member's own shifts. The `/admin` Tasks
+  tab now has a creation form and edit/reassign dialog; `/admin` also has a
+  basic Shifts tab. Neither view adds shift edit/cancellation or event links.
 - The backend tests cover customer/anonymous refusals, own-only task and shift
   visibility, cross-staff denial for status and checklist, admin-only creation
   and assignment, customer-assignee rejection and invalid status enum values.
@@ -213,17 +215,20 @@ hardening completed in Task 5.2; Tasks 5.3–5.5 remain.
   not staff task/checklist/shift persistence.
 
 **Main gaps and risks:** Task 5.2 resolved event validation/context, PATCH clear
-semantics and server-assigned checklist ordering. Remaining: no status
-transition policy (the API stays permissive pending an ARCH decision); no
-administrator assignment UI; no shift UI; no audit history for status/assignee/
-checklist changes; no staff PostgreSQL integration; and no database constraint
-against concurrent checklist-position collisions.
+semantics and server-assigned checklist ordering. Task 5.3 added administrator
+task creation/assignment/reassignment and basic shift viewing/creation. Remaining:
+no approved status transition policy (the API stays permissive pending an ARCH
+decision); no cancelled-task filter; no shift edit, reassignment or cancellation;
+no event-linked shifts; no audit history for status/assignee/checklist changes;
+no staff PostgreSQL integration; and no database constraint against concurrent
+checklist-position collisions. Inactive assignees and time-zone policy also
+remain open.
 
 | #   | Task | Status | Acceptance criteria |
 | --- | --- | --- | --- |
 | 5.1 | Staff operations audit and design | `DONE` | Existing staff schema, endpoints, permissions, UI and tests inspected; proposed MVP, no duplicate tables, acceptance tests and ARCH questions recorded in `STAFF_OPERATIONS_DESIGN.md`. |
 | 5.2 | Backend contract hardening | `DONE` | Event validation/context and N+1 prevention; omitted-versus-explicit-null PATCH semantics; server-assigned checklist positions; administrator assignee-option endpoint; focused backend tests. Status transitions remain backward-compatible pending an ARCH decision. No migration. |
-| 5.3 | Administrator assignment and shift workspace | `TODO` | Admin task creation/assignment UI and basic shift list/create using existing endpoints; loading/empty/error/permission states. |
+| 5.3 | Administrator assignment and shift workspace | `DONE` | Admin task creation/assignment/reassignment UI with assignee and event options, optional initial checklist and explicit clear semantics; basic shift list/create for administrators and read-only own-shift view for staff; loading/empty/error states and focused component/API tests. No shift edit/cancellation or event-linked shifts. |
 | 5.4 | Staff dashboard context and mobile states | `TODO` | Event-linked task context, upcoming shifts, approved status controls, filters, error/empty states and mobile layout. |
 | 5.5 | PostgreSQL integration and regression | `TODO` | Staff persistence covered on PostgreSQL; browser/frontend checks extended for the staff and administrator workspaces. |
 
@@ -2541,8 +2546,58 @@ administrator assignee options needed by the assignment UI.
 - Event cancellation/deletion effects on linked tasks remain as the existing
   foreign-key behaviour, not a new policy.
 
-**Next:** Task 5.3 — administrator assignment and shift workspace. Do not mark
-Tasks 5.3–5.5 complete until their UI/PostgreSQL evidence exists.
+**Next:** Task 5.4 — staff dashboard context and mobile states. Do not mark
+Tasks 5.4–5.5 complete until their UI/PostgreSQL evidence exists.
+
+### Task 5.3 — Administrator assignment and shift workspace (`DONE`)
+
+**Scope**
+
+- Extend the administrator Tasks tab with a creation form and an edit/reassign
+  dialog using existing task endpoints and `GET /api/admin/assignees`.
+- Add a basic administrator shift list/create view and a read-only own-shift view
+  for staff using the existing shift endpoints.
+- Do not add shift edit, cancellation, reassignment, recurrence or event links.
+  Do not add tables, migrations or new backend rules.
+
+**Implemented**
+
+- Administrator task creation accepts title, description, assignee, priority,
+  due date/time, optional event and an optional initial checklist. Assignee and
+  event options load independently; either failed request disables submission
+  and shows an explicit error so a partial option list cannot silently create an
+  incomplete assignment.
+- The administrator task table shows creator and event context. The edit dialog
+  sends only changed fields and uses explicit nulls for cleared assignee, due
+  date or event. On failure the form stays open with its values and an
+  error message; on success the task queries refresh.
+- New administrator-only Shifts tab lists the team's shifts and creates a shift
+  from a staff selector, start/end date-time, role label and notes. Loading,
+  empty, error and permission states are explicit.
+- The `/staff` workspace shows the signed-in member's own shifts sorted with
+  upcoming first, plus event title and start time on event-linked task cards. A
+  failed shift request is shown as an error, not as an empty schedule.
+- API client types and calls expose the Task 5.2 event/creator fields, the
+  assignee-option route and shift creation without changing the backend.
+
+**Evidence**
+
+- `src/test/staff-workspace.test.tsx` covers task creation, failed option
+  requests disabling submission, validation and mutation failures retaining
+  values, edit/reassign payloads with explicit clears, shift list/create states
+  and shift ordering.
+- `src/test/staff-api.test.ts` covers the new assignee, task and shift calls.
+- Frontend typecheck, ESLint and the full Vitest suite passed after the change.
+- Backend suite and `alembic check` were unchanged; no backend or migration file
+  changed in this task.
+
+**Unresolved policy**
+
+- Status transitions, cancelled-task filtering and mobile review remain Task 5.4.
+- Shift editing, reassignment, cancellation and event-linked shifts remain
+  deferred pending ARCH decisions; `staff_shifts.event_id` was not added.
+- Inactive assignees, time-zone policy, audit history and checklist-position
+  concurrency remain open from Task 5.2.
 
 ---
 
