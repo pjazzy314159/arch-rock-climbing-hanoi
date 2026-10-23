@@ -91,7 +91,7 @@ try {
   check("invents no metric cards", (await page.locator(".metric").count()) === 0);
   check(
     "offers the log-an-attempt action",
-    (await page.getByRole("link", { name: /Log an attempt/ }).count()) > 0,
+    (await page.getByRole("button", { name: /Log an attempt/ }).count()) > 0,
   );
   check(
     "offers the route directory",
@@ -190,15 +190,17 @@ try {
   await noHorizontalOverflow("populated, desktop");
   await page.screenshot({ path: `${shots}/member-dashboard-desktop.png`, fullPage: true });
 
-  const logAttempt = page.getByRole("link", { name: /Log an attempt/ }).first();
+  const logAttempt = page.getByRole("button", { name: /Log an attempt/ }).first();
   await logAttempt.focus();
   check(
     "log-an-attempt takes keyboard focus",
     await logAttempt.evaluate((element) => element === document.activeElement),
   );
   await page.keyboard.press("Enter");
-  await page.waitForURL("**/member/logbook", { timeout: 20_000 });
-  check("log-an-attempt opens the logbook", page.url().endsWith("/member/logbook"));
+  const logDialog = page.getByRole("dialog", { name: "Log a climb" });
+  await logDialog.waitFor({ state: "visible", timeout: 20_000 });
+  check("log-an-attempt opens the log form", await logDialog.isVisible());
+  await page.getByRole("button", { name: "Close log form" }).click();
 
   await page.goto(`${baseUrl}/member`, { waitUntil: "networkidle", timeout: 60_000 });
   await page.waitForTimeout(1200);

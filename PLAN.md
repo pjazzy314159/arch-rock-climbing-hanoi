@@ -107,8 +107,8 @@ Every phase keeps the public website and the backend working.
 | **0** | Audit and planning: `MEMBER_UX_REVIEW.md`, this plan    | `DONE`        | —                                             |
 | **1** | Member dashboard and climbing experience                | `IN_PROGRESS` | Phase 0                                       |
 | **2** | Visual route-setting tool for staff                     | `DONE`        | Phase 1 (route and wall data must be settled) |
-| **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `IN_PROGRESS` | Phase 1 (coordinate with any schema change)   |
-| **4** | Admin customer management                               | `TODO`        | Phase 1, Phase 3                              |
+| **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `DONE`        | Phase 1 (coordinate with any schema change)   |
+| **4** | Admin customer management                               | `IN_PROGRESS` | Phase 1, Phase 3                              |
 | **5** | Staff operations                                        | `TODO`        | Phase 2, Phase 4                              |
 | **6** | ARCH-scoped AI assistant                                | `TODO`        | Phase 1 (route and content data)              |
 | **7** | Handover and local data ownership (`DATA_HANDOVER.md`)  | `TODO`        | Phase 3                                       |
@@ -157,6 +157,7 @@ Every phase keeps the public website and the backend working.
 | --- | ---------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 3.1 | Verify PostgreSQL 18.6 compatibility on a dedicated disposable database                  | `DONE`        | Client/server versions verified; migrations, `alembic check`, repeatable seed, constraints, API operations and permissions exercised on PostgreSQL. |
 | 3.2 | Configure and verify PostgreSQL as the primary local development database                | `DONE`        | Restricted local role and `arch_dev_pg`; PostgreSQL-first docs; repeatable migrations and seed; live HTTP flows; restart persistence; SQLite fallback preserved. |
+| 3.3 | Final cross-feature regression sweep                                                     | `DONE`        | Backend, frontend, PostgreSQL and browser checks re-run; defects fixed and recorded in `REGRESSION_REPORT.md`. |
 
 - The actual client and server versions are verified and recorded.
 - A local PostgreSQL development database is configured through environment
@@ -2225,11 +2226,48 @@ Full commands, output summaries and the schema evidence are in
 - The shared wall-hold geometry limitation recorded under Task 2B.3 is
   unchanged.
 
-**Next:** the final cross-feature regression sweep that closes Phase 3, then
-Phase 4 (admin customer management).
+**Next:** Phase 4 (admin customer management).
 
-Phase 3 itself remains `IN_PROGRESS`: Tasks 3.1 and 3.2 are complete, but the
-separate final cross-feature regression sweep has not started.
+### Task 3.3 — Final cross-feature regression sweep (`DONE`)
+
+**Scope**
+
+- Re-run the complete backend, frontend and PostgreSQL verification against the
+  current repository rather than relying on earlier task evidence.
+- Use `arch_dev_pg_test` for mutating browser checks; leave `arch_dev_pg` and
+  `backend/arch_dev.db` intact.
+- Exercise member, route, overlay, staff, admin, contact, assistant, voting and
+  permission journeys at desktop and phone widths.
+
+**Results**
+
+- Backend: Ruff check and format clean; `214 passed, 2 skipped`; Alembic
+  `check` clean; opt-in PostgreSQL tests `2 passed` on `arch_dev_pg_test`.
+- Frontend: typecheck clean; `158 passed in 17 files`; lint 0 errors and the
+  7 existing `react-refresh` warnings; production build succeeded.
+- PostgreSQL: 18.6 (`180006`), database `arch_dev_pg`, role `arch_dev`, head
+  `83693e68129f`; health reports PostgreSQL and no SQLite fallback.
+- Browser: all 20 public/application routes clean; member dashboard and flows
+  passed; route directory/cards passed; route-setting passed; published overlay
+  **26/26**; member regression **19/19**; staff, contact, voting and assistant
+  checks passed at `1440x900` and `390x844` with no horizontal overflow.
+- Seeding was repeated against `arch_dev_pg_test` with identical counts.
+  `backend/arch_dev.db` was not written; its recorded SHA-256 is unchanged.
+
+**Fixes**
+
+- Corrected the route-setting publication cache invalidation so an overlay
+  already cached in the member session refreshes after publishing.
+- Repaired `scripts/check-member-dashboard.mjs` to use the actual “Log an
+  attempt” button and shared dialog instead of a stale link expectation.
+
+**Evidence:** [REGRESSION_REPORT.md](REGRESSION_REPORT.md).
+
+**Limitations:** the live assistant check used the deterministic fallback
+because no external model is configured. The administrator member list gaps,
+including server pagination and a detail view, belong to Phase 4.
+
+**Next:** Task 4.1 — customer-management audit and design.
 
 ---
 
