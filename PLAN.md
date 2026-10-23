@@ -172,6 +172,18 @@ Every phase keeps the public website and the backend working.
   `arch_dev_pg`, and `/api/health` reports `database: "postgresql"`.
 - Database creation, migration, seeding, backup and restore are documented.
 
+#### Phase 4 — Admin customer management
+
+| #   | Task | Status | Acceptance criteria |
+| --- | --- | --- | --- |
+| 4.1 | Customer-management audit and design | `DONE` | Existing customer/profile model inspected; safe fields, missing operations, privacy boundaries, acceptance tests and ARCH questions recorded in `CUSTOMER_MANAGEMENT_DESIGN.md`. |
+| 4.2 | Admin customer list and search | `TODO` | Paginated, server-searched directory; admin-only backend; loading/empty/error/permission states; detail links; backend and frontend tests. |
+| 4.3 | Customer details and climbing activity | `TODO` | Authorised detail view with profile, agreement, activity, recent climbs and labelled contact history; no invented data; bounded queries; tests. |
+| 4.4 | Safe customer administration | `TODO` | Only confirmed operations exposed; explicit confirmation/audit where applicable; decision note for unanswered questions. |
+
+`CUSTOMER_MANAGEMENT_DESIGN.md` records the full audit, API shape and the
+questions that still require ARCH confirmation.
+
 #### Phase 4–7
 
 See the section headings above and the brief in the task that set this
@@ -2267,7 +2279,51 @@ Full commands, output summaries and the schema evidence are in
 because no external model is configured. The administrator member list gaps,
 including server pagination and a detail view, belong to Phase 4.
 
-**Next:** Task 4.1 — customer-management audit and design.
+**Next:** Task 4.2 — admin customer list and search.
+
+### Task 4.1 — Customer-management audit and design (`DONE`)
+
+**Scope**
+
+- Inspect the existing user/profile, safety-agreement, climbing, contact and
+  administration models before designing a customer directory.
+- Decide whether a new customer table or migration is needed.
+- Record safe fields, permission boundaries, API/UI shape, acceptance tests and
+  questions for ARCH.
+
+**Findings**
+
+- Customers are already represented by `users`; agreements, achievements and
+  contact messages have separate tables. No duplicate customer table is
+  justified.
+- The current `/api/admin/members` endpoint is admin-protected but returns a
+  plain list, has no total/paging metadata, searches only name/email and issues
+  one agreement and one send query per row.
+- There is no customer detail endpoint or page. Contact messages have no user
+  foreign key and must not be presented as verified account history.
+- Membership tiers/status are optional descriptive fields; no contract,
+  subscription or billing rules exist. Safety-agreement semantics remain
+  provisional.
+- The first release needs no schema migration. It can be implemented entirely
+  with bounded read queries over the existing tables.
+
+**Design**
+
+- Add `GET /api/admin/customers` with search, role/status filters, limit/offset
+  and a total; add `GET /api/admin/customers/{user_id}` for the safe profile,
+  latest agreement, activity summary, recent climbs and labelled contact
+  history.
+- Keep the existing `/admin` workspace and replace the browser-only Members tab
+  with a server-backed Customers tab and a `/admin/customers/{id}` detail route.
+- Omit password hashes/tokens and do not show the database ID as the primary
+  label. Mark seeded `@example.com` accounts as demo data.
+- Customer editing is not implemented until ARCH confirms the account,
+  membership, agreement and deactivation rules. Existing agreement/contact
+  actions remain the only administrative writes.
+
+**Evidence:** [CUSTOMER_MANAGEMENT_DESIGN.md](CUSTOMER_MANAGEMENT_DESIGN.md).
+
+**Next:** Task 4.2 — implement the paginated customer directory.
 
 ---
 
