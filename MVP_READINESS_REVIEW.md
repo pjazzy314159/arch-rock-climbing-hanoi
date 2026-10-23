@@ -6,6 +6,12 @@ A review of the ARCH platform as it stands, against the requirements in
 **Reviewed:** commit `d5b2abf`, working tree clean, branch `main`, no remote
 configured (so nothing can be pushed).
 
+> **Later update (2026-10-23):** P1 below — “PostgreSQL has never been run” —
+> was resolved by Task 3.1. The migrations, repeatable seed and live API smoke
+> test were run against PostgreSQL 18.6; see
+> [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md). The rest of this
+> review remains a snapshot at the commit above.
+
 **How it was reviewed:** the documentation was read, the code was inspected
 endpoint by endpoint and screen by screen, the whole verification suite was run
 again, and the running application was probed directly — with a script that

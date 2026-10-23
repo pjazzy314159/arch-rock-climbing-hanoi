@@ -114,9 +114,17 @@ def upgrade() -> None:
         connection.execute(
             sa.text(
                 "INSERT INTO walls (name, description, sort_order, is_active, created_at, updated_at) "
-                "VALUES (:name, :description, :sort_order, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                "VALUES (:name, :description, :sort_order, :is_active, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
             ),
-            {"name": name, "description": description, "sort_order": order},
+            {
+                "name": name,
+                "description": description,
+                "sort_order": order,
+                # Pass a real boolean rather than the SQLite integer 1:
+                # PostgreSQL rejects an integer expression for a boolean column.
+                "is_active": True,
+            },
         )
 
     # Every route is pointed at the wall with the matching name.

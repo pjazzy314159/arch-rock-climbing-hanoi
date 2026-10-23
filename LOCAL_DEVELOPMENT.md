@@ -15,8 +15,12 @@ them in a browser.
 | uv        | 0.11.7                                      | Manages the Python environment. Install from <https://docs.astral.sh/uv/>.           |
 | A browser | Any current Chrome, Edge, Firefox or Safari |                                                                                      |
 
-Nothing else is required. **PostgreSQL is not needed for local development** —
-the backend runs on SQLite by default. Docker is not required either.
+Nothing else is required. **PostgreSQL is not needed for normal local
+development** — the backend runs on SQLite by default. PostgreSQL 18.6 is
+installed on this machine, and its migration, seed and live API paths have been
+verified against a disposable database; see
+[POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md). Docker is not
+required either.
 
 ---
 
@@ -339,9 +343,12 @@ published FAQ in the database.
 
 **Needs infrastructure that is not on this machine:**
 
-- PostgreSQL. The backend is written for it and the migrations apply to it,
-  but the local development database is SQLite.
 - A deployment target. The build produces a Cloudflare Worker; it has not been
   deployed from this machine.
 - Rate limiting and e-mail verification, which belong in the reverse proxy in
   front of the API. See [DEPLOYMENT.md](DEPLOYMENT.md).
+
+PostgreSQL 18.6 is installed locally and has been verified for migrations,
+repeatable seeding and a live API smoke test. SQLite remains the default, so
+the normal local workflow does not require starting PostgreSQL; the verification
+commands are in [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).

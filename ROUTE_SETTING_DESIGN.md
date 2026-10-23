@@ -64,10 +64,11 @@ attempts; the safe pattern is to archive the old route and set a new one
 
 - `backend/app/deps.py`: `get_current_user`, `require_staff`
   (staff + admin), `require_admin`.
-- Backend tests run against an isolated SQLite database
-  (`backend/tests/conftest.py`); production currently uses SQLite
-  (`arch_dev.db`) as well — PostgreSQL is **not** integrated yet.
-- Alembic head: `9d1c4f8ab207`. Migrations live in `backend/migrations/versions`.
+- The ordinary backend tests run against an isolated SQLite database
+  (`backend/tests/conftest.py`). PostgreSQL 18.6 is the deployment target and
+  has been verified separately on a disposable database; see
+  [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
+- Alembic head: `83693e68129f`. Migrations live in `backend/migrations/versions`.
 - Frontend: admin dashboard in `src/components/arch/staff-pages.tsx`
   (`RoutesTab` creates routes and flips status). There is no canvas, no
   drawing code and no hold concept anywhere.
@@ -321,16 +322,18 @@ and PostgreSQL.
 
 **What is verified where**
 
-- Tests run on isolated SQLite, as all existing tests do. That is _not_ proof
-  of PostgreSQL compatibility.
-- Before any production claim, the migration must be applied to a **disposable
-  PostgreSQL database** (`upgrade head` → `downgrade -1` → `upgrade head`),
-  and the annotation endpoints exercised there. This is outstanding work and
-  is recorded as such — see also Phase 3 in `PLAN.md`.
+- The ordinary suite still runs on isolated SQLite. That is _not_ proof of
+  PostgreSQL compatibility.
+- PostgreSQL 18.6 verification is complete for Task 3.1: the migrations were
+  applied to empty disposable databases, `alembic check` was clean, a separate
+  database passed `upgrade head` → `downgrade base` → `upgrade head`, seeding
+  was repeatable, and the annotation/publishing endpoints were exercised by a
+  live API smoke test and opt-in PostgreSQL tests. See
+  [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
 - The existing dev database (`arch_dev.db`, SQLite) contains demo accounts and
-  logged attempts; it must not be reset to try the migration. A new migration
-  is additive (`create table`, `add nullable column`), so running it in place
-  is safe; the app also needs no downtime for the new tables.
+  logged attempts; it was not reset to try the migration. The new migration is
+  additive (`create table`, `add nullable column`), so running it in place is
+  safe; the app also needs no downtime for the new tables.
 
 ---
 
@@ -425,7 +428,7 @@ Browser (Playwright, 1440×900 and 390×844):
 3. **Editor UI** (wall picker, canvas, boxes, order, save/publish) in the admin
    area.
 4. **Browser verification** at desktop and phone widths, plus the migration on
-   a disposable PostgreSQL database when Phase 3 starts.
+   a disposable PostgreSQL database (completed in Task 3.1).
 
 Each slice is committed separately. If capacity runs out after slice 1, the
 application remains buildable and the member pages are unchanged.

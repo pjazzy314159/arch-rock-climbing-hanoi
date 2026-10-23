@@ -145,13 +145,18 @@ VITE_API_BASE_URL=https://api.arch.vn bun run build
 
 ## 6. What has not been exercised here
 
-This repository was developed and verified on a single machine without
-PostgreSQL, without Docker and without a cloud account. The following are
-documented and configuration-correct, but have not been run end to end:
+This repository was developed and verified on a single machine without Docker
+and without a cloud account. PostgreSQL 18.6 was run locally against disposable
+verification databases; the migrations, repeatable seed, schema inspection and
+live API smoke test are recorded in
+[POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
+
+The following are documented and configuration-correct, but have not been run
+end to end:
 
 - deploying the Cloudflare Worker;
-- running the API against a real PostgreSQL server (the models, the migrations
-  and the tests all run on SQLite, which the SQLAlchemy layer abstracts);
+- a production PostgreSQL deployment with the intended application role,
+  backups, monitoring and load;
 - the live language-model provider path for the assistant (the provider call,
   the grounding and the fallback are unit-tested; the HTTP call to a provider
   is not);

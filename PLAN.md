@@ -64,8 +64,10 @@ brief (Python + FastAPI + PostgreSQL), a new backend is required.
 
 - Node `v24.16.0`, npm `11.13.0` (use `npm.cmd` — PowerShell execution policy blocks `*.ps1` shims), Bun `1.4.3`.
 - Python `3.11.9` / `3.13.9` available, `uv 0.11.7` available for dependency management.
-- **No PostgreSQL server, `psql`, or Docker on this machine.** The backend therefore targets PostgreSQL for
-  deployment and falls back to SQLite for local development and tests. See §6.
+- **PostgreSQL 18.6 is installed and was verified for Task 3.1.** The `psql`
+  client and server are installed under `C:\Program Files\PostgreSQL\18`;
+  SQLite remains the default database for fast local development and tests.
+  See [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md) and §6.
 - `C:\Users\tandu\MattNg\LAB` is a **symlink to `F:\LAB`**. Vite resolves symlinks to their real path, which
   made Vitest externalise the setup file and fail with `Cannot find module '/@fs/F:/…'`. Fixed with
   `scripts/run-tests.mjs`, which re-anchors the working directory to the real path.
@@ -104,7 +106,7 @@ Every phase keeps the public website and the backend working.
 | **0** | Audit and planning: `MEMBER_UX_REVIEW.md`, this plan    | `DONE`        | —                                             |
 | **1** | Member dashboard and climbing experience                | `IN_PROGRESS` | Phase 0                                       |
 | **2** | Visual route-setting tool for staff                     | `DONE`        | Phase 1 (route and wall data must be settled) |
-| **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `TODO`        | Phase 1 (coordinate with any schema change)   |
+| **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `IN_PROGRESS` | Phase 1 (coordinate with any schema change)   |
 | **4** | Admin customer management                               | `TODO`        | Phase 1, Phase 3                              |
 | **5** | Staff operations                                        | `TODO`        | Phase 2, Phase 4                              |
 | **6** | ARCH-scoped AI assistant                                | `TODO`        | Phase 1 (route and content data)              |
@@ -149,6 +151,10 @@ Every phase keeps the public website and the backend working.
 - Members see only the published version of a route.
 
 #### Phase 3 — PostgreSQL 18.6
+
+| #   | Task                                                                                     | Status        | Acceptance criteria                                                                                                                                   |
+| --- | ---------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1 | Verify PostgreSQL 18.6 compatibility on a dedicated disposable database                  | `DONE`        | Client/server versions verified; migrations, `alembic check`, repeatable seed, constraints, API operations and permissions exercised on PostgreSQL. |
 
 - The actual client and server versions are verified and recorded.
 - A local PostgreSQL development database is configured through environment
@@ -200,7 +206,9 @@ deliberately leaves alone.
 
 **Open items**
 
-- PostgreSQL is unavailable locally → backend runs on SQLite for development, PostgreSQL for deployment.
+- PostgreSQL 18.6 is available locally and has been verified on a disposable
+  database; SQLite remains the default for development and the ordinary test
+  suite. See Task 3.1 below.
 - Placeholder imagery must be replaced with ARCH's real photos.
 - `.env` still holds a real Supabase publishable key from the import; it stays untracked.
 
@@ -2033,8 +2041,87 @@ order, and the selection. It never calls the draft save or publish endpoints.
   transaction.
 - PostgreSQL remains untested for this feature.
 
-**Next:** Phase 3 — verify PostgreSQL 18.6 on a disposable instance, then run
-the final cross-feature sweep against the chosen database.
+**Next:** the final cross-feature regression sweep; Task 3.1 is recorded below.
+
+---
+
+### Task 3.1 — PostgreSQL 18.6 compatibility verification (`DONE`)
+
+**Scope**
+
+- Verify the installed PostgreSQL client and server, create disposable
+  verification databases, migrate an empty schema, run `alembic check`, seed
+  twice, inspect the resulting schema, exercise the live API, and add opt-in
+  PostgreSQL test coverage.
+- Keep SQLite as the primary development database. Do not migrate, reset or
+  overwrite `backend/arch_dev.db`.
+
+**Verified environment**
+
+- Client: `psql (PostgreSQL) 18.6`.
+- Server: PostgreSQL 18.6 on `x86_64-windows`, `server_version_num` `180006`,
+  SCRAM-SHA-256 authentication on `127.0.0.1:5432`.
+- Application database: `arch_pg_verify` (UTF8, created from `template0`).
+- Roll-back database: `arch_pg_migration_verify` (UTF8, no application data;
+  used only for the downgrade/upgrade round trip).
+- Credentials were supplied through the environment only. No role or existing
+  database was modified.
+
+**Defects found and fixed**
+
+- The wall/route-type migration inserted the SQLite integer literal `1` into
+  the PostgreSQL `boolean` column `walls.is_active`. PostgreSQL rejected it.
+  The migration now binds `True` as a real boolean, which works on both
+  databases and does not change the schema. It was edited in place because the
+  failure occurs inside that revision and aborts it before a later corrective
+  revision could run; databases already at head do not re-execute it. The
+  rationale is recorded in [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
+- Alembic and the seed command passed database URLs through `configparser`
+  without escaping `%`. A valid percent-encoded URL failed with an interpolation
+  error. Both callers now escape the URL before setting the Alembic option.
+- Added `backend/tests/test_postgresql_integration.py`. It is skipped by default
+  and runs only when `ARCH_TEST_POSTGRES_URL` names a dedicated test/verify
+  database. Each test creates and drops a temporary schema.
+
+**Results**
+
+- Empty schema migrated through all four revisions to
+  `83693e68129f (head)`; `alembic check` reported no new upgrade operations.
+- A separate empty database completed `upgrade head` → `downgrade base` →
+  `upgrade head` → `alembic check` successfully.
+- The schema was inspected through PostgreSQL catalogs: 23 application tables
+  plus `alembic_version`; no native enum types; enum-like columns are
+  `varchar(20)`; booleans, `timestamptz`, foreign keys, indexes, unique
+  constraints and wall-hold check constraints are correct.
+- `python -m app.seed --demo` completed twice with identical row counts. The
+  same idempotence check passed inside a temporary schema.
+- The API ran as a separate process on port `8010` against `arch_pg_verify`.
+  Health reported `database: "postgresql"` and the live smoke test passed all
+  28 checks: public routes/filters, member auth/dashboard, attempt logging,
+  leaderboard, wall-hold annotations, draft ordering/roles/privacy, publication,
+  permissions, and contact messages.
+- The opt-in PostgreSQL tests pass (`2 passed`); the normal backend suite is
+  `212 passed, 2 skipped`, with the two PostgreSQL tests skipped by default.
+- Backend Ruff and formatting are clean.
+- The frontend was unchanged; its existing typecheck, 158 tests and production
+  build pass, and lint reports warnings only (0 errors).
+- The SQLite database was not changed: the default setting is still
+  `sqlite+pysqlite:///./arch_dev.db`, and `backend/arch_dev.db` retains its
+  original 8 users, 6 routes, 3 wall holds, 1 hold set and 3 route holds.
+
+**Limitations**
+
+- SQLite remains the primary local database; PostgreSQL coverage is a separate
+  opt-in/manual check, not part of the default test run.
+- Production load, backup/restore and HA behaviour were not part of this task.
+- The shared wall-hold geometry limitation recorded under Task 2B.3 is
+  unchanged.
+
+Full commands, output summaries and the schema evidence are in
+[POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
+
+Phase 3 itself remains `IN_PROGRESS`: the final cross-feature regression sweep
+is separate from this verification and was not started.
 
 ---
 
@@ -2044,7 +2131,7 @@ the final cross-feature sweep against the chosen database.
 | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Keep TanStack Start + Tailwind v4 + TanStack Router                                      | Existing Lovable stack; the brief says not to migrate without cause.                                                              |
 | New Python/FastAPI backend in `backend/`                                                 | The brief and README both prefer FastAPI + PostgreSQL. The existing Supabase scaffold has no tables and is not a working backend. |
-| SQLAlchemy 2.0 + Alembic, PostgreSQL target with SQLite dev fallback                     | No PostgreSQL server exists in this environment; the same models/migrations run on both.                                          |
+| SQLAlchemy 2.0 + Alembic, PostgreSQL target with SQLite dev fallback                     | PostgreSQL 18.6 is available and verified; SQLite keeps local development and the normal test suite fast.                         |
 | Frontend talks to the backend through `src/services/api.ts`                              | Keeps mock data isolated behind one replaceable boundary; the existing UI does not need rewriting.                                |
 | Keep the mock adapter as an explicit offline fallback                                    | The site must still render when the backend is not running, and mock data must stay clearly labelled.                             |
 | Passwords hashed with `bcrypt`; JWT access tokens issued by the backend                  | Required by the brief; avoids adding a JS auth dependency to the frontend.                                                        |
@@ -2078,8 +2165,9 @@ the final cross-feature sweep against the chosen database.
 | Staff          | Own tasks with status controls and checklists                                                      |
 | Administration | Summary, member records, route management, task creation, event publishing                         |
 | Assistant      | Embedded in the site, grounded on the published FAQ, honest about its limits                       |
-| Backend        | FastAPI, SQLAlchemy 2.0, Alembic migrations, 123 tests                                             |
-| Frontend       | 50 tests, lint and typecheck clean, production build verified in a browser                         |
+| Database       | SQLite default for development/tests; PostgreSQL 18.6 migrations, seed and live API verified       |
+| Backend        | FastAPI, SQLAlchemy 2.0, Alembic migrations, 212 tests                                             |
+| Frontend       | 158 tests, typecheck clean, lint has warnings only, production build verified                      |
 
 ### How to run it
 
@@ -2099,9 +2187,11 @@ Full instructions are in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) and
 
 ### Known limitations
 
-- **PostgreSQL has never been run.** The models, the migrations and the tests
-  all run on SQLite; the SQLAlchemy layer abstracts the difference, but the
-  PostgreSQL path is documented rather than exercised.
+- **PostgreSQL is verified, but SQLite is still the default.** Migrations,
+  repeatable seeding and a live API smoke test were run against PostgreSQL
+  18.6. The ordinary test suite and local development still use SQLite, and the
+  PostgreSQL tests require an explicitly configured server; see
+  [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md).
 - **The deployment has not been performed.** The build produces a Cloudflare
   Worker that has not been deployed.
 - **No rate limiting and no e-mail verification.** Both belong in the proxy in

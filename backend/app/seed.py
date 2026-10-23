@@ -581,7 +581,9 @@ def _migrate(reset: bool = False) -> None:
     backend_root = Path(__file__).resolve().parent.parent
     config = Config(str(backend_root / "alembic.ini"))
     config.set_main_option("script_location", str(backend_root / "migrations"))
-    config.set_main_option("sqlalchemy.url", get_settings().database_url)
+    # configparser treats a bare percent sign as interpolation syntax. Escape
+    # percent-encoded URLs here for the same reason as migrations/env.py.
+    config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
 
     if reset:
         command.downgrade(config, "base")
