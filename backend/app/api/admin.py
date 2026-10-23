@@ -7,6 +7,7 @@ buttons in the frontend is not treated as access control.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -15,14 +16,13 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import require_admin
 from app.models import (
-    Achievement,
     AgreementStatus,
     ClimbRoute,
     ContactMessage,
     Course,
     Event,
     Product,
-    ResultType,
+    Role,
     RouteStatus,
     RouteVote,
     SafetyAgreement,
@@ -32,6 +32,8 @@ from app.models import (
     Wall,
 )
 from app.schemas import (
+    AdminCustomerDetailOut,
+    AdminCustomerListOut,
     AdminMemberOut,
     AdminSummaryOut,
     AgreementOut,
@@ -48,6 +50,12 @@ from app.schemas import (
     WallOut,
 )
 from app.services.climbing import build_route_out, build_route_summary
+from app.services.customers import (
+    get_customer_detail,
+)
+from app.services.customers import (
+    list_customers as query_customers,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -96,39 +104,54 @@ def admin_summary(
 
 @router.get("/members", response_model=list[AdminMemberOut])
 def list_members(
-    search: str | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=160),
     limit: int = Query(default=50, ge=1, le=200),
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> list[AdminMemberOut]:
-    """Customer records with their agreement status and send count."""
-    statement = select(User)
-    if search:
-        pattern = f"%{search.strip()}%"
-        statement = statement.where(User.full_name.ilike(pattern) | User.email.ilike(pattern))
-    users = db.scalars(statement.order_by(User.id).limit(limit)).all()
+    """Legacy customer list; the paginated directory is ``/customers``."""
+    page = query_customers(db, search=search, limit=limit)
+    return page.items
 
-    members: list[AdminMemberOut] = []
-    for member in users:
-        agreement = db.scalar(
-            select(SafetyAgreement)
-            .where(SafetyAgreement.user_id == member.id)
-            .order_by(SafetyAgreement.created_at.desc(), SafetyAgreement.id.desc())
-        )
-        sends = (
-            db.scalar(
-                select(func.count())
-                .select_from(Achievement)
-                .where(Achievement.user_id == member.id, Achievement.result == ResultType.SENT)
-            )
-            or 0
-        )
-        payload = AdminMemberOut.model_validate(member)
-        payload.role = member.role.value
-        payload.agreement_status = agreement.status.value if agreement else None
-        payload.total_sends = sends
-        members.append(payload)
-    return members
+
+@router.get("/customers", response_model=AdminCustomerListOut)
+def list_customer_directory(
+    search: str | None = Query(default=None, max_length=160),
+    role: Role | None = Query(default=None),
+    status_filter: Literal["active", "inactive"] | None = Query(default=None, alias="status"),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminCustomerListOut:
+    """A bounded, server-searched directory of accounts for administrators."""
+    page = query_customers(
+        db,
+        search=search,
+        role=role,
+        active=None if status_filter is None else status_filter == "active",
+        limit=limit,
+        offset=offset,
+    )
+    return AdminCustomerListOut(
+        items=page.items,
+        total=page.total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/customers/{customer_id}", response_model=AdminCustomerDetailOut)
+def customer_detail(
+    customer_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminCustomerDetailOut:
+    """One customer's safe profile, agreement and bounded activity history."""
+    detail = get_customer_detail(db, customer_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+    return detail
 
 
 @router.get("/contact", response_model=list[ContactMessageOut])

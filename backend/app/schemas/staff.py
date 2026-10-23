@@ -120,3 +120,67 @@ class AdminMemberOut(ORMModel):
     joined_on: date | None = None
     agreement_status: str | None = None
     total_sends: int = 0
+
+
+class AdminCustomerOut(AdminMemberOut):
+    """A safe customer summary for the directory.
+
+    The database ID is present only so the browser can build a detail URL; the
+    UI uses the name and email as the visible identifier.
+    """
+
+    created_at: datetime
+    last_climb_on: date | None = None
+
+
+class AdminCustomerListOut(BaseModel):
+    items: list[AdminCustomerOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class AdminCustomerAgreementOut(ORMModel):
+    id: int
+    version: str
+    status: str
+    method: str | None = None
+    signed_at: datetime | None = None
+    signed_name: str | None = None
+    notes: str | None = None
+
+
+class AdminCustomerAttemptOut(ORMModel):
+    id: int
+    route_id: int | None = None
+    route_name: str
+    grade: str
+    result: str
+    attempts: int
+    climbed_on: date
+    created_at: datetime
+
+
+class AdminCustomerContactOut(ORMModel):
+    id: int
+    subject: str
+    handled: bool
+    created_at: datetime
+
+
+class AdminCustomerActivityOut(BaseModel):
+    sends: int = 0
+    flashes: int = 0
+    projects: int = 0
+    attempts: int = 0
+    total_climbs: int = 0
+
+
+class AdminCustomerDetailOut(AdminCustomerOut):
+    phone: str | None = None
+    climbing_level: int = 0
+    agreement: AdminCustomerAgreementOut | None = None
+    activity: AdminCustomerActivityOut
+    recent_attempts: list[AdminCustomerAttemptOut] = []
+    recent_contact_messages: list[AdminCustomerContactOut] = []
+    contact_history_note: str = ""
