@@ -109,7 +109,7 @@ Every phase keeps the public website and the backend working.
 | **2** | Visual route-setting tool for staff                     | `DONE`        | Phase 1 (route and wall data must be settled) |
 | **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `DONE`        | Phase 1 (coordinate with any schema change)   |
 | **4** | Admin customer management                               | `DONE`        | Phase 1, Phase 3                              |
-| **5** | Staff operations                                        | `TODO`        | Phase 2, Phase 4                              |
+| **5** | Staff operations                                        | `IN_PROGRESS` | Phase 2, Phase 4                              |
 | **6** | ARCH-scoped AI assistant                                | `TODO`        | Phase 1 (route and content data)              |
 | **7** | Handover and local data ownership (`DATA_HANDOVER.md`)  | `TODO`        | Phase 3                                       |
 
@@ -183,6 +183,51 @@ Every phase keeps the public website and the backend working.
 
 `CUSTOMER_MANAGEMENT_DESIGN.md` records the full audit, API shape and the
 questions that still require ARCH confirmation.
+
+#### Phase 5 — Staff operations
+
+**Status:** `IN_PROGRESS` — design completed in Task 5.1; no implementation
+code has been changed by the design task.
+
+**Design document:** [STAFF_OPERATIONS_DESIGN.md](STAFF_OPERATIONS_DESIGN.md)
+
+**Existing capabilities discovered (backend and UI):**
+
+- `staff_tasks`, `checklist_items`, `staff_shifts` and `events` already exist in
+  the initial migration. No new task/checklist/shift/event table is required for
+  the MVP.
+- Task creation and assignment are administrator-only
+  (`POST /api/staff/tasks`); assignees must be staff or administrators.
+- Staff can read only their own tasks, update their own status, and tick/add
+  checklist items on their own tasks. Administrators can work across the team,
+  and `GET /api/admin/tasks` lists every task.
+- `GET /api/staff/shifts` already returns the caller's shifts and the whole team
+  for administrators; `POST /api/staff/shifts` is administrator-only.
+- The `/staff` page already shows own task cards, status controls and checklist
+  controls. The `/admin` Tasks tab is read-only; there is no assignee selector,
+  no admin task form, and no shift UI anywhere.
+- The backend tests cover customer/anonymous refusals, own-only task and shift
+  visibility, cross-staff denial for status and checklist, admin-only creation
+  and assignment, customer-assignee rejection and invalid status enum values.
+- PostgreSQL integration tests currently cover migrations and route/hold models,
+  not staff task/checklist/shift persistence.
+
+**Main gaps and risks:** no event validation/context on task creation; no status
+transition policy; PATCH cannot clear assignee/due date; UI-added checklist items
+can share position `0`; no administrator assignment UI; no shift UI; no audit
+history for status/assignee/checklist changes.
+
+| #   | Task | Status | Acceptance criteria |
+| --- | --- | --- | --- |
+| 5.1 | Staff operations audit and design | `DONE` | Existing staff schema, endpoints, permissions, UI and tests inspected; proposed MVP, no duplicate tables, acceptance tests and ARCH questions recorded in `STAFF_OPERATIONS_DESIGN.md`. |
+| 5.2 | Backend contract hardening | `TODO` | Event validation/context, status transition policy, PATCH clear semantics, checklist ordering, assignee-option endpoint and backend tests. No migration expected. |
+| 5.3 | Administrator assignment and shift workspace | `TODO` | Admin task creation/assignment UI and basic shift list/create using existing endpoints; loading/empty/error/permission states. |
+| 5.4 | Staff dashboard context and mobile states | `TODO` | Event-linked task context, upcoming shifts, approved status controls, filters, error/empty states and mobile layout. |
+| 5.5 | PostgreSQL integration and regression | `TODO` | Staff persistence covered on PostgreSQL; browser/frontend checks extended for the staff and administrator workspaces. |
+
+`STAFF_OPERATIONS_DESIGN.md` records the full audit, the MVP and the questions
+that still require ARCH confirmation. Phase 5 will not be marked `DONE` until
+Tasks 5.2–5.5 are implemented and verified.
 
 #### Phase 4–7
 
@@ -2402,9 +2447,51 @@ including server pagination and a detail view, belong to Phase 4.
 - No migration was required: the existing schema already holds all approved
   fields.
 
-**Next:** Phase 5 (staff operations) or Phase 6 (ARCH-scoped assistant), subject
-to the remaining Phase 1/2 tasks. Phase 4 does not resolve the ARCH questions in
+**Next:** Task 5.2 — backend contract hardening for staff tasks, checklists and
+shifts. Phase 4 does not resolve the ARCH questions in
 `CUSTOMER_MANAGEMENT_DESIGN.md`.
+
+### Task 5.1 — Staff operations audit and design (`DONE`)
+
+**Scope**
+
+- Inspect the existing staff task, checklist, shift and event schema, endpoints,
+  permission checks, UI and tests before proposing Phase 5 work.
+- Decide whether a new task/event table is needed and define the smallest useful
+  staff workflow.
+- Record acceptance tests and the business questions that ARCH must answer.
+
+**Findings**
+
+- `staff_tasks`, `checklist_items`, `staff_shifts` and `events` already exist in
+  the initial migration. No duplicate table is needed for the MVP.
+- The backend already supports administrator task creation/assignment, own-task
+  staff updates, own-task checklist work and own/all shift reads. The main gaps
+  are UI exposure, event context, status-transition policy, checklist ordering,
+  PATCH clear semantics and audit history.
+- The `/staff` page shows own tasks, status controls and checklist controls but
+  has no shift view, event context or team assignment form. The `/admin` Tasks
+  tab is read-only; assignment, reassignment and event selection are not
+  exposed.
+- The existing tests prove customer/anonymous refusal, own-only visibility,
+  cross-staff denial for status/checklist, admin-only creation/assignment and
+  customer-assignee rejection. They do not prove write-endpoint refusals for
+  every route or PostgreSQL staff persistence.
+
+**Design**
+
+- `STAFF_OPERATIONS_DESIGN.md` records the full audit, permission matrix,
+  acceptance tests and open ARCH questions.
+- Proposed sequence: Task 5.2 backend contract hardening; Task 5.3 administrator
+  assignment and shift workspace; Task 5.4 staff dashboard context and mobile
+  states; Task 5.5 PostgreSQL integration and regression.
+- No migration is proposed for the core MVP. A nullable `staff_shifts.event_id`
+  is the smallest extension only if ARCH confirms event-linked shifts.
+
+**Evidence:** [STAFF_OPERATIONS_DESIGN.md](STAFF_OPERATIONS_DESIGN.md).
+
+**Next:** Task 5.2 — harden the task/checklist/shift API contract and add the
+administrator assignee options needed by the assignment UI.
 
 ---
 
