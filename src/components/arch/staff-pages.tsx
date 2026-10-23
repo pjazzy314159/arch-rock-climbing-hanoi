@@ -49,6 +49,7 @@ const TASK_STATUSES = [
   { value: "todo", label: "To do" },
   { value: "in_progress", label: "In progress" },
   { value: "done", label: "Done" },
+  { value: "cancelled", label: "Cancelled" },
 ] as const;
 
 const TASK_PRIORITIES = [
@@ -64,6 +65,8 @@ function errorMessage(caught: unknown, fallback: string): string {
   if (caught instanceof ApiError) {
     if (caught.status === 401) return "Your session has expired. Please sign in again.";
     if (caught.status === 403) return "You do not have permission to do that.";
+    if (caught.status === 409) return "This status change is not allowed.";
+    if (caught.status === 422) return "Invalid status value.";
     return caught.message;
   }
   return fallback;
@@ -193,19 +196,28 @@ function TaskCard({ task }: { task: ApiTask }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newItem, setNewItem] = useState("");
+  const [lastValidStatus, setLastValidStatus] = useState<ApiTask["status"]>(task.status);
 
-  async function setStatus(status: string) {
+  async function setStatus(status: ApiTask["status"]) {
+    if (status === task.status) return;
+    setLastValidStatus(task.status);
     setPending(true);
     setError(null);
     try {
       await staffApi.updateTaskStatus(task.id, status);
       await queryClient.invalidateQueries({ queryKey: ["staff", "tasks"] });
       await queryClient.invalidateQueries({ queryKey: ["admin", "tasks"] });
+      setLastValidStatus(status);
     } catch (caught) {
       setError(errorMessage(caught, "The task could not be updated."));
     } finally {
       setPending(false);
     }
+  }
+
+  async function retrySetStatus() {
+    if (!error) return;
+    await setStatus(lastValidStatus);
   }
 
   async function toggleItem(itemId: number, isDone: boolean) {
@@ -239,9 +251,12 @@ function TaskCard({ task }: { task: ApiTask }) {
   }
 
   const done = task.status === "done";
+  const cancelled = task.status === "cancelled";
 
   return (
-    <article className={`task-card ${done ? "task-card-done" : ""}`}>
+    <article
+      className={`task-card ${done ? "task-card-done" : cancelled ? "task-card-cancelled" : ""}`}
+    >
       <div className="task-card-head">
         <div>
           <span className="card-kicker">
@@ -250,7 +265,9 @@ function TaskCard({ task }: { task: ApiTask }) {
           </span>
           <h3>{task.title}</h3>
         </div>
-        <span className={`status-${task.status === "done" ? "sent" : "project"}`}>
+        <span
+          className={`status-${task.status === "done" ? "sent" : task.status === "cancelled" ? "cancelled" : "project"}`}
+        >
           {task.status.replace("_", " ")}
         </span>
       </div>
@@ -297,23 +314,28 @@ function TaskCard({ task }: { task: ApiTask }) {
       </form>
 
       <div className="task-actions">
-        {TASK_STATUSES.map((option) => (
-          <Button
-            key={option.value}
-            variant={task.status === option.value ? "default" : "outline"}
-            size="sm"
-            disabled={!hydrated || pending}
-            aria-pressed={task.status === option.value}
-            onClick={() => setStatus(option.value)}
-          >
-            {option.label}
-          </Button>
-        ))}
+        {TASK_STATUSES.map((option) => {
+          return (
+            <Button
+              key={option.value}
+              variant={task.status === option.value ? "default" : "outline"}
+              size="sm"
+              disabled={!hydrated || pending}
+              aria-pressed={task.status === option.value}
+              onClick={() => setStatus(option.value)}
+            >
+              {option.label}
+            </Button>
+          );
+        })}
       </div>
       {error && (
-        <p className="feedback error" role="alert">
-          {error}
-        </p>
+        <div className="feedback error" role="alert">
+          <p>{error}</p>
+          <Button type="button" variant="outline" size="sm" onClick={retrySetStatus}>
+            Retry
+          </Button>
+        </div>
       )}
     </article>
   );
@@ -456,6 +478,7 @@ export function StaffTasksPage() {
           { value: "todo", label: "To do" },
           { value: "in_progress", label: "In progress" },
           { value: "done", label: "Done" },
+          { value: "cancelled", label: "Cancelled" },
         ].map((option) => (
           <Button
             key={option.value}
@@ -1595,9 +1618,12 @@ export function AdminDashboardPage() {
                 <p>Loading tasks…</p>
               </div>
             ) : tasks.isError ? (
-              <p className="data-banner" role="alert">
+              <div className="data-banner" role="alert">
                 <span>Tasks could not be loaded.</span>
-              </p>
+                <Button type="button" variant="outline" size="sm" onClick={() => tasks.refetch()}>
+                  Retry
+                </Button>
+              </div>
             ) : (
               <TasksTab tasks={tasks.data ?? []} />
             ))}

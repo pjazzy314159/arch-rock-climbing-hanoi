@@ -3265,7 +3265,8 @@ details.content-block > summary {
 }
 
 .status-sent,
-.status-project {
+.status-project,
+.status-cancelled {
   display: inline-block;
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
@@ -3283,6 +3284,16 @@ details.content-block > summary {
 .status-project {
   background: rgb(255 210 63 / 0.14);
   color: var(--color-hold-yellow);
+}
+
+.status-cancelled {
+  background: rgb(255 100 100 / 0.12);
+  color: var(--color-destructive);
+}
+
+.task-card-cancelled {
+  opacity: 0.6;
+  border-color: var(--color-destructive);
 }
 
 /* Modal */
