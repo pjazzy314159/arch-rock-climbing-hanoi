@@ -525,7 +525,7 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
         text: "Draft saved. Members still see the published sequence.",
       });
       await queryClient.invalidateQueries({
-        queryKey: ["route-setting", "public-holds", routeId],
+        queryKey: ["arch", "route-holds", routeId],
       });
     } catch (caught) {
       // Keep the sequence exactly as it is so a failed save can be retried.
@@ -555,7 +555,7 @@ export function RouteSettingEditor({ isAdmin }: { isAdmin: boolean }) {
         text: "Published. Members now see this sequence; the previous one is kept as history.",
       });
       await queryClient.invalidateQueries({
-        queryKey: ["route-setting", "public-holds", routeId],
+        queryKey: ["arch", "route-holds", routeId],
       });
       await queryClient.invalidateQueries({ queryKey: ["arch", "route", routeId] });
     } catch (caught) {
