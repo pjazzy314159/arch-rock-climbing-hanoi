@@ -193,3 +193,32 @@ Frontend:
 Until these are answered, the admin customer screens are read-only apart from
 the already-existing agreement and contact-inbox actions. This is intentionally
 not a general customer-edit endpoint.
+
+## 9. Task 4.4 decision — no new customer writes
+
+The existing security model supports customer reads for administrators, but it
+does not establish who may change a profile, deactivate an account, alter a
+role, change membership fields or delete a customer. Those actions have
+consequences for authentication, agreements, contact history and audit
+retention, and the reviewed requirements do not confirm any of them.
+
+The customer directory and detail screens therefore ship read-only. In
+particular, this release deliberately does **not** add:
+
+- profile or phone editing;
+- role or account-status changes;
+- membership tier/status editing;
+- password reset or password-hash access;
+- customer deletion or data export;
+- new safety-agreement or contact-message mutations.
+
+The two administrative writes that already existed remain unchanged and keep
+their existing backend checks: recording an agreement decision and marking a
+contact message handled. The detail screen labels itself read-only and points
+back to the directory, so an administrator is not shown controls that do not
+exist in the API.
+
+Revisit this decision only after the questions in section 8 are answered and a
+confirmation/audit design is agreed. At that point, write operations should be
+added one at a time with role checks, explicit confirmation for destructive
+actions, and tests for success, denial and missing records.

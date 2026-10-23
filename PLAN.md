@@ -1,4 +1,4 @@
-# ARCH Climbing Gym Platform — Implementation Plan
+﻿# ARCH Climbing Gym Platform — Implementation Plan
 
 Source of truth for implementation progress. Statuses: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`.
 
@@ -108,7 +108,7 @@ Every phase keeps the public website and the backend working.
 | **1** | Member dashboard and climbing experience                | `IN_PROGRESS` | Phase 0                                       |
 | **2** | Visual route-setting tool for staff                     | `DONE`        | Phase 1 (route and wall data must be settled) |
 | **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `DONE`        | Phase 1 (coordinate with any schema change)   |
-| **4** | Admin customer management                               | `IN_PROGRESS` | Phase 1, Phase 3                              |
+| **4** | Admin customer management                               | `DONE`        | Phase 1, Phase 3                              |
 | **5** | Staff operations                                        | `TODO`        | Phase 2, Phase 4                              |
 | **6** | ARCH-scoped AI assistant                                | `TODO`        | Phase 1 (route and content data)              |
 | **7** | Handover and local data ownership (`DATA_HANDOVER.md`)  | `TODO`        | Phase 3                                       |
@@ -177,9 +177,9 @@ Every phase keeps the public website and the backend working.
 | #   | Task | Status | Acceptance criteria |
 | --- | --- | --- | --- |
 | 4.1 | Customer-management audit and design | `DONE` | Existing customer/profile model inspected; safe fields, missing operations, privacy boundaries, acceptance tests and ARCH questions recorded in `CUSTOMER_MANAGEMENT_DESIGN.md`. |
-| 4.2 | Admin customer list and search | `TODO` | Paginated, server-searched directory; admin-only backend; loading/empty/error/permission states; detail links; backend and frontend tests. |
-| 4.3 | Customer details and climbing activity | `TODO` | Authorised detail view with profile, agreement, activity, recent climbs and labelled contact history; no invented data; bounded queries; tests. |
-| 4.4 | Safe customer administration | `TODO` | Only confirmed operations exposed; explicit confirmation/audit where applicable; decision note for unanswered questions. |
+| 4.2 | Admin customer list and search | `DONE` | Paginated, server-searched directory; admin-only backend; loading/empty/error/permission states; detail links; backend and frontend tests. |
+| 4.3 | Customer details and climbing activity | `DONE` | Authorised detail view with profile, agreement, activity, recent climbs and labelled contact history; no invented data; bounded queries; tests. |
+| 4.4 | Safe customer administration | `DONE` | Only confirmed operations exposed; explicit confirmation/audit where applicable; decision note for unanswered questions. |
 
 `CUSTOMER_MANAGEMENT_DESIGN.md` records the full audit, API shape and the
 questions that still require ARCH confirmation.
@@ -2323,7 +2323,88 @@ including server pagination and a detail view, belong to Phase 4.
 
 **Evidence:** [CUSTOMER_MANAGEMENT_DESIGN.md](CUSTOMER_MANAGEMENT_DESIGN.md).
 
-**Next:** Task 4.2 — implement the paginated customer directory.
+### Task 4.2 — Admin customer list and search (`DONE`)
+
+**Scope**
+
+- Replace the browser-filtered Members tab with a server-backed customer
+  directory in the existing `/admin` workspace.
+- Add a bounded backend endpoint with search, role/status filters, limit/offset
+  and total count, using the existing `users`, `safety_agreements` and
+  `achievements` tables.
+- Make loading, populated, empty, error, retry and permission-denied states
+  explicit; link each row to a detail view; label seeded demo accounts.
+
+**Implementation**
+
+- `GET /api/admin/customers` uses `require_admin`, escapes search wildcards and
+  computes latest agreement, send count and last climb with correlated
+  subqueries instead of per-row queries. The response is items + total + limit +
+  offset, capped at 100 rows.
+- The legacy `/api/admin/members` response is retained for compatibility but now
+  uses the same safe query.
+- The frontend `Customers` tab debounces search by 300 ms, keeps paging on the
+  server, exposes role filtering, displays name/email as the visible identifier
+  and marks `@example.com` accounts as **Demo**.
+- The admin page no longer flashes the permission-denied state while the session
+  is loading.
+
+**Tests**
+
+- Backend: anonymous/customer/staff denial, safe fields, activity summary,
+  search name/email/phone, empty search, role/status filters, stable pagination
+  and legacy endpoint compatibility.
+- Frontend component tests cover loading, populated, empty, error/retry,
+  search/role/paging callbacks and demo labelling; API tests cover query
+  encoding and detail URLs.
+- Browser: `scripts/check-admin-customers.mjs` passed **16/16** checks for the
+  directory, search, detail navigation, read-only content, phone overflow and
+  customer denial.
+
+### Task 4.3 — Customer details and climbing activity (`DONE`)
+
+**Implementation**
+
+- `GET /api/admin/customers/{id}` returns the safe profile, latest agreement,
+  aggregate activity (sends, flashes, projects, attempts, total climbs), the ten
+  latest climbs and at most five contact messages with the same email.
+- Activity is aggregated in SQL; detail responses are bounded and do not grow
+  with history. The contact section states that messages are not linked to
+  accounts, and full message bodies are not returned.
+- `/admin/customers/{id}` renders account, membership, agreement, activity,
+  recent climbs and contact history, with “Not recorded” / “No climbs recorded”
+  for missing data. Route and page links use names, not database IDs.
+- The screen is visibly read-only.
+
+**Tests**
+
+- Backend: detail permissions, missing record 404, agreement and activity
+  aggregation, latest-climb ordering, case-insensitive email history, omitted
+  message bodies, no password hash, and null/zero states for a customer with no
+  agreement or climbs.
+- Frontend: detail populated, no-agreement/no-activity, contact-history,
+  error/retry and no-password tests.
+- Full suite after implementation: **224 passed, 2 skipped** backend;
+  **167 passed in 18 files** frontend; typecheck, lint (0 errors, 7 existing
+  warnings), production build and Alembic `check` all clean.
+
+### Task 4.4 — Safe customer administration (`DONE`)
+
+**Decision**
+
+- No customer write operation is added. The repository confirms reads, the
+  existing agreement decision endpoint and the existing contact-handled action;
+  it does not confirm profile edits, role changes, account deactivation,
+  membership edits, deletion or retention rules.
+- The detail screen is read-only, and section 9 of
+  `CUSTOMER_MANAGEMENT_DESIGN.md` records the omitted operations and the
+  conditions for revisiting them.
+- No migration was required: the existing schema already holds all approved
+  fields.
+
+**Next:** Phase 5 (staff operations) or Phase 6 (ARCH-scoped assistant), subject
+to the remaining Phase 1/2 tasks. Phase 4 does not resolve the ARCH questions in
+`CUSTOMER_MANAGEMENT_DESIGN.md`.
 
 ---
 
