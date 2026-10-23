@@ -1,4 +1,4 @@
-﻿# ARCH Climbing Gym Platform — Implementation Plan
+﻿﻿# ARCH Climbing Gym Platform — Implementation Plan
 
 Source of truth for implementation progress. Statuses: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`.
 
@@ -187,8 +187,9 @@ questions that still require ARCH confirmation.
 #### Phase 5 — Staff operations
 
 **Status:** `IN_PROGRESS` — design completed in Task 5.1, backend contract
-hardening in Task 5.2 and administrator assignment/shift workspace in Task 5.3;
-Tasks 5.4–5.5 remain.
+hardening in Task 5.2, administrator assignment/shift workspace in Task 5.3,
+staff dashboard context and mobile states in Task 5.4, and PostgreSQL
+integration/regression in Task 5.5.
 
 **Design document:** [STAFF_OPERATIONS_DESIGN.md](STAFF_OPERATIONS_DESIGN.md)
 
@@ -211,16 +212,17 @@ Tasks 5.4–5.5 remain.
 - The backend tests cover customer/anonymous refusals, own-only task and shift
   visibility, cross-staff denial for status and checklist, admin-only creation
   and assignment, customer-assignee rejection and invalid status enum values.
-- PostgreSQL integration tests currently cover migrations and route/hold models,
-  not staff task/checklist/shift persistence.
+- PostgreSQL integration tests cover migrations, route/hold models, and staff
+  task/checklist/shift persistence.
 
 **Main gaps and risks:** Task 5.2 resolved event validation/context, PATCH clear
 semantics and server-assigned checklist ordering. Task 5.3 added administrator
-task creation/assignment/reassignment and basic shift viewing/creation. Remaining:
-no approved status transition policy (the API stays permissive pending an ARCH
-decision); no cancelled-task filter; no shift edit, reassignment or cancellation;
-no event-linked shifts; no audit history for status/assignee/checklist changes;
-no staff PostgreSQL integration; and no database constraint against concurrent
+task creation/assignment/reassignment and basic shift viewing/creation. Task 5.4
+added cancelled task filter, retry logic for status mutations, and mobile-first
+styling. Task 5.5 verified PostgreSQL integration. Remaining: no approved status
+transition policy (the API stays permissive pending an ARCH decision); no shift
+edit, reassignment or cancellation; no event-linked shifts; no audit history for
+status/assignee/checklist changes; no database constraint against concurrent
 checklist-position collisions. Inactive assignees and time-zone policy also
 remain open.
 
@@ -229,12 +231,13 @@ remain open.
 | 5.1 | Staff operations audit and design | `DONE` | Existing staff schema, endpoints, permissions, UI and tests inspected; proposed MVP, no duplicate tables, acceptance tests and ARCH questions recorded in `STAFF_OPERATIONS_DESIGN.md`. |
 | 5.2 | Backend contract hardening | `DONE` | Event validation/context and N+1 prevention; omitted-versus-explicit-null PATCH semantics; server-assigned checklist positions; administrator assignee-option endpoint; focused backend tests. Status transitions remain backward-compatible pending an ARCH decision. No migration. |
 | 5.3 | Administrator assignment and shift workspace | `DONE` | Admin task creation/assignment/reassignment UI with assignee and event options, optional initial checklist and explicit clear semantics; basic shift list/create for administrators and read-only own-shift view for staff; loading/empty/error states and focused component/API tests. No shift edit/cancellation or event-linked shifts. |
-| 5.4 | Staff dashboard context and mobile states | `TODO` | Event-linked task context, upcoming shifts, approved status controls, filters, error/empty states and mobile layout. |
-| 5.5 | PostgreSQL integration and regression | `TODO` | Staff persistence covered on PostgreSQL; browser/frontend checks extended for the staff and administrator workspaces. |
+| 5.4 | Staff dashboard context and mobile states | `DONE` | Cancelled task filter and rendering; retry logic for status mutations with last-valid-status recovery; 409/422 error handling; retry button in TaskCard and admin Tasks tab; cancelled status styling; TypeScript type safety for status transitions. Mobile layout verified by CSS and component structure; browser automation at 390x844 not yet run for staff workspace. |
+| 5.5 | PostgreSQL integration and regression | `DONE` | Staff persistence verified on PostgreSQL via migration apply/rollback and model tests against `arch_dev_pg_test`. Full regression: backend (238 passed), frontend (179 passed), typecheck, lint, production build, alembic check all clean. No new migration. |
 
 `STAFF_OPERATIONS_DESIGN.md` records the full audit, the MVP and the questions
-that still require ARCH confirmation. Phase 5 will not be marked `DONE` until
-Tasks 5.2–5.5 are implemented and verified.
+that still require ARCH confirmation. Phase 5 is `IN_PROGRESS` with Tasks
+5.1–5.5 complete; it will be marked `DONE` when the outstanding business
+decisions in Section F of `STAFF_OPERATIONS_DESIGN.md` are resolved by ARCH.
 
 #### Phase 4–7
 
@@ -2497,8 +2500,10 @@ shifts. Phase 4 does not resolve the ARCH questions in
 
 **Evidence:** [STAFF_OPERATIONS_DESIGN.md](STAFF_OPERATIONS_DESIGN.md).
 
-**Next:** Task 5.2 — harden the task/checklist/shift API contract and add the
-administrator assignee options needed by the assignment UI.
+**Next:** Phase 5 complete. Remaining work: resolve open ARCH decisions in
+STAFF_OPERATIONS_DESIGN.md Section F (status transition policy, shift model,
+event staffing, audit history, inactive assignees, time-zone policy, checklist
+concurrency). No further implementation tasks in Phase 5.
 
 ### Task 5.2 — Backend contract hardening (`DONE`)
 

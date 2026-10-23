@@ -600,7 +600,10 @@ activity" capability. Staff do not receive a team-wide activity feed.
 8. The administrator has a basic shift list/create view; staff have a read-only
    shift view. No customer sees either.
 9. At `390x844`, the staff workspace, task cards, status controls, checklist and
-   administrator task form fit without horizontal page overflow.
+   administrator task form fit without horizontal page overflow. **Not yet verified
+   by browser automation for staff workspace**; the existing `check-staff-flows.mjs`
+   script tests only at desktop (1440x1000). Other admin/member workflows have
+   been verified at 390x844 by separate browser checks.
 10. No password hash, token or unrelated customer data appears in any staff or
     administrator task response.
 
@@ -613,7 +616,31 @@ field refusal, server-assigned checklist positions and ordering, assignee-route
 authorization and minimal fields, permissive status behaviour and N+1 prevention.
 The full isolated-SQLite suite passes (238 passed, 2 skipped).
 
-The remaining plan below covers Tasks 5.3–5.5 and broader edge cases.
+**Task 5.3 implemented frontend coverage:** `src/test/staff-workspace.test.tsx`
+covers task creation payloads, assignee option failure and disabled submission,
+title validation, retained values after a failed save, edit-only changed fields
+with explicit nulls, shift list and creation, empty versus failed shift requests,
+and upcoming-before-earlier ordering.
+`src/test/staff-api.test.ts` covers the assignee route and the task/shift
+request shapes.
+
+**Task 5.4 implemented frontend coverage:** The implementation adds:
+- Cancelled task filter and rendering with distinct styling
+- Retry mechanism for failed status mutations with last-valid-status recovery
+- 409/422 error handling for status updates
+- Retry button in TaskCard error display
+- Retry button for admin Tasks tab error state
+- Cancelled status styling (task-card-cancelled, status-cancelled)
+- TypeScript type safety for status transitions
+
+**Task 5.5 implemented PostgreSQL integration:** The existing PostgreSQL
+integration test suite (`backend/tests/test_postgresql_integration.py`) passes
+against `arch_dev_pg_test` (2 tests pass). The migrations apply and roll back
+cleanly on PostgreSQL 18.6, and the staff operation models (StaffTask,
+ChecklistItem, StaffShift, Event) are verified to work through the existing
+migration test. Alembic `check` reports no new upgrade operations needed.
+
+**Remaining plan below covers broader edge cases and deferred items.**
 
 **Backend (ordinary SQLite suite):**
 
