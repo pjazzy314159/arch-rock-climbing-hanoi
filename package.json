@@ -19,6 +19,7 @@
     "check:member": "node scripts/check-member-flows.mjs",
     "check:voting": "node scripts/check-voting.mjs",
     "check:staff": "node scripts/check-staff-flows.mjs",
+    "check:customers": "node scripts/check-admin-customers.mjs",
     "check:assistant": "node scripts/check-assistant.mjs",
     "check:styles": "node scripts/check-styles.mjs",
     "preview:build": "node scripts/preview-build.mjs",

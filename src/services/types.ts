@@ -284,6 +284,65 @@ export type ApiAdminMember = {
   total_sends: number;
 };
 
+/** A safe customer row in the administrator directory. */
+export type ApiAdminCustomer = ApiAdminMember & {
+  created_at: string;
+  last_climb_on: string | null;
+};
+
+export type ApiAdminCustomerPage = {
+  items: ApiAdminCustomer[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type ApiAdminCustomerAgreement = {
+  id: number;
+  version: string;
+  status: string;
+  method: string | null;
+  signed_at: string | null;
+  signed_name: string | null;
+  notes: string | null;
+};
+
+export type ApiAdminCustomerAttempt = {
+  id: number;
+  route_id: number | null;
+  route_name: string;
+  grade: string;
+  result: "sent" | "project";
+  attempts: number;
+  climbed_on: string;
+  created_at: string;
+};
+
+export type ApiAdminCustomerContact = {
+  id: number;
+  subject: string;
+  handled: boolean;
+  created_at: string;
+};
+
+export type ApiAdminCustomerActivity = {
+  sends: number;
+  flashes: number;
+  projects: number;
+  attempts: number;
+  total_climbs: number;
+};
+
+export type ApiAdminCustomerDetail = ApiAdminCustomer & {
+  phone: string | null;
+  climbing_level: number;
+  agreement: ApiAdminCustomerAgreement | null;
+  activity: ApiAdminCustomerActivity;
+  recent_attempts: ApiAdminCustomerAttempt[];
+  recent_contact_messages: ApiAdminCustomerContact[];
+  contact_history_note: string;
+};
+
 /** A member account, as the backend returns it. */
 export type ApiUser = {
   id: number;

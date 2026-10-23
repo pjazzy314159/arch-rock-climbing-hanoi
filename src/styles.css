@@ -3565,6 +3565,91 @@
   flex: 0 1 18rem;
 }
 
+.admin-filter-select {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.8rem;
+  color: var(--color-muted-foreground);
+}
+
+.admin-filter-select select {
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-size: 0.85rem;
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.25rem 0;
+  font-size: 0.85rem;
+  color: var(--color-muted-foreground);
+}
+
+.customer-detail-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.customer-detail-heading h2 {
+  margin-bottom: 0.25rem;
+  font-size: 1.6rem;
+}
+
+.customer-detail-heading p {
+  color: var(--color-muted-foreground);
+}
+
+.customer-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.customer-detail-list {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+  gap: 0.55rem 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.customer-detail-list dt {
+  color: var(--color-muted-foreground);
+}
+
+.customer-detail-list dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .admin-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .customer-detail-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+
+  .customer-detail-list dd {
+    margin-bottom: 0.55rem;
+  }
+}
+
 @media (min-width: 1024px) {
   .workspace {
     grid-template-columns: 16rem minmax(0, 1fr);

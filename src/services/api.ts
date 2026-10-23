@@ -16,6 +16,8 @@
 
 import type {
   ApiAchievement,
+  ApiAdminCustomerDetail,
+  ApiAdminCustomerPage,
   ApiAdminMember,
   ApiAdminSummary,
   ApiAgreement,
@@ -347,6 +349,28 @@ export const adminApi = {
     apiRequest<ApiAdminMember[]>(
       `/api/admin/members${search ? `?search=${encodeURIComponent(search)}` : ""}`,
     ),
+
+  customers: (
+    params: {
+      search?: string | undefined;
+      role?: string | undefined;
+      status?: "active" | "inactive" | undefined;
+      limit?: number | undefined;
+      offset?: number | undefined;
+    } = {},
+  ) => {
+    const query = new URLSearchParams();
+    if (params.search) query.set("search", params.search);
+    if (params.role) query.set("role", params.role);
+    if (params.status) query.set("status", params.status);
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    if (params.offset !== undefined) query.set("offset", String(params.offset));
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+    return apiRequest<ApiAdminCustomerPage>(`/api/admin/customers${suffix}`);
+  },
+
+  customer: (customerId: number) =>
+    apiRequest<ApiAdminCustomerDetail>(`/api/admin/customers/${customerId}`),
 
   routes: (status?: string) =>
     apiRequest<ApiRouteSummary[]>(`/api/admin/routes${status ? `?status=${status}` : ""}`),

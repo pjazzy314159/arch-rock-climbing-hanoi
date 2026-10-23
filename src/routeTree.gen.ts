@@ -30,6 +30,7 @@ import { Route as MemberProgressRouteImport } from './routes/member_.progress'
 import { Route as RoutesRouteIdRouteImport } from './routes/routes_.$routeId'
 import { Route as ShopProductIdRouteImport } from './routes/shop_.$productId'
 import { Route as StaffRouteSettingRouteImport } from './routes/staff_.route-setting'
+import { Route as AdminCustomersCustomerIdRouteImport } from './routes/admin_.customers.$customerId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -136,6 +137,12 @@ const StaffRouteSettingRoute = StaffRouteSettingRouteImport.update({
   path: '/staff/route-setting',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCustomersCustomerIdRoute =
+  AdminCustomersCustomerIdRouteImport.update({
+    id: '/admin_/customers/$customerId',
+    path: '/admin/customers/$customerId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -159,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/routes/$routeId': typeof RoutesRouteIdRoute
   '/shop/$productId': typeof ShopProductIdRoute
   '/staff/route-setting': typeof StaffRouteSettingRoute
+  '/admin/customers/$customerId': typeof AdminCustomersCustomerIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -182,6 +190,7 @@ export interface FileRoutesByTo {
   '/routes/$routeId': typeof RoutesRouteIdRoute
   '/shop/$productId': typeof ShopProductIdRoute
   '/staff/route-setting': typeof StaffRouteSettingRoute
+  '/admin/customers/$customerId': typeof AdminCustomersCustomerIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -206,6 +215,7 @@ export interface FileRoutesById {
   '/routes_/$routeId': typeof RoutesRouteIdRoute
   '/shop_/$productId': typeof ShopProductIdRoute
   '/staff_/route-setting': typeof StaffRouteSettingRoute
+  '/admin_/customers/$customerId': typeof AdminCustomersCustomerIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -231,6 +241,7 @@ export interface FileRouteTypes {
     | '/routes/$routeId'
     | '/shop/$productId'
     | '/staff/route-setting'
+    | '/admin/customers/$customerId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
     | '/routes/$routeId'
     | '/shop/$productId'
     | '/staff/route-setting'
+    | '/admin/customers/$customerId'
   id:
     | '__root__'
     | '/'
@@ -277,6 +289,7 @@ export interface FileRouteTypes {
     | '/routes_/$routeId'
     | '/shop_/$productId'
     | '/staff_/route-setting'
+    | '/admin_/customers/$customerId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -301,6 +314,7 @@ export interface RootRouteChildren {
   RoutesRouteIdRoute: typeof RoutesRouteIdRoute
   ShopProductIdRoute: typeof ShopProductIdRoute
   StaffRouteSettingRoute: typeof StaffRouteSettingRoute
+  AdminCustomersCustomerIdRoute: typeof AdminCustomersCustomerIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -452,6 +466,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StaffRouteSettingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin_/customers/$customerId': {
+      id: '/admin_/customers/$customerId'
+      path: '/admin/customers/$customerId'
+      fullPath: '/admin/customers/$customerId'
+      preLoaderRoute: typeof AdminCustomersCustomerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -477,6 +498,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoutesRouteIdRoute: RoutesRouteIdRoute,
   ShopProductIdRoute: ShopProductIdRoute,
   StaffRouteSettingRoute: StaffRouteSettingRoute,
+  AdminCustomersCustomerIdRoute: AdminCustomersCustomerIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

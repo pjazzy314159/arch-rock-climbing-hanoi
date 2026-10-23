@@ -97,6 +97,30 @@ describe("the administration endpoints", () => {
     expect(url).toBe(`${API_BASE_URL}/api/admin/members?search=Alex%20Nguyen`);
   });
 
+  it("builds the customer directory query and detail URL", async () => {
+    const fetchMock = mockFetch(async () =>
+      jsonResponse({ items: [], total: 0, limit: 20, offset: 0 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { adminApi } = await import("@/services/api");
+    await adminApi.customers({
+      search: "Alex Nguyen",
+      role: "customer",
+      status: "active",
+      limit: 20,
+      offset: 40,
+    });
+    await adminApi.customer(7);
+
+    const [listUrl] = fetchMock.mock.calls[0] as unknown as [string];
+    const [detailUrl] = fetchMock.mock.calls[1] as unknown as [string];
+    expect(listUrl).toBe(
+      `${API_BASE_URL}/api/admin/customers?search=Alex+Nguyen&role=customer&status=active&limit=20&offset=40`,
+    );
+    expect(detailUrl).toBe(`${API_BASE_URL}/api/admin/customers/7`);
+  });
+
   it("posts a new route with the official grade", async () => {
     const fetchMock = mockFetch(async () => jsonResponse({ id: 9, name: "New Route" }));
     vi.stubGlobal("fetch", fetchMock);

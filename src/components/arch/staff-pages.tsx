@@ -21,7 +21,8 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { adminApi, staffApi, ApiError, ApiUnavailableError } from "@/services/api";
 import { WALL_TYPES, WALL_TYPE_LABELS, type WallType } from "@/services/arch";
 import { useSession } from "@/services/session";
-import type { ApiAdminMember, ApiRouteSummary, ApiTask } from "@/services/types";
+import type { ApiRouteSummary, ApiTask } from "@/services/types";
+import { CustomersDirectoryPanel } from "./customer-pages";
 import { EmptyNotice } from "./data-state";
 import { PageHeading, TextLink } from "./shared";
 
@@ -398,7 +399,7 @@ export function StaffTasksPage() {
 /* Administration                                                             */
 /* -------------------------------------------------------------------------- */
 
-type AdminTab = "Members" | "Routes" | "Tasks" | "Events" | "Messages";
+type AdminTab = "Customers" | "Routes" | "Tasks" | "Events" | "Messages";
 
 function MessagesTab() {
   const queryClient = useQueryClient();
@@ -466,61 +467,6 @@ function MessagesTab() {
           {error}
         </p>
       )}
-    </>
-  );
-}
-
-function MembersTab({ members }: { members: ApiAdminMember[] }) {
-  const [search, setSearch] = useState("");
-  const filtered = members.filter((member) =>
-    `${member.full_name} ${member.email}`.toLowerCase().includes(search.toLowerCase()),
-  );
-  return (
-    <>
-      <label className="search-field">
-        <Search size={17} />
-        <input
-          aria-label="Search members"
-          placeholder="Search members…"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </label>
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Member</th>
-              <th>Role</th>
-              <th>Membership</th>
-              <th>Agreement</th>
-              <th>Sends</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((member) => (
-              <tr key={member.id}>
-                <td>
-                  <strong>{member.full_name}</strong>
-                  <small>{member.email}</small>
-                </td>
-                <td>{member.role}</td>
-                <td>{member.membership_tier ?? "—"}</td>
-                <td>
-                  <span
-                    className={
-                      member.agreement_status === "signed" ? "status-sent" : "status-project"
-                    }
-                  >
-                    {member.agreement_status ?? "none"}
-                  </span>
-                </td>
-                <td>{member.total_sends}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </>
   );
 }
@@ -853,18 +799,12 @@ function EventsTab() {
 /** The operations workspace for administrators. */
 export function AdminDashboardPage() {
   const { status, user } = useSession();
-  const [tab, setTab] = useState<AdminTab>("Members");
+  const [tab, setTab] = useState<AdminTab>("Customers");
   const hydrated = useHydrated();
 
   const summary = useQuery({
     queryKey: ["admin", "summary"],
     queryFn: () => adminApi.summary(),
-    enabled: status === "authenticated" && user?.role === "admin",
-    retry: false,
-  });
-  const members = useQuery({
-    queryKey: ["admin", "members"],
-    queryFn: () => adminApi.members(),
     enabled: status === "authenticated" && user?.role === "admin",
     retry: false,
   });
@@ -882,15 +822,20 @@ export function AdminDashboardPage() {
   });
 
   const isAdmin = status === "authenticated" && user?.role === "admin";
+  const sessionLoading = status === "loading";
 
   return (
     <StaffShell>
       <PageHeading
         eyebrow="ARCH OPERATIONS"
         title="The gym, at a glance."
-        description="Members, routes, tasks and events — with the checks the backend makes on every request."
+        description="Customers, routes, tasks and events — with the checks the backend makes on every request."
       />
-      {!isAdmin ? (
+      {sessionLoading ? (
+        <div className="loading-block" aria-busy="true">
+          <p>Checking your session…</p>
+        </div>
+      ) : !isAdmin ? (
         <PermissionDenied need="an administrator account" />
       ) : (
         <>
@@ -935,7 +880,7 @@ export function AdminDashboardPage() {
 
           <div className="admin-toolbar">
             <div className="category-tabs">
-              {(["Members", "Routes", "Tasks", "Events", "Messages"] as AdminTab[]).map(
+              {(["Customers", "Routes", "Tasks", "Events", "Messages"] as AdminTab[]).map(
                 (option) => (
                   <Button
                     key={option}
@@ -949,14 +894,7 @@ export function AdminDashboardPage() {
             </div>
           </div>
 
-          {tab === "Members" &&
-            (members.isPending ? (
-              <div className="loading-block">
-                <p>Loading members…</p>
-              </div>
-            ) : (
-              <MembersTab members={members.data ?? []} />
-            ))}
+          {tab === "Customers" && <CustomersDirectoryPanel />}
           {tab === "Routes" && <RoutesTab routes={routes.data ?? []} />}
           {tab === "Tasks" &&
             (tasks.isPending ? (

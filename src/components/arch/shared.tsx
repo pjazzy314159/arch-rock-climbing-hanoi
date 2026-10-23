@@ -262,6 +262,7 @@ export function TextLink({
     | "/contact"
     | "/member"
     | "/member/logbook"
+    | "/admin"
     | "/leaderboard";
   children: ReactNode;
 }) {
