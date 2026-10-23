@@ -66,6 +66,7 @@ from app.schemas.holds import (
     WallHoldUpdateIn,
 )
 from app.schemas.staff import (
+    AdminAssigneeOut,
     AdminCustomerActivityOut,
     AdminCustomerAgreementOut,
     AdminCustomerAttemptOut,
@@ -90,6 +91,7 @@ from app.schemas.staff import (
 __all__ = [
     "AchievementIn",
     "AchievementOut",
+    "AdminAssigneeOut",
     "AdminCustomerActivityOut",
     "AdminCustomerAgreementOut",
     "AdminCustomerAttemptOut",

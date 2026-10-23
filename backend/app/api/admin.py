@@ -32,6 +32,7 @@ from app.models import (
     Wall,
 )
 from app.schemas import (
+    AdminAssigneeOut,
     AdminCustomerDetailOut,
     AdminCustomerListOut,
     AdminMemberOut,
@@ -112,6 +113,24 @@ def list_members(
     """Legacy customer list; the paginated directory is ``/customers``."""
     page = query_customers(db, search=search, limit=limit)
     return page.items
+
+
+@router.get("/assignees", response_model=list[AdminAssigneeOut])
+def list_task_assignees(
+    user: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> list[AdminAssigneeOut]:
+    """Staff and administrators who may be assigned tasks.
+
+    This is deliberately a minimal identity response for an assignment control:
+    no agreement, membership or other customer fields are returned. The team is
+    expected to stay small, so the list is not paginated; ordering is stable.
+    """
+    users = db.scalars(
+        select(User)
+        .where(User.role.in_((Role.STAFF, Role.ADMIN)))
+        .order_by(User.full_name, User.id)
+    ).all()
+    return [AdminAssigneeOut.model_validate(item) for item in users]
 
 
 @router.get("/customers", response_model=AdminCustomerListOut)
@@ -386,9 +405,11 @@ def list_all_tasks(
     user: User = Depends(require_admin), db: Session = Depends(get_db)
 ) -> list[TaskOut]:
     """Every task, for the operations view."""
-    from app.api.staff import _task_to_out
+    from app.api.staff import _task_load_options, _task_to_out
 
-    tasks = db.scalars(select(StaffTask).order_by(StaffTask.id)).all()
+    tasks = db.scalars(
+        select(StaffTask).options(*_task_load_options()).order_by(StaffTask.id)
+    ).all()
     return [_task_to_out(task) for task in tasks]
 
 

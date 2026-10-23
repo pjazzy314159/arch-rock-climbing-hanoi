@@ -9,13 +9,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.db import get_db
 from app.deps import require_admin, require_staff
 from app.models import (
     ChecklistItem,
+    Event,
     Role,
     StaffShift,
     StaffTask,
@@ -37,10 +38,25 @@ from app.schemas import (
 router = APIRouter(prefix="/api/staff", tags=["staff"])
 
 
+def _task_load_options():
+    """Load the task relations needed by ``TaskOut`` without an N+1 query."""
+    return (
+        joinedload(StaffTask.assignee),
+        joinedload(StaffTask.created_by),
+        joinedload(StaffTask.event),
+        selectinload(StaffTask.checklist),
+    )
+
+
 def _task_to_out(task: StaffTask) -> TaskOut:
     payload = TaskOut.model_validate(task)
     payload.assignee_name = task.assignee.full_name if task.assignee else None
-    payload.checklist = [ChecklistItemOut.model_validate(item) for item in task.checklist]
+    payload.created_by_name = task.created_by.full_name if task.created_by else None
+    payload.event_title = task.event.title if task.event else None
+    payload.event_starts_at = task.event.starts_at if task.event else None
+    payload.event_ends_at = task.event.ends_at if task.event else None
+    items = sorted(task.checklist, key=lambda item: (item.position, item.id))
+    payload.checklist = [ChecklistItemOut.model_validate(item) for item in items]
     return payload
 
 
@@ -67,6 +83,25 @@ def _assert_can_access(task: StaffTask, user: User) -> None:
         )
 
 
+def _assignee_or_error(db: Session, assignee_id: int) -> User:
+    assignee = db.get(User, assignee_id)
+    if assignee is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignee not found")
+    if assignee.role not in (Role.STAFF, Role.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tasks can only be assigned to staff or administrators",
+        )
+    return assignee
+
+
+def _event_or_error(db: Session, event_id: int) -> Event:
+    event = db.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    return event
+
+
 @router.get("/tasks", response_model=list[TaskOut])
 def list_tasks(
     status_filter: str | None = Query(default=None, alias="status"),
@@ -79,7 +114,7 @@ def list_tasks(
     Staff see their own assignments by default. Administrators can request
     every task with ``?all=true``.
     """
-    statement = select(StaffTask)
+    statement = select(StaffTask).options(*_task_load_options())
     if user.role is not Role.ADMIN or not all_tasks:
         statement = statement.where(StaffTask.assignee_id == user.id)
     if status_filter:
@@ -103,16 +138,10 @@ def create_task(
     db: Session = Depends(get_db),
 ) -> TaskOut:
     """Create a task and assign it to a member of staff."""
-    assignee = None
     if payload.assignee_id is not None:
-        assignee = db.get(User, payload.assignee_id)
-        if assignee is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignee not found")
-        if assignee.role not in (Role.STAFF, Role.ADMIN):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tasks can only be assigned to staff or administrators",
-            )
+        _assignee_or_error(db, payload.assignee_id)
+    if payload.event_id is not None:
+        _event_or_error(db, payload.event_id)
 
     task = StaffTask(
         title=payload.title.strip(),
@@ -130,7 +159,7 @@ def create_task(
             ChecklistItem(
                 task_id=task.id,
                 label=item.label.strip(),
-                position=item.position or index,
+                position=index,
             )
         )
     db.commit()
@@ -153,37 +182,41 @@ def update_task(
     task = _load_task(db, task_id)
     _assert_can_access(task, user)
 
-    is_admin = user.role is Role.ADMIN
-    if not is_admin and (
-        payload.assignee_id is not None
-        or payload.title is not None
-        or payload.description is not None
-        or payload.priority is not None
-        or payload.due_at is not None
-    ):
+    supplied = payload.model_fields_set
+    admin_fields = {"title", "description", "priority", "due_at", "assignee_id", "event_id"}
+    if user.role is not Role.ADMIN and supplied & admin_fields:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can change task details",
         )
 
-    if payload.title is not None:
-        task.title = payload.title.strip()
-    if payload.description is not None:
-        task.description = payload.description.strip()
-    if payload.priority is not None:
-        task.priority = payload.priority
-    if payload.due_at is not None:
-        task.due_at = payload.due_at
-    if payload.assignee_id is not None:
-        assignee = db.get(User, payload.assignee_id)
-        if assignee is None or assignee.role not in (Role.STAFF, Role.ADMIN):
+    # Nullable fields can be cleared explicitly. Required columns must not be
+    # null, even though the PATCH model needs nullable types to mark omission.
+    for field_name in ("title", "description", "priority", "status"):
+        if field_name in supplied and getattr(payload, field_name) is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tasks can only be assigned to staff or administrators",
+                detail=f"{field_name.replace('_', ' ').title()} cannot be null",
             )
-        task.assignee_id = assignee.id
-    if payload.status is not None:
-        task.status = payload.status
+    if "assignee_id" in supplied and payload.assignee_id is not None:
+        _assignee_or_error(db, payload.assignee_id)
+    if "event_id" in supplied and payload.event_id is not None:
+        _event_or_error(db, payload.event_id)
+
+    if "title" in supplied:
+        task.title = payload.title.strip()  # type: ignore[union-attr]
+    if "description" in supplied:
+        task.description = payload.description.strip()  # type: ignore[union-attr]
+    if "priority" in supplied:
+        task.priority = payload.priority  # type: ignore[assignment]
+    if "due_at" in supplied:
+        task.due_at = payload.due_at
+    if "assignee_id" in supplied:
+        task.assignee_id = payload.assignee_id
+    if "event_id" in supplied:
+        task.event_id = payload.event_id
+    if "status" in supplied:
+        task.status = payload.status  # type: ignore[assignment]
         task.completed_at = datetime.now(UTC) if payload.status is TaskStatus.DONE else None
 
     db.commit()
@@ -219,11 +252,21 @@ def add_checklist_item(
     user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ) -> ChecklistItemOut:
-    """Add a checklist entry to a task."""
+    """Add a checklist entry to a task.
+
+    Positions are assigned by the server so repeated additions do not collide.
+    The current table has no unique constraint on ``(task_id, position)``, so
+    concurrent requests can still race on the same next value; this is a known
+    limitation until the database model is extended.
+    """
     task = _load_task(db, task_id)
     _assert_can_access(task, user)
     label = payload.label.strip() or "Checklist item"
-    item = ChecklistItem(task_id=task.id, label=label, position=payload.position)
+    highest = db.scalar(
+        select(func.max(ChecklistItem.position)).where(ChecklistItem.task_id == task.id)
+    )
+    position = 0 if highest is None else highest + 1
+    item = ChecklistItem(task_id=task.id, label=label, position=position)
     db.add(item)
     db.commit()
     db.refresh(item)

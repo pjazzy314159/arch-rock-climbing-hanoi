@@ -1,6 +1,7 @@
 # Staff Operations — Audit and Design
 
-Status: design proposal for Phase 5; implementation not started
+Status: design accepted; Task 5.2 backend contract hardening implemented;
+Tasks 5.3–5.5 proposed
 Date: 2026-10-23
 Scope: staff tasks, checklists, shifts, event support and the staff workspace
 
@@ -11,7 +12,9 @@ table is proposed.
 
 The audit was done directly against the repository at the Phase 4 head
 (`f59a2a0`). Free-model subagent routing was unavailable, so the backend and
-frontend audits were completed sequentially.
+frontend audits were completed sequentially. Task 5.2 was implemented against
+the same schema without a migration; section A.6 records the exact contracts
+now in force.
 
 ## A. Current capabilities
 
@@ -43,15 +46,16 @@ equals their own user ID. An unassigned task is therefore invisible to staff.
 
 | Endpoint | Guard | Actual behaviour |
 | --- | --- | --- |
-| `GET /api/staff/tasks` | staff/admin | Returns the caller's own tasks by default. An administrator may request all tasks with `?all=true`; the flag does not widen a non-administrator's view. Supports a validated `status` filter. Ordered by nullable due date then ID. No pagination. |
-| `POST /api/staff/tasks` | admin | Creates a task with title, description, optional assignee, priority, due date, optional event ID and optional initial checklist. The assignee must exist and be a staff or administrator account. This is the only task-creation endpoint. |
-| `PATCH /api/staff/tasks/{id}` | staff/admin | Administrators may change title, description, priority, due date, assignee and status. Non-administrators may change status only; attempting to change the other fields returns 403. No event-ID or checklist edit. |
-| `POST /api/staff/tasks/{id}/status` | staff/admin | Dedicated status update. It accepts any valid task status for an authorised task; there is no transition check. Setting `done` sets `completed_at`; leaving `done` clears it. |
-| `POST /api/staff/tasks/{id}/checklist` | staff/admin | Adds a checklist item to an authorised task. The label is trimmed. `position` defaults to `0`, so several UI-added items can share the same position. |
+| `GET /api/staff/tasks` | staff/admin | Returns the caller's own tasks by default. An administrator may request all tasks with `?all=true`; the flag does not widen a non-administrator's view. Supports a validated `status` filter. Ordered by nullable due date then ID. Eagerly loads assignee, creator, event and checklist. No pagination. |
+| `POST /api/staff/tasks` | admin | Creates a task with title, description, optional assignee, priority, due date, optional event ID and optional initial checklist. The assignee must exist and be a staff or administrator account; a supplied event must exist (404). This is the only task-creation endpoint. |
+| `PATCH /api/staff/tasks/{id}` | staff/admin | Administrators may change title, description, priority, due date, assignee, status and event. Non-administrators may change status only; explicitly supplying any administrator field, including a null value, returns 403. Omitted fields stay unchanged; explicit null clears `assignee_id`, `due_at` and `event_id`; required fields cannot be null. |
+| `POST /api/staff/tasks/{id}/status` | staff/admin | Dedicated status update. It accepts any valid task status for an authorised task; there is still no transition check. Setting `done` sets `completed_at`; leaving `done` clears it. |
+| `POST /api/staff/tasks/{id}/checklist` | staff/admin | Adds a checklist item to an authorised task. The label is trimmed. The server assigns the next position; a client-supplied `position` is accepted for compatibility but ignored. |
 | `PATCH /api/staff/checklist/{item_id}` | staff/admin | Ticks or unticks an item, records `done_at`/`done_by_id`, and optionally edits its label/position. Permission is checked against the parent task. |
 | `GET /api/staff/shifts` | staff/admin | Returns the caller's shifts; administrators see the whole team. Optional `start`/`end` filter on `starts_at`. Ordered by start time. No pagination. |
 | `POST /api/staff/shifts` | admin | Creates a shift for a staff or administrator account. Rejects an end time that is not after the start time. No overlap, event, update or delete support. |
-| `GET /api/admin/tasks` | admin | Returns every task ordered by ID. This is the administrator's activity view. No filters or pagination. |
+| `GET /api/admin/tasks` | admin | Returns every task ordered by ID with the same eager-loaded event, creator, assignee and checklist context. This is the administrator's activity view. No filters or pagination. |
+| `GET /api/admin/assignees` | admin | New in Task 5.2. Returns `id`, `full_name`, `email` and `role` for every staff/administrator account, ordered by name then ID. No pagination; the team is small. No password, agreement or membership data. |
 | `GET /api/admin/events`, `POST /api/admin/events` | admin | Lists every event and creates an event. No event update/delete endpoint. |
 
 The admin summary counts tasks whose status is `todo` or `in_progress` as open,
@@ -132,6 +136,82 @@ therefore be assignees but are not included in that headline staff count.
 | Low | Completed tasks do not require all checklist items to be complete. | The API allows `done` with unchecked steps. This may be acceptable or unsafe depending on the task. |
 | Low | Administrator task creation from `/staff` invalidates only `["staff", "tasks"]`. | The administrator Tasks tab can remain stale until its query is invalidated or the page reloads. |
 
+### A.6 Task 5.2 implemented contracts and remaining policy
+
+Task 5.2 changed backend behaviour only. The schema and migration history are
+unchanged; the event relationship is an ORM relationship over the existing
+`staff_tasks.event_id` foreign key. `alembic check` reports no new upgrade
+operations.
+
+**Event validation and context**
+
+- `POST /api/staff/tasks` and `PATCH /api/staff/tasks/{id}` validate a supplied
+  `event_id`. A missing event returns 404 with `Event not found`; no task is
+  created or changed. Event cancellation/deletion policy is not implemented.
+- `TaskOut` now exposes `created_by_name`, `event_title`, `event_starts_at` and
+  `event_ends_at` in addition to the existing IDs and assignee name. These are
+  populated from the ORM relationships.
+- `GET /api/staff/tasks` and `GET /api/admin/tasks` use `joinedload` for the
+  assignee, creator and event plus `selectinload` for the checklist. A focused
+  query-count test confirms the listing does not grow per task.
+
+**PATCH clear semantics**
+
+- `PATCH /api/staff/tasks/{id}` uses Pydantic `model_fields_set`, so an omitted
+  field stays unchanged and an explicit `null` is distinguishable.
+- Administrators may clear `assignee_id`, `due_at` and `event_id` with an
+  explicit `null`, and may replace any of them with a validated value. Missing
+  assignees/events return 404; a customer assignee returns 400.
+- `title`, `description`, `priority` and `status` are non-nullable columns. An
+  explicit `null` for any of them returns 400 rather than silently doing
+  nothing. `event_id` is now an administrator-editable field.
+- Staff still may change only status on their own tasks. Supplying any
+  administrator-only field, including a null value, returns 403. This does not
+  broaden staff permissions.
+
+**Checklist ordering**
+
+- New tasks assign positions `0..n-1` in request order. New items appended to an
+  existing task receive `max(position) + 1`. A client-supplied position is
+  accepted for backward compatibility but ignored.
+- `TaskOut` sorts checklist items by `(position, id)` so legacy duplicate
+  positions still render deterministically. The database has no unique
+  constraint on `(task_id, position)`, so two concurrent additions can still
+  race on the same next value; the API does not claim a concurrency guarantee.
+  Adding such a constraint would require a migration and an ARCH decision.
+
+**Administrator assignee options**
+
+- New `GET /api/admin/assignees` route, administrator-only. It returns only
+  `id`, `full_name`, `email` and `role` for users whose role is `staff` or
+  `admin`, ordered by full name then ID. It exposes no password, session,
+  agreement or customer data and is not paginated because the team is expected
+  to remain small.
+- The route filters by role, matching the existing task-assignment rule. It does
+  not filter inactive accounts; whether inactive staff/admin accounts should be
+  assignable remains an ARCH decision. The same unresolved point applies to task
+  create/update validation.
+
+**Status transition policy**
+
+- No restrictive transition graph was introduced in Task 5.2. The existing API
+  continues to accept any valid `TaskStatus` value for an authorised task, and
+  `completed_at` follows `done`. Unknown enum values still return 422.
+- A focused test documents the current permissive behaviour so a future ARCH
+  decision can change it deliberately. The 409 transition matrix proposed in
+  section B is deferred, not implemented.
+
+**Focused test evidence**
+
+`backend/tests/test_staff_task_contracts.py` covers event create/update
+validation and context, omitted versus explicit-null PATCH fields, valid and
+invalid replacements, administrator-only field refusal, server-assigned
+checklist positions and ordering, assignee-route authorization and minimal
+fields, permissive status behaviour and N+1 prevention. The full backend suite
+passes on isolated SQLite. The existing PostgreSQL integration suite also passed
+against the designated test database, but it does not yet create staff
+persistence records; that focused coverage remains Task 5.5.
+
 ## B. Proposed MVP
 
 The MVP should make the existing task and shift data usable in the existing
@@ -180,25 +260,31 @@ scheduling policy. No database migration is required for the core MVP.
   Tasks tab. An administrator who loses the role mid-session must see the
   permission state, not a blank table.
 
-### B.3 Minimal backend contract changes (no new tables)
+### B.3 Backend contract changes (no new tables)
 
-These changes make the existing UI reliable; they do not add task/event tables:
+Task 5.2 implemented the following against the existing schema:
 
-1. Validate `event_id` on task creation and return 404 when the event does not
-   exist. Include event title/start/end in the task read model through a join or
-   relationship.
-2. Enforce a status transition matrix in one place so both PATCH and the status
-   endpoint behave identically. Return 409 for a disallowed transition and keep
-   422 for an unknown enum value.
-3. Make PATCH distinguish "field omitted" from "field explicitly null" for
-   `assignee_id` and `due_at`, so an administrator can unassign or clear a due
-   date. Add `event_id` to task updates if event support is confirmed.
-4. Assign the next checklist position on the server when the client omits it.
-   Preserve explicit positions when supplied. Keep the existing ordering.
-5. Return the creator/checklist-completer display names where they are useful
-   for accountability. Do not expose password or token data.
-6. Keep the existing admin-only all-task endpoint. Add simple server-side
-   filters only if needed; do not build a second task list endpoint.
+1. Validate `event_id` on task creation and update and return 404 when the event
+   does not exist. Expose event title/start/end in the task read model through
+   the ORM relationship. Done.
+2. Distinguish "field omitted" from "field explicitly null" in PATCH for
+   `assignee_id`, `due_at` and `event_id`, so an administrator can unassign or
+   clear a due date or event. Done. Required fields cannot be explicitly null.
+3. Assign the next checklist position on the server. Done. Client-supplied
+   positions are ignored for new items; ordering is deterministic. Concurrent
+   additions are not guaranteed collision-free without a future constraint.
+4. Return the creator display name and event context in task responses without
+   exposing password or token data. Done. Checklist-completer names remain a
+   future UI/accountability decision.
+5. Add a minimal administrator-only assignee option endpoint. Done at
+   `GET /api/admin/assignees`.
+6. Keep the existing admin-only all-task endpoint. No second task list endpoint
+   was added. Simple server-side filters remain deferred until volume requires
+   them.
+7. Enforce a status transition matrix in one place. Deferred: no ARCH decision
+   confirms the allowed transitions, so Task 5.2 kept the existing permissive
+   contract and documented it. Unknown enum values still return 422; a future
+   matrix should return 409 for a disallowed transition.
 
 ### B.4 Explicit non-goals for the MVP
 
@@ -213,9 +299,10 @@ These changes make the existing UI reliable; they do not add task/event tables:
 
 ### B.5 Proposed implementation sequence
 
-1. **Task 5.2 — Backend contract hardening.** Event validation and event
-   context, status transitions, PATCH clear semantics, checklist position,
-   assignee-option endpoint and tests. No migration expected.
+1. **Task 5.2 — Backend contract hardening.** Implemented: event validation and
+   context, PATCH clear semantics, server-assigned checklist position,
+   administrator assignee-option endpoint and focused tests. Status transitions
+   remain permissive pending the ARCH decision. No migration was required.
 2. **Task 5.3 — Administrator assignment and shift workspace.** Admin task
    creation/assignment UI and a basic shift list/create tab using existing
    endpoints.
@@ -296,7 +383,9 @@ needed at all.
 | Create a task | No | No | Yes |
 | Assign or reassign a task | No | No | Yes |
 | Change task title/description/priority/due/event | No | No | Yes |
-| Update status on an assigned task | No | Yes, own tasks and approved transitions | Yes, any task |
+| Clear assignee/due/event with an explicit null | No | No | Yes |
+| List assignee options | No | No | Yes |
+| Update status on an assigned task | No | Yes, own tasks; any valid status until ARCH approves a transition graph | Yes, any task |
 | Add a checklist item | No | Yes, own tasks (current behaviour; see F.4) | Yes |
 | Tick/untick a checklist item | No | Yes, own tasks | Yes |
 | Delete a task or checklist item | No | No | Not in the MVP; decide with ARCH |
@@ -317,10 +406,11 @@ deliberate role/permission design, not an implicit widening of the staff role.
 - Apply `_assert_can_access` to every task and checklist mutation. A staff member
   must not reach another person's task by guessing its ID.
 - Reject a non-administrator who tries to change title, description, priority,
-  due date or assignee through PATCH.
+  due date, assignee or event through PATCH, including when the value is null.
 - Reject a task assigned to a customer at creation or reassignment.
 - Reject a shift assigned to a customer.
-- Validate event references before insert/update.
+- Validate event and assignee references before insert/update. Implemented in
+  Task 5.2 for task create/update.
 - Return 403 for a role refusal and 404 for a missing record; do not reveal
   whether another person's task exists to an unauthorised staff member.
 - Do not rely on the UI to hide controls. The same checks must work through the
@@ -332,7 +422,10 @@ What exists today:
 
 - task and checklist `created_at`/`updated_at`;
 - task `created_by_id`, `completed_at`, assignee and event;
-- checklist `done_by_id` and `done_at`;
+- task responses expose `created_by_name`, event title/start/end and assignee
+  name from the existing relationships;
+- checklist `done_by_id` and `done_at` (the response exposes the ID, not a
+  completer display name);
 - shift creator is not stored (there is no `created_by_id` on `staff_shifts`);
 - no history of previous statuses, assignees or checklist edits.
 
@@ -370,18 +463,27 @@ activity" capability. Staff do not receive a team-wide activity feed.
    initial checklist. The response includes the event context and checklist.
 6. An administrator can reassign a task and clear an assignee or due date where
    the approved PATCH contract allows it.
-7. Invalid status transitions are refused with 409; unknown status values remain
-   422. Valid transitions update `completed_at` consistently.
+7. Status transitions remain backward-compatible until ARCH approves a
+   transition graph. Any valid status value is accepted for an authorised task;
+   unknown values return 422 and `completed_at` follows `done`. A future matrix
+   should return 409 for a disallowed transition.
 8. Checklist state survives a new GET request. A tick records `done_by_id` and
-   `done_at`; an untick clears them. New items receive a stable order.
+   `done_at`; an untick clears them. New items receive a stable server-assigned
+   order.
 9. A task cannot reference a nonexistent event. An event-linked task returns the
-   event title/start in the read model.
+   event title/start/end in the read model. Event deletion keeps the existing
+   foreign-key behaviour; no cancellation policy is invented.
 10. Shifts cannot end before they start or be assigned to a customer. Staff see
     only their own shifts; administrators see all.
 11. Missing task, checklist item or shift records return 404 without leaking
     another user's data.
 12. The admin summary remains consistent after task creation, completion and
     cancellation.
+13. An administrator-only assignee option endpoint returns only staff/admin ID,
+    display name, email and role. Customers and staff receive 403; anonymous
+    callers receive 401.
+14. PATCH preserves omitted nullable fields and can clear assignee, due date and
+    event explicitly. Required fields cannot be set to null.
 
 ### E.2 Frontend acceptance criteria
 
@@ -405,6 +507,15 @@ activity" capability. Staff do not receive a team-wide activity feed.
     administrator task response.
 
 ### E.3 Test plan
+
+**Task 5.2 implemented backend coverage:** `backend/tests/test_staff_task_contracts.py`
+contains 14 focused tests for event validation/context, omitted versus
+explicit-null PATCH fields, valid and invalid replacements, administrator-only
+field refusal, server-assigned checklist positions and ordering, assignee-route
+authorization and minimal fields, permissive status behaviour and N+1 prevention.
+The full isolated-SQLite suite passes (238 passed, 2 skipped).
+
+The remaining plan below covers Tasks 5.3–5.5 and broader edge cases.
 
 **Backend (ordinary SQLite suite):**
 
@@ -504,3 +615,11 @@ activity" capability. Staff do not receive a team-wide activity feed.
 12. **Completion and evidence:** Do any tasks require evidence (photo, note,
     signature) or checklist gating before completion? The current schema stores
     only task/checklist text and status.
+13. **Inactive assignees:** Should inactive staff or administrator accounts be
+    excluded from `GET /api/admin/assignees` and from task assignment? Task 5.2
+    filters by role only to match the existing assignment rule; changing this
+    needs an explicit policy.
+14. **Checklist concurrency:** The server assigns positions but the database has
+    no unique constraint on `(task_id, position)`. Two concurrent additions can
+    still share a position. Confirm whether a future migration should add the
+    constraint and how a collision should be retried.

@@ -21,8 +21,14 @@ class ChecklistItemOut(ORMModel):
 
 
 class ChecklistItemIn(BaseModel):
+    """A new checklist item.
+
+    ``position`` is accepted for backward compatibility, but the server assigns
+    the final position so new items cannot collide with existing ones.
+    """
+
     label: str = Field(min_length=1, max_length=200)
-    position: int = 0
+    position: int | None = None
 
 
 class ChecklistUpdateIn(BaseModel):
@@ -42,7 +48,11 @@ class TaskOut(ORMModel):
     assignee_id: int | None = None
     assignee_name: str | None = None
     created_by_id: int | None = None
+    created_by_name: str | None = None
     event_id: int | None = None
+    event_title: str | None = None
+    event_starts_at: datetime | None = None
+    event_ends_at: datetime | None = None
     created_at: datetime
     checklist: list[ChecklistItemOut] = []
 
@@ -64,6 +74,7 @@ class TaskUpdateIn(BaseModel):
     priority: TaskPriority | None = None
     status: TaskStatus | None = None
     due_at: datetime | None = None
+    event_id: int | None = None
 
 
 class TaskStatusIn(BaseModel):
@@ -107,6 +118,15 @@ class AdminSummaryOut(BaseModel):
     open_tasks: int
     pending_agreements: int
     products: int
+
+
+class AdminAssigneeOut(ORMModel):
+    """The minimum identity fields needed to populate an assignment control."""
+
+    id: int
+    full_name: str
+    email: str
+    role: str
 
 
 class AdminMemberOut(ORMModel):

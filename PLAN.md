@@ -186,8 +186,8 @@ questions that still require ARCH confirmation.
 
 #### Phase 5 — Staff operations
 
-**Status:** `IN_PROGRESS` — design completed in Task 5.1; no implementation
-code has been changed by the design task.
+**Status:** `IN_PROGRESS` — design completed in Task 5.1 and backend contract
+hardening completed in Task 5.2; Tasks 5.3–5.5 remain.
 
 **Design document:** [STAFF_OPERATIONS_DESIGN.md](STAFF_OPERATIONS_DESIGN.md)
 
@@ -212,15 +212,17 @@ code has been changed by the design task.
 - PostgreSQL integration tests currently cover migrations and route/hold models,
   not staff task/checklist/shift persistence.
 
-**Main gaps and risks:** no event validation/context on task creation; no status
-transition policy; PATCH cannot clear assignee/due date; UI-added checklist items
-can share position `0`; no administrator assignment UI; no shift UI; no audit
-history for status/assignee/checklist changes.
+**Main gaps and risks:** Task 5.2 resolved event validation/context, PATCH clear
+semantics and server-assigned checklist ordering. Remaining: no status
+transition policy (the API stays permissive pending an ARCH decision); no
+administrator assignment UI; no shift UI; no audit history for status/assignee/
+checklist changes; no staff PostgreSQL integration; and no database constraint
+against concurrent checklist-position collisions.
 
 | #   | Task | Status | Acceptance criteria |
 | --- | --- | --- | --- |
 | 5.1 | Staff operations audit and design | `DONE` | Existing staff schema, endpoints, permissions, UI and tests inspected; proposed MVP, no duplicate tables, acceptance tests and ARCH questions recorded in `STAFF_OPERATIONS_DESIGN.md`. |
-| 5.2 | Backend contract hardening | `TODO` | Event validation/context, status transition policy, PATCH clear semantics, checklist ordering, assignee-option endpoint and backend tests. No migration expected. |
+| 5.2 | Backend contract hardening | `DONE` | Event validation/context and N+1 prevention; omitted-versus-explicit-null PATCH semantics; server-assigned checklist positions; administrator assignee-option endpoint; focused backend tests. Status transitions remain backward-compatible pending an ARCH decision. No migration. |
 | 5.3 | Administrator assignment and shift workspace | `TODO` | Admin task creation/assignment UI and basic shift list/create using existing endpoints; loading/empty/error/permission states. |
 | 5.4 | Staff dashboard context and mobile states | `TODO` | Event-linked task context, upcoming shifts, approved status controls, filters, error/empty states and mobile layout. |
 | 5.5 | PostgreSQL integration and regression | `TODO` | Staff persistence covered on PostgreSQL; browser/frontend checks extended for the staff and administrator workspaces. |
@@ -2492,6 +2494,55 @@ shifts. Phase 4 does not resolve the ARCH questions in
 
 **Next:** Task 5.2 — harden the task/checklist/shift API contract and add the
 administrator assignee options needed by the assignment UI.
+
+### Task 5.2 — Backend contract hardening (`DONE`)
+
+**Scope**
+
+- Harden the existing staff-task API without a migration: validate event
+  references and expose event context, make PATCH clear semantics explicit,
+  assign checklist positions on the server and add administrator assignee
+  options.
+- Keep status transitions backward-compatible because ARCH has not confirmed a
+  transition graph. Do not add event cancellation/deletion behaviour.
+
+**Implemented contracts**
+
+- `POST /api/staff/tasks` and `PATCH /api/staff/tasks/{id}` return 404 for a
+  nonexistent event. `TaskOut` adds `created_by_name`, `event_title`,
+  `event_starts_at` and `event_ends_at`; task lists eagerly load assignee,
+  creator, event and checklist to avoid N+1 queries.
+- PATCH distinguishes omitted fields from explicit nulls. Omitted fields remain
+  unchanged; `assignee_id`, `due_at` and `event_id` can be cleared by an
+  administrator; required fields cannot be explicitly null. Staff still may
+  change only status on their own tasks.
+- New checklist items receive server-assigned positions. Initial positions follow
+  request order; appended positions use `max + 1`; client positions are ignored.
+  Responses sort by position then ID. Concurrent additions can still race because
+  there is no unique database constraint.
+- New administrator-only `GET /api/admin/assignees` returns the minimum fields
+  `id`, `full_name`, `email` and `role` for staff/administrator accounts in stable
+  order. It exposes no customer, agreement or credential data.
+- Status transitions remain permissive; unknown enum values still return 422.
+  The transition matrix and 409 response remain an ARCH decision.
+
+**Evidence**
+
+- New focused tests: `backend/tests/test_staff_task_contracts.py` (14 tests).
+- Full backend suite: **238 passed, 2 skipped** on isolated SQLite.
+- Ruff: passed. `git diff --check`: passed. `alembic check`: no new operations.
+- PostgreSQL staff persistence was not tested in this task; it remains Task 5.5.
+
+**Unresolved policy**
+
+- Status transition graph and whether disallowed transitions return 409.
+- Whether inactive staff/administrator accounts should be assignable.
+- Whether a future migration should add a unique checklist-position constraint.
+- Event cancellation/deletion effects on linked tasks remain as the existing
+  foreign-key behaviour, not a new policy.
+
+**Next:** Task 5.3 — administrator assignment and shift workspace. Do not mark
+Tasks 5.3–5.5 complete until their UI/PostgreSQL evidence exists.
 
 ---
 

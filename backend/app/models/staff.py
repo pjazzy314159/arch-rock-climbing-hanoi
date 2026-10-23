@@ -62,6 +62,7 @@ class StaffTask(Base, TimestampMixin):
         back_populates="tasks", foreign_keys=[assignee_id]
     )
     created_by: Mapped[User] = relationship(foreign_keys=[created_by_id])  # noqa: F821
+    event: Mapped[Event] = relationship()  # noqa: F821
     checklist: Mapped[list[ChecklistItem]] = relationship(
         back_populates="task", cascade="all, delete-orphan", order_by="ChecklistItem.position"
     )
