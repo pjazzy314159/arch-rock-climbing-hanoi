@@ -147,35 +147,14 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
   text-decoration: none;
   flex-shrink: 0;
 }
 
 .brand-logo {
-  width: 2.25rem;
+  width: 8.5rem;
   height: auto;
   display: block;
-}
-
-.brand-type {
-  display: flex;
-  flex-direction: column;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 1.35rem;
-  line-height: 1;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.brand-type small {
-  font-family: var(--font-sans);
-  font-size: 0.55rem;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  color: var(--color-muted-foreground);
-  margin-top: 0.2rem;
 }
 
 .desktop-nav {
