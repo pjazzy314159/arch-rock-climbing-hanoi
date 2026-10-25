@@ -51,9 +51,14 @@ export function ServiceIcon({ name }: { name: string }) {
 export function Brand() {
   return (
     <Link to="/" aria-label="ARCH home" className="brand">
-      <span className="brand-mark">
-        <Mountain />
-      </span>
+      <img
+        className="brand-logo"
+        src="/brand/arch-logo.png"
+        alt=""
+        width={2481}
+        height={1493}
+        aria-hidden="true"
+      />
       <span className="brand-type">
         ARCH<small>ROCK CLIMBING HANOI</small>
       </span>

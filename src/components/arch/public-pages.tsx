@@ -35,6 +35,7 @@ import {
   type RouteFilters,
 } from "@/services/arch";
 import gymPhoto from "@/assets/arch-gym.jpg";
+import panoramaPhoto from "@/assets/arch-overall.jpg";
 import shoePhoto from "@/assets/climbing-shoes.jpg";
 
 export function GymPage() {
@@ -109,9 +110,9 @@ export function TourPage() {
       />
       <div className={`tour-view ${zoom ? "tour-zoom" : ""}`} ref={container}>
         <img
-          src={gymPhoto}
-          width={1920}
-          height={1024}
+          src={panoramaPhoto}
+          width={2046}
+          height={756}
           alt={`${zones[zone]} photographic gym preview`}
           style={{ objectPosition: `${pan}% center` }}
         />

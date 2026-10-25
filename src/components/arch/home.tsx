@@ -15,6 +15,7 @@ import { routeQuery } from "@/services/arch";
 import { SampleDataBanner } from "./data-state";
 import { RouteCard, TextLink } from "./shared";
 import gymPhoto from "@/assets/arch-gym.jpg";
+import panoramaPhoto from "@/assets/arch-overall.jpg";
 import shoePhoto from "@/assets/climbing-shoes.jpg";
 export function Home() {
   const { data: routes } = useSuspenseQuery(routeQuery);
@@ -23,10 +24,10 @@ export function Home() {
       <section className="home-hero">
         <img
           className="hero-photo"
-          src={gymPhoto}
-          alt="A climber on an overhanging wall in an industrial climbing gym"
-          width={1920}
-          height={1024}
+          src={panoramaPhoto}
+          alt="The ARCH climbing gym interior showing the full wall expanse"
+          width={2046}
+          height={756}
         />
         <div className="hero-shade" />
         <div className="hero-inner">
