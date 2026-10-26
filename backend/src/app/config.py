@@ -13,7 +13,8 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = BACKEND_ROOT.parent
 
 #: Environment names that are treated as a production deployment.
 PRODUCTION_ENVIRONMENTS = {"production", "prod"}
@@ -28,7 +29,7 @@ class Settings(BaseSettings):
     """Runtime settings for the ARCH API."""
 
     model_config = SettingsConfigDict(
-        env_file=(REPO_ROOT / ".env", Path(__file__).resolve().parent / ".env"),
+        env_file=(REPO_ROOT / ".env", BACKEND_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
