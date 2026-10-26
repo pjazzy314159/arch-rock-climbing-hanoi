@@ -53,3 +53,5 @@ __pycache__/
 
 *.md
 !README.md
+# Generated Cloudflare Python Workers packages
+/backend/python_modules/
