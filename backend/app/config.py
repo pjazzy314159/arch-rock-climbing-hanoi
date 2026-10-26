@@ -97,7 +97,39 @@ class Settings(BaseSettings):
         return bool(self.llm_provider and self.llm_api_key and self.llm_model)
 
 
+def _worker_settings_overrides() -> dict[str, object]:
+    """Read settings exposed by the Cloudflare Worker runtime."""
+    try:
+        from workers import env as worker_env
+    except Exception:
+        # Normal local FastAPI / Uvicorn process.
+        return {}
+
+    names = (
+        "ARCH_ENVIRONMENT",
+        "ARCH_SECRET_KEY",
+        "ARCH_ACCESS_TOKEN_TTL_MINUTES",
+        "CORS_ORIGINS",
+        "LLM_PROVIDER",
+        "LLM_API_KEY",
+        "LLM_MODEL",
+    )
+
+    overrides: dict[str, object] = {}
+
+    for name in names:
+        try:
+            value = getattr(worker_env, name, None)
+        except Exception:
+            continue
+
+        if value is not None and str(value) != "":
+            overrides[name] = value
+
+    return overrides
+
+
 @lru_cache
 def get_settings() -> Settings:
-    """Return the cached application settings."""
-    return Settings()
+    """Load settings from Worker bindings, falling back to local settings."""
+    return Settings(**_worker_settings_overrides())

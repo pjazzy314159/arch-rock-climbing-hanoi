@@ -10,7 +10,11 @@
     }
   ],
   "vars": {
-    "ARCH_ENVIRONMENT": "development",
-    "CORS_ORIGINS": "https://arch-rock-climbing-hanoi.vercel.app,http://localhost:5173,http://localhost:8080,http://localhost:8083,http://localhost:8090"
+  "ARCH_ENVIRONMENT": "production",
+  "CORS_ORIGINS": "https://arch-rock-climbing-hanoi.vercel.app"
+  },
+  "secrets": {
+    "required": ["ARCH_SECRET_KEY"]
   }
+
 }
