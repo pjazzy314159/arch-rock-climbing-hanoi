@@ -30,12 +30,18 @@ from sqlalchemy.orm import sessionmaker
 from app.config import get_settings
 from app.db import Base
 from app.models import (
+    ChecklistItem,
     ClimbRoute,
     HoldRole,
     HoldSetStatus,
     RouteHold,
     RouteHoldSet,
     RouteStatus,
+    Role,
+    StaffShift,
+    StaffTask,
+    TaskPriority,
+    TaskStatus,
     User,
     Wall,
     WallHold,
@@ -291,5 +297,249 @@ def test_the_models_and_constraints_work_on_postgresql(
             assert state.published is not None
             assert [item.wall_hold_id for item in state.draft.holds] == draft_hold_ids
             assert [item.wall_hold_id for item in state.published.holds] == published_ids
+    finally:
+        engine.dispose()
+
+
+def test_staff_task_checklist_shift_workflows_on_postgresql(
+    postgres_schema: tuple[URL, str],
+) -> None:
+    """Staff task, checklist and shift CRUD work correctly on PostgreSQL."""
+    base, schema = postgres_schema
+    engine = sa.create_engine(_schema_url(base, schema), future=True)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False, future=True)
+    try:
+        with factory() as db:
+            # Create test users: admin, staff, and customer
+            admin = User(
+                email="admin@pg-test.example.com",
+                full_name="PostgreSQL Admin",
+                password_hash="not-a-real-password-hash",
+                is_active=True,
+                role=Role.ADMIN,
+            )
+            staff_user = User(
+                email="staff@pg-test.example.com",
+                full_name="PostgreSQL Staff",
+                password_hash="not-a-real-password-hash",
+                is_active=True,
+                role=Role.STAFF,
+            )
+            customer = User(
+                email="customer@pg-test.example.com",
+                full_name="PostgreSQL Customer",
+                password_hash="not-a-real-password-hash",
+                is_active=True,
+                role=Role.CUSTOMER,
+            )
+            db.add_all([admin, staff_user, customer])
+            db.flush()
+
+            # --- Staff Task CRUD ---
+            # Create a task assigned to staff
+            task = StaffTask(
+                title="Test route inspection",
+                description="Inspect the new routes on the overhang wall",
+                status=TaskStatus.TODO,
+                priority=TaskPriority.HIGH,
+                assignee_id=staff_user.id,
+                created_by_id=admin.id,
+            )
+            db.add(task)
+            db.flush()
+
+            # Verify task created with correct values
+            assert task.id is not None
+            assert task.status is TaskStatus.TODO
+            assert task.priority is TaskPriority.HIGH
+            assert task.assignee_id == staff_user.id
+            assert task.created_by_id == admin.id
+            assert task.completed_at is None
+
+            # Update task status to in_progress
+            task.status = TaskStatus.IN_PROGRESS
+            db.flush()
+
+            stored_task = db.get(StaffTask, task.id)
+            assert stored_task is not None
+            assert stored_task.status is TaskStatus.IN_PROGRESS
+
+            # Complete the task
+            task.status = TaskStatus.DONE
+            task.completed_at = utcnow()
+            db.flush()
+
+            stored_task = db.get(StaffTask, task.id)
+            assert stored_task.status is TaskStatus.DONE
+            assert stored_task.completed_at is not None
+
+            # Cancel a task (should not set completed_at)
+            cancelled_task = StaffTask(
+                title="Cancelled task",
+                description="This task was cancelled",
+                status=TaskStatus.CANCELLED,
+                assignee_id=staff_user.id,
+            )
+            db.add(cancelled_task)
+            db.flush()
+            assert cancelled_task.status is TaskStatus.CANCELLED
+            assert cancelled_task.completed_at is None
+
+            # --- Checklist CRUD ---
+            # Add checklist items to the task
+            item1 = ChecklistItem(
+                task_id=task.id,
+                label="Check holds are secure",
+                position=0,
+            )
+            item2 = ChecklistItem(
+                task_id=task.id,
+                label="Verify route grades",
+                position=1,
+            )
+            item3 = ChecklistItem(
+                task_id=task.id,
+                label="Update route status in system",
+                position=2,
+            )
+            db.add_all([item1, item2, item3])
+            db.flush()
+
+            # Verify checklist items created with correct ordering
+            assert item1.id is not None
+            assert item2.id is not None
+            assert item3.id is not None
+            assert item1.position == 0
+            assert item2.position == 1
+            assert item3.position == 2
+
+            # Tick the first item
+            item1.is_done = True
+            item1.done_at = utcnow()
+            item1.done_by_id = staff_user.id
+            db.flush()
+
+            stored_item1 = db.get(ChecklistItem, item1.id)
+            assert stored_item1.is_done is True
+            assert stored_item1.done_at is not None
+            assert stored_item1.done_by_id == staff_user.id
+
+            # Verify checklist relationship and ordering
+            stored_task = db.get(StaffTask, task.id)
+            assert stored_task is not None
+            checklist = stored_task.checklist
+            assert len(checklist) == 3
+            assert checklist[0].label == "Check holds are secure"
+            assert checklist[1].label == "Verify route grades"
+            assert checklist[2].label == "Update route status in system"
+            assert checklist[0].is_done is True
+            assert checklist[1].is_done is False
+            assert checklist[2].is_done is False
+
+            # --- Staff Shift CRUD ---
+            # Create a shift for the staff member
+            from datetime import datetime, timedelta
+            shift_start = utcnow() + timedelta(days=1)
+            shift_end = shift_start + timedelta(hours=8)
+
+            shift = StaffShift(
+                staff_id=staff_user.id,
+                starts_at=shift_start,
+                ends_at=shift_end,
+                role="Floor staff",
+                notes="Morning shift - route inspection",
+            )
+            db.add(shift)
+            db.flush()
+
+            assert shift.id is not None
+            assert shift.staff_id == staff_user.id
+            assert shift.role == "Floor staff"
+            assert shift.notes == "Morning shift - route inspection"
+
+            # Update shift
+            shift.role = "Route setter"
+            shift.notes = "Morning shift - route setting"
+            db.flush()
+
+            stored_shift = db.get(StaffShift, shift.id)
+            assert stored_shift is not None
+            assert stored_shift.role == "Route setter"
+            assert stored_shift.notes == "Morning shift - route setting"
+
+            # Verify shift timing constraints (ends_at must be after starts_at)
+            # This is enforced at the application level, not database level
+            invalid_shift = StaffShift(
+                staff_id=staff_user.id,
+                starts_at=shift_end,
+                ends_at=shift_start,  # ends before starts
+                role="Invalid shift",
+            )
+            db.add(invalid_shift)
+            db.flush()  # This should succeed at DB level (no constraint)
+            # Application validation should catch this
+
+            # --- Database-level constraints ---
+            # Task assignee must exist (FK constraint)
+            with pytest.raises(sa.exc.IntegrityError), engine.begin() as connection:
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO staff_tasks (title, status, priority, assignee_id, created_at, updated_at) "
+                        "VALUES (:title, :status, :priority, :assignee_id, now(), now())"
+                    ),
+                    {
+                        "title": "Invalid task",
+                        "status": "todo",
+                        "priority": "normal",
+                        "assignee_id": 99999,  # non-existent user
+                    },
+                )
+
+            # Checklist item task_id must exist (FK constraint)
+            with pytest.raises(sa.exc.IntegrityError), engine.begin() as connection:
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO checklist_items (task_id, label, position, is_done, created_at, updated_at) "
+                        "VALUES (:task_id, :label, :position, :is_done, now(), now())"
+                    ),
+                    {
+                        "task_id": 99999,  # non-existent task
+                        "label": "Invalid item",
+                        "position": 0,
+                        "is_done": False,
+                    },
+                )
+
+            # Shift staff_id must exist (FK constraint)
+            with pytest.raises(sa.exc.IntegrityError), engine.begin() as connection:
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO staff_shifts (staff_id, starts_at, ends_at, role, notes, created_at, updated_at) "
+                        "VALUES (:staff_id, :starts_at, :ends_at, :role, :notes, now(), now())"
+                    ),
+                    {
+                        "staff_id": 99999,  # non-existent user
+                        "starts_at": shift_start,
+                        "ends_at": shift_end,
+                        "role": "Floor staff",
+                        "notes": "",
+                    },
+                )
+
+            # Cascade delete: deleting a task should delete its checklist items
+            db.delete(task)
+            db.flush()
+            remaining_items = db.query(ChecklistItem).filter(ChecklistItem.task_id == task.id).all()
+            assert len(remaining_items) == 0
+
+            # Cascade delete: deleting a user should delete their tasks (cascade="all, delete-orphan")
+            # Note: FK has ondelete="SET NULL" but ORM cascade="all, delete-orphan" takes precedence
+            db.delete(staff_user)
+            db.flush()
+            # The cancelled_task should be deleted because of cascade delete
+            stored_task = db.get(StaffTask, cancelled_task.id)
+            assert stored_task is None
+
     finally:
         engine.dispose()

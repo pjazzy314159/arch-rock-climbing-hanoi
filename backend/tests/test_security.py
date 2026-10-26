@@ -114,8 +114,11 @@ class TestLoginResponses:
         assert unknown.status_code == wrong.status_code == 401
         assert unknown.json() == wrong.json()
 
-    def test_the_dummy_hash_is_a_usable_bcrypt_hash(self) -> None:
+    def test_the_dummy_hash_is_a_usable_password_hash(self) -> None:
+        # The dummy hash is a bcrypt hash of "not-a-real-password";
+        # verify_password should accept that password and reject others.
         assert verify_password("not-a-real-password", DUMMY_PASSWORD_HASH) is True
+        assert verify_password("wrong-password", DUMMY_PASSWORD_HASH) is False
 
 
 class TestChecklistRequestBody:

@@ -5,15 +5,16 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.api import api_router
 from app.config import get_settings
-from app.db import engine
+from app.db import get_db, get_engine_from_scope
 
 logger = logging.getLogger("arch.api")
 
@@ -39,14 +40,38 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Prefer Cloudflare Worker vars when running on Workers.
+cors_origins = settings.cors_origin_list
+
+try:
+    from workers import env as worker_env
+
+    worker_cors_origins = getattr(
+        worker_env, "CORS_ORIGINS", None
+    )
+
+    if worker_cors_origins:
+        cors_origins = [
+            origin.strip()
+            for origin in str(worker_cors_origins).split(",")
+            if origin.strip()
+        ]
+except Exception:
+    # Ordinary local FastAPI development uses Pydantic settings.
+    pass
+
+if "*" in cors_origins:
+    raise ValueError(
+        "CORS_ORIGINS must list explicit origins when credentials are enabled"
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list or ["http://localhost:8080"],
+    allow_origins=cors_origins or ["http://localhost:8080"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -69,12 +94,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 @app.get("/api/health", tags=["meta"])
-def health() -> dict:
-    """Report service health and the configured database dialect."""
-    dialect = engine.dialect.name
+def health(request: Request, db: Session = Depends(get_db)) -> dict:
+    """Report service health and the configured database dialect.
+
+    Uses the request-scoped database session which automatically selects
+    the correct engine: Hyperdrive binding in production, local DATABASE_URL
+    in development.
+    """
+    dialect = db.bind.dialect.name
     try:
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
+        db.execute(text("SELECT 1"))
         database_ok = True
     except Exception:  # pragma: no cover - only hit when the database is down
         logger.exception("Database health check failed")

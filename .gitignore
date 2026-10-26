@@ -55,3 +55,4 @@ __pycache__/
 !README.md
 # Generated Cloudflare Python Workers packages
 /backend/python_modules/
+/backend/wrangler.local.jsonc

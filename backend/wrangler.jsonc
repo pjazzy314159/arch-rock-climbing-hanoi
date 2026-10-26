@@ -1,0 +1,16 @@
+{
+  "name": "arch-backend-worker",
+  "main": "worker.py",
+  "compatibility_date": "2026-09-08",
+  "compatibility_flags": ["python_workers"],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "225ffa662b9d480bbb9ce568f036ce99"
+    }
+  ],
+  "vars": {
+    "ARCH_ENVIRONMENT": "development",
+    "CORS_ORIGINS": "https://arch-rock-climbing-hanoi.vercel.app,http://localhost:5173,http://localhost:8080,http://localhost:8083,http://localhost:8090"
+  }
+}
