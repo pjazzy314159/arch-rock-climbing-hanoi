@@ -56,3 +56,5 @@ __pycache__/
 # Generated Cloudflare Python Workers packages
 /backend/python_modules/
 /backend/wrangler.local.jsonc
+/backend/.dev.vars
+/backend/secrets.production.env
