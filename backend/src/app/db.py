@@ -48,7 +48,7 @@ from threading import local
 
 from fastapi import Request
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine.url import make_url
+from sqlalchemy.engine.url import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
@@ -62,51 +62,77 @@ def connection_args_for(database_url: str) -> dict[str, object]:
     """Return driver-specific connection arguments for a SQLAlchemy URL."""
     if database_url.startswith("sqlite"):
         return {"check_same_thread": False}
+
+    if database_url.startswith("postgresql+pg8000"):
+        # Worker connects to Hyperdrive; Hyperdrive handles TLS upstream.
+        return {
+            "timeout": 5,
+            "ssl_context": False,
+        }
+
     if database_url.startswith(("postgresql", "postgres")):
         return {"connect_timeout": 5}
+
     return {}
 
 
 def _build_url_from_hyperdrive_binding(binding) -> str | None:
-    """Construct a SQLAlchemy PostgreSQL URL from a Hyperdrive binding object.
-
-    The binding is expected to expose connection parameters. We try
-    common attribute patterns used by the Hyperdrive Python Workers SDK.
-    """
+    """Build a pg8000 URL from Cloudflare Hyperdrive bindings."""
     if binding is None:
         return None
 
-    # Try to get a direct connection string if the binding provides one
-    for attr in ("connectionString", "connection_string", "url"):
-        if hasattr(binding, attr):
-            value = getattr(binding, attr)
-            if value and isinstance(value, str):
-                try:
-                    made_url = make_url(value)
-                    # Ensure psycopg driver
-                    if not made_url.drivername.startswith("postgresql+psycopg"):
-                        made_url = made_url.set(drivername="postgresql+psycopg")
-                    return made_url.render_as_string(hide_password=False)
-                except Exception:
-                    pass
-
-    # Try to get individual connection parameters
+    # Prefer the native Hyperdrive connection fields.
     host = getattr(binding, "host", None)
     port = getattr(binding, "port", 5432)
-    username = getattr(binding, "user", None) or getattr(binding, "username", None)
+    username = getattr(binding, "user", None) or getattr(
+        binding, "username", None
+    )
     password = getattr(binding, "password", None)
     database = getattr(binding, "database", None)
 
     if host and username and database:
-        url_str = f"postgresql+psycopg://{username}"
-        if password:
-            url_str += f":{password}"
-        url_str += f"@{host}:{port}/{database}"
         try:
-            made_url = make_url(url_str)
-            return made_url.render_as_string(hide_password=False)
-        except Exception:
+            url = URL.create(
+                "postgresql+pg8000",
+                username=str(username),
+                password=str(password) if password is not None else None,
+                host=str(host),
+                port=int(port or 5432),
+                database=str(database),
+            )
+            return url.render_as_string(hide_password=False)
+        except (TypeError, ValueError):
             return None
+
+    # Compatibility fallback for bindings exposing only a connection URL.
+    for attr in ("connectionString", "connection_string", "url"):
+        value = getattr(binding, attr, None)
+        if not value or not isinstance(value, str):
+            continue
+
+        try:
+            url = make_url(value).set(drivername="postgresql+pg8000")
+
+            # sslmode is a libpq/psycopg option, not a pg8000 option.
+            query = {
+                key: val
+                for key, val in url.query.items()
+                if key.lower()
+                not in {
+                    "sslmode",
+                    "sslrootcert",
+                    "sslcert",
+                    "sslkey",
+                    "sslpassword",
+                    "sslcrl",
+                    "sslcrldir",
+                }
+            }
+
+            url = url.set(query=query)
+            return url.render_as_string(hide_password=False)
+        except Exception:
+            continue
 
     return None
 
@@ -165,16 +191,44 @@ def close_hyperdrive_engine() -> None:
 # Local development engine (created at import time)
 # ---------------------------------------------------------------------------
 
-_local_engine = create_engine(
-    get_settings().database_url,
-    future=True,
-    connect_args=connection_args_for(get_settings().database_url),
-    pool_pre_ping=True,
-)
+# Local development engine.
+# Do not load the local PostgreSQL driver during Cloudflare Worker startup.
 
-LocalSessionLocal = sessionmaker(
-    bind=_local_engine, autoflush=False, expire_on_commit=False, future=True
-)
+def _is_workers_runtime() -> bool:
+    try:
+        from workers import env as worker_env
+        return worker_env is not None
+    except Exception:
+        return False
+
+
+_local_engine = None
+LocalSessionLocal = None
+
+
+def _ensure_local_engine():
+    global _local_engine, LocalSessionLocal
+
+    if _local_engine is None:
+        database_url = get_settings().database_url
+        _local_engine = create_engine(
+            database_url,
+            future=True,
+            connect_args=connection_args_for(database_url),
+            pool_pre_ping=True,
+        )
+        LocalSessionLocal = sessionmaker(
+            bind=_local_engine,
+            autoflush=False,
+            expire_on_commit=False,
+            future=True,
+        )
+
+    return _local_engine
+
+
+if not _is_workers_runtime():
+    _ensure_local_engine()
 
 
 class Base(DeclarativeBase):
@@ -202,6 +256,8 @@ def get_db(request: Request) -> Iterator[Session]:
         )
         session = session_factory()
     else:
+        _ensure_local_engine()
+        assert LocalSessionLocal is not None
         session = LocalSessionLocal()
 
     try:
@@ -230,6 +286,8 @@ def session_scope(scope: dict | None = None) -> Iterator[Session]:
         )
         session = session_factory()
     else:
+        _ensure_local_engine()
+        assert LocalSessionLocal is not None
         session = LocalSessionLocal()
 
     try:
