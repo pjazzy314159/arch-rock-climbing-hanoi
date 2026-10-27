@@ -52,11 +52,36 @@ from sqlalchemy.engine.url import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
-
+import asyncio
+from collections.abc import AsyncIterator, Iterator
 
 # Thread-local storage for request-scoped engines created from Hyperdrive binding
 _thread_local = local()
 
+async def get_db(request: Request) -> AsyncIterator[Session]:
+    async with _database_lock:
+        scope = request.scope
+        engine = get_engine_from_scope(scope)
+
+        if engine is not None:
+            session_factory = sessionmaker(
+                bind=engine,
+                autoflush=False,
+                expire_on_commit=False,
+                future=True,
+            )
+            session = session_factory()
+        else:
+            _ensure_local_engine()
+            assert LocalSessionLocal is not None
+            session = LocalSessionLocal()
+
+        try:
+            yield session
+        finally:
+            session.close()
+            if hasattr(_thread_local, "hyperdrive_engine"):
+                close_hyperdrive_engine()
 
 def connection_args_for(database_url: str) -> dict[str, object]:
     """Return driver-specific connection arguments for a SQLAlchemy URL."""
