@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.api import api_router
 from app.config import get_settings
-from app.db import get_db, get_engine_from_scope
+from app.db import get_db
 
 logger = logging.getLogger("arch.api")
 

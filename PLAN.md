@@ -2720,3 +2720,22 @@ Full instructions are in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) and
 11. Legal/privacy review of the customer-record and agreement data model.
 12. Whether self-registration should be open before e-mail verification exists.
 13. Where the route and product pictures should be stored, and who may publish them.
+
+## 6. Production reliability (test_deploy branch)
+
+**Status:** IN_PROGRESS — investigation and minimal fix applied; deployed verification pending.
+
+**Root cause:** Cloudflare Python Workers runtime does not support concurrent synchronous database I/O. The get_db dependency was synchronous, causing "Cannot enter a promising task from inside another running promising task" errors under concurrent requests. The previous commit (4431c3c) added a broken async get_db that referenced an undefined _database_lock, which was shadowed by the sync definition and could not execute.
+
+**Fix:** Made get_db an async generator and serialized database access with a lazily-initialized module-level syncio.Lock, per Cloudflare Hyperdrive documentation. Removed unused imports (	ext from db.py, get_engine_from_scope from main.py). No changes to auth, JWT, roles, password hashing, or database schema.
+
+**Files changed:**
+- ackend/src/app/db.py — async get_db with syncio.Lock
+- ackend/src/app/main.py — removed unused get_engine_from_scope import
+- ackend/src/app/security.py — import sorting (ruff fix)
+
+**Tests:** 238 passed, 3 skipped (Python 3.11). Ruff clean. No new migrations.
+
+**Limitations:** Local TestClient is single-threaded; concurrency behavior cannot be fully verified locally. Deployed verification required.
+
+**Remaining:** Deploy to Cloudflare, run smoke tests against production endpoints, monitor logs for "promising task" errors.

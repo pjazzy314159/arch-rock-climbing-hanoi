@@ -15,7 +15,8 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from jwt import encode as jwt_encode, decode as jwt_decode
+from jwt import decode as jwt_decode
+from jwt import encode as jwt_encode
 
 from app.config import get_settings
 

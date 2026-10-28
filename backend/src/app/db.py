@@ -42,46 +42,34 @@ Important limitations and requirements
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import asyncio
+from collections.abc import AsyncIterator, Iterator
 from contextlib import contextmanager
 from threading import local
 
 from fastapi import Request
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.engine.url import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
-import asyncio
-from collections.abc import AsyncIterator, Iterator
 
 # Thread-local storage for request-scoped engines created from Hyperdrive binding
 _thread_local = local()
 
-async def get_db(request: Request) -> AsyncIterator[Session]:
-    async with _database_lock:
-        scope = request.scope
-        engine = get_engine_from_scope(scope)
+# Isolate-wide lock for serializing synchronous database operations in Cloudflare
+# Python Workers. Concurrent synchronous driver I/O is not supported by the
+# Workers runtime; the lock prevents "Cannot enter a promising task from inside
+# another running promising task" errors. Created lazily so it is bound to the
+# event loop where it is first used.
+_db_lock: asyncio.Lock | None = None
 
-        if engine is not None:
-            session_factory = sessionmaker(
-                bind=engine,
-                autoflush=False,
-                expire_on_commit=False,
-                future=True,
-            )
-            session = session_factory()
-        else:
-            _ensure_local_engine()
-            assert LocalSessionLocal is not None
-            session = LocalSessionLocal()
 
-        try:
-            yield session
-        finally:
-            session.close()
-            if hasattr(_thread_local, "hyperdrive_engine"):
-                close_hyperdrive_engine()
+def _get_db_lock() -> asyncio.Lock:
+    global _db_lock
+    if _db_lock is None:
+        _db_lock = asyncio.Lock()
+    return _db_lock
 
 def connection_args_for(database_url: str) -> dict[str, object]:
     """Return driver-specific connection arguments for a SQLAlchemy URL."""
@@ -260,8 +248,12 @@ class Base(DeclarativeBase):
     """Declarative base for every ARCH model."""
 
 
-def get_db(request: Request) -> Iterator[Session]:
+async def get_db(request: Request) -> AsyncIterator[Session]:
     """FastAPI dependency that yields a request-scoped database session.
+
+    Synchronous database operations are serialized with an isolate-wide
+    ``asyncio.Lock`` per Cloudflare Python Workers guidance, because
+    concurrent synchronous driver I/O is not supported by the runtime.
 
     The request's ASGI scope is inspected for a Hyperdrive binding
     (``scope["env"].HYPERDRIVE``). If present, a request-scoped engine is
@@ -269,29 +261,31 @@ def get_db(request: Request) -> Iterator[Session]:
 
     The session is properly closed after the request.
     """
-    # Get the ASGI scope from the request
-    scope = request.scope
+    lock = _get_db_lock()
+    async with lock:
+        # Get the ASGI scope from the request
+        scope = request.scope
 
-    # Try to get engine from Hyperdrive binding in scope
-    engine = get_engine_from_scope(scope)
+        # Try to get engine from Hyperdrive binding in scope
+        engine = get_engine_from_scope(scope)
 
-    if engine is not None:
-        session_factory = sessionmaker(
-            bind=engine, autoflush=False, expire_on_commit=False, future=True
-        )
-        session = session_factory()
-    else:
-        _ensure_local_engine()
-        assert LocalSessionLocal is not None
-        session = LocalSessionLocal()
+        if engine is not None:
+            session_factory = sessionmaker(
+                bind=engine, autoflush=False, expire_on_commit=False, future=True
+            )
+            session = session_factory()
+        else:
+            _ensure_local_engine()
+            assert LocalSessionLocal is not None
+            session = LocalSessionLocal()
 
-    try:
-        yield session
-    finally:
-        session.close()
-        # Close the request-scoped Hyperdrive engine if we created one
-        if hasattr(_thread_local, "hyperdrive_engine"):
-            close_hyperdrive_engine()
+        try:
+            yield session
+        finally:
+            session.close()
+            # Close the request-scoped Hyperdrive engine if we created one
+            if hasattr(_thread_local, "hyperdrive_engine"):
+                close_hyperdrive_engine()
 
 
 @contextmanager
