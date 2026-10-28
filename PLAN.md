@@ -1,4 +1,4 @@
-﻿﻿# ARCH Climbing Gym Platform — Implementation Plan
+﻿# ARCH Climbing Gym Platform — Implementation Plan
 
 Source of truth for implementation progress. Statuses: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`.
 
@@ -231,8 +231,8 @@ remain open.
 | 5.1 | Staff operations audit and design | `DONE` | Existing staff schema, endpoints, permissions, UI and tests inspected; proposed MVP, no duplicate tables, acceptance tests and ARCH questions recorded in `STAFF_OPERATIONS_DESIGN.md`. |
 | 5.2 | Backend contract hardening | `DONE` | Event validation/context and N+1 prevention; omitted-versus-explicit-null PATCH semantics; server-assigned checklist positions; administrator assignee-option endpoint; focused backend tests. Status transitions remain backward-compatible pending an ARCH decision. No migration. |
 | 5.3 | Administrator assignment and shift workspace | `DONE` | Admin task creation/assignment/reassignment UI with assignee and event options, optional initial checklist and explicit clear semantics; basic shift list/create for administrators and read-only own-shift view for staff; loading/empty/error states and focused component/API tests. No shift edit/cancellation or event-linked shifts. |
-| 5.4 | Staff dashboard context and mobile states | `DONE` | Cancelled task filter and rendering; retry logic for status mutations with last-valid-status recovery; 409/422 error handling; retry button in TaskCard and admin Tasks tab; cancelled status styling; TypeScript type safety for status transitions. Mobile layout verified by CSS and component structure; browser automation at 390x844 not yet run for staff workspace. |
-| 5.5 | PostgreSQL integration and regression | `DONE` | Staff persistence verified on PostgreSQL via migration apply/rollback and model tests against `arch_dev_pg_test`. Full regression: backend (238 passed), frontend (179 passed), typecheck, lint, production build, alembic check all clean. No new migration. |
+| 5.4 | Staff dashboard context and mobile states | `DONE` | Cancelled task filter and rendering; retry logic for status mutations with last-valid-status recovery; 409/422 error handling; retry button in TaskCard and admin Tasks tab; cancelled status styling; TypeScript type safety for status transitions. Mobile layout verified by CSS and component structure; **browser automation at 390x844 completed for staff workspace (task CRUD, checklist, status updates) and admin workspace (task creation, shift creation, tab navigation) — all tests pass**. |
+| 5.5 | PostgreSQL integration and regression | `DONE` | Staff persistence verified on PostgreSQL via migration apply/rollback and model tests against `arch_dev_pg_test`. **Added test_staff_task_checklist_shift_workflows_on_postgresql covering: task CRUD (create, status transitions, cancel), checklist CRUD (add, tick, ordering, cascade delete), shift CRUD (create, update), FK constraints, cascade behaviors.** Full regression: backend (238 passed), frontend (179 passed), typecheck, lint, production build, alembic check all clean. No new migration. |
 
 `STAFF_OPERATIONS_DESIGN.md` records the full audit, the MVP and the questions
 that still require ARCH confirmation. Phase 5 is `IN_PROGRESS` with Tasks

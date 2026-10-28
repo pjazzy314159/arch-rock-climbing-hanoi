@@ -600,10 +600,7 @@ activity" capability. Staff do not receive a team-wide activity feed.
 8. The administrator has a basic shift list/create view; staff have a read-only
    shift view. No customer sees either.
 9. At `390x844`, the staff workspace, task cards, status controls, checklist and
-   administrator task form fit without horizontal page overflow. **Not yet verified
-   by browser automation for staff workspace**; the existing `check-staff-flows.mjs`
-   script tests only at desktop (1440x1000). Other admin/member workflows have
-   been verified at 390x844 by separate browser checks.
+   administrator task form fit without horizontal page overflow.
 10. No password hash, token or unrelated customer data appears in any staff or
     administrator task response.
 
@@ -633,12 +630,25 @@ request shapes.
 - Cancelled status styling (task-card-cancelled, status-cancelled)
 - TypeScript type safety for status transitions
 
+**Mobile browser verification (390x844):** `scripts/check-staff-flows.mjs --mobile` passes for:
+- Staff workspace: task cards render, status updates (todo → in_progress → done), checklist add/tick, cancelled filter
+- Admin workspace: task creation, shift creation, tab navigation (Tasks, Shifts), horizontal overflow 0px
+- Customer refusal: staff/admin pages correctly blocked
+
 **Task 5.5 implemented PostgreSQL integration:** The existing PostgreSQL
 integration test suite (`backend/tests/test_postgresql_integration.py`) passes
-against `arch_dev_pg_test` (2 tests pass). The migrations apply and roll back
+against `arch_dev_pg_test` (3 tests pass). The migrations apply and roll back
 cleanly on PostgreSQL 18.6, and the staff operation models (StaffTask,
 ChecklistItem, StaffShift, Event) are verified to work through the existing
 migration test. Alembic `check` reports no new upgrade operations needed.
+
+**New PostgreSQL integration test (`test_staff_task_checklist_shift_workflows_on_postgresql`):**
+- Task CRUD: create, status transitions (todo → in_progress → done), cancel, completed_at consistency
+- Checklist CRUD: add items with server-assigned positions, tick items (is_done, done_at, done_by_id), ordering verified
+- Shift CRUD: create, update role/notes, FK constraints
+- Database constraints: FK on task assignee_id, checklist task_id, shift staff_id; cascade delete checklist items on task delete; cascade delete tasks on user delete (ORM cascade)
+- Enum persistence: TaskStatus, TaskPriority, Role round-trip correctly
+- Timezone-aware timestamps verified
 
 **Remaining plan below covers broader edge cases and deferred items.**
 

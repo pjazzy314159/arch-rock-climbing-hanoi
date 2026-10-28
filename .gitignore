@@ -58,3 +58,5 @@ __pycache__/
 /backend/wrangler.local.jsonc
 /backend/.dev.vars
 /backend/secrets.production.env
+backend/.test-accounts.credentials.json
+backend/scripts/seed_test_accounts.py
