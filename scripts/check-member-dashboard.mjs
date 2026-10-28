@@ -79,21 +79,25 @@ page.on("console", (message) => {
   }
 });
 
-// --- Request origin guard: abort if any API request targets a non-local origin ---
-page.on("request", (request) => {
+// --- Request origin guard: intercept and abort if any API request targets a non-local origin ---
+await page.route("**/*", async (route) => {
   try {
-    const parsed = new URL(request.url());
+    const parsed = new URL(route.request().url());
     // API requests contain /api/ in the path (covers all API endpoints)
     if (parsed.pathname.includes("/api/")) {
       if (parsed.origin !== expectedApiOrigin) {
         const msg = `FATAL: API request to unexpected origin: ${parsed.origin} (expected ${expectedApiOrigin})`;
         console.error(msg);
-        console.error("URL:", request.url());
+        console.error("URL:", route.request().url());
+        await route.abort();
         process.exit(1);
+        return;
       }
     }
+    await route.continue();
   } catch {
     // Ignore non-URL requests (e.g., data: URLs)
+    await route.continue();
   }
 });
 
