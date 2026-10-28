@@ -125,7 +125,7 @@ Every phase keeps the public website and the backend working.
 | 1.6 | Log an attempt from the dashboard and from a route                                                                         | `DONE`        | The attempt is stored by the backend, survives a refresh and a sign-in, and a member cannot change another member's records.               |
 | 1.7 | Ranking rule stated on the dashboard and the leaderboard                                                                   | `DONE`        | The page states the scoring rule and the displayed rank matches the backend.                                                               |
 | 1.8 | Tests                                                                                                                      | `DONE`        | Backend: dashboard response (empty, populated, ranking, filters, auth), route filters (grade, wall, wall type, status, search, combined, invalid values, empty options, archived routes). Frontend: dashboard mapping (valid data, empty, failed API), route directory. Verified via automated test suite. |
-| 1.9 | Browser review at desktop and mobile sizes                                                                                 | `DONE`        | Browser checks executed at desktop (1440×900) and mobile (390×844) against local backend (SQLite test database). Empty, populated and unavailable dashboard states reviewed. Route directory, logbook, route detail, leaderboard, and log-an-attempt flow exercised. No console/hydration errors. Screenshots saved to var/screenshots/. |
+| 1.9 | Browser review at desktop and mobile sizes                                                                                 | `IN_PROGRESS` | Browser checks executed at desktop (1440×900) and mobile (390×844) against local backend. Empty, populated and unavailable dashboard states reviewed. Route directory, logbook, route detail, leaderboard, and log-an-attempt flow exercised. No console/hydration errors. Screenshots saved to var/screenshots/. Safety guard added to check-member-dashboard.mjs: rejects non-loopback frontend/API URLs, intercepts all API requests and aborts on non-expected origin. PostgreSQL browser verification blocked: cannot create dedicated arch_member_browser_test database (insufficient privileges). SQLite was used for the successful run. |
 
 #### Acceptance criteria for Phase 1 as a whole
 
@@ -2739,3 +2739,31 @@ Full instructions are in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) and
 **Limitations:** Local TestClient is single-threaded; concurrency behavior cannot be fully verified locally. Deployed verification required.
 
 **Remaining:** Deploy to Cloudflare, run smoke tests against production endpoints, monitor logs for "promising task" errors.
+
+## 7. Phase 1.9 Browser Verification — Safety Guard and PostgreSQL Blocker
+
+**Status:** IN_PROGRESS — safety guard implemented; PostgreSQL browser verification blocked.
+
+**Safety guard added to scripts/check-member-dashboard.mjs:**
+- Rejects non-loopback frontend URLs before launching the browser.
+- Requires explicit API base URL (argument or env var); rejects missing/malformed/non-loopback.
+- Intercepts every outgoing request; aborts if any /api/ request targets a non-expected origin.
+- Guard is active before registration, login, or climb logging.
+
+**Verification of guard (executed):**
+- 
+ode scripts/check-member-dashboard.mjs http://example.com http://localhost:8000 → rejected (non-loopback frontend)
+- 
+ode scripts/check-member-dashboard.mjs http://localhost:8080 http://evil.com → rejected (non-loopback API)
+- 
+ode scripts/check-member-dashboard.mjs (no args) → rejected (missing URLs)
+
+**Browser checks executed (SQLite backend, previous evidence carried forward):**
+- Desktop (1440×900) and mobile (390×844) against local backend.
+- Registration, empty dashboard, first climb logging, flash derivation, populated dashboard, unavailable state with retry.
+- No console/hydration errors, no horizontal overflow.
+- Screenshots in ar/screenshots/.
+
+**PostgreSQL blocker:** Cannot create dedicated rch_member_browser_test database. The rch_dev user lacks CREATEDB privilege and the postgres superuser password is unknown. pg_hba.conf modification to trust auth was attempted but the server could not be restarted (access denied). No mutating browser checks were run against PostgreSQL.
+
+**Remaining gap:** Run the mutating browser flow against a dedicated local PostgreSQL database (rch_member_browser_test) once database creation is possible. All other acceptance criteria are satisfied.
