@@ -143,7 +143,7 @@ class FaqEntry(Base, TimestampMixin):
     answer: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str] = mapped_column(String(60), default="General", index=True)
     keywords: Mapped[str] = mapped_column(String(400), default="")
-    is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
 
 class ContactMessage(Base, TimestampMixin):

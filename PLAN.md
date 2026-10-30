@@ -110,8 +110,11 @@ Every phase keeps the public website and the backend working.
 | **3** | PostgreSQL 18.6: verify, configure, migrate, seed, test | `DONE`        | Phase 1 (coordinate with any schema change)   |
 | **4** | Admin customer management                               | `DONE`        | Phase 1, Phase 3                              |
 | **5** | Staff operations                                        | `IN_PROGRESS` | Phase 2, Phase 4                              |
-| **6** | ARCH-scoped AI assistant                                | `TODO`        | Phase 1 (route and content data)              |
+| **6** | ARCH-scoped AI assistant                                | `IN_PROGRESS` | Phase 1 (route and content data)              |
 | **7** | Handover and local data ownership (`DATA_HANDOVER.md`)  | `TODO`        | Phase 3                                       |
+| **8** | Admin content management                                | `TODO`        | Phase 1, Phase 3, Phase 6                     |
+| **9** | ARCH Content Collection, Confirmation & Publishing      | `TODO`        | Phase 8 (Admin CMS complete), ARCH stakeholder availability |
+| **10** | Final UI Quality & Anti-AI-Slop Review with Impeccable | `TODO`        | All backend, CMS, storage, data-collection, and functional implementation tasks complete |
 
 #### Phase 1 — Member dashboard and climbing experience
 
@@ -802,6 +805,354 @@ pages, so both render the same first frame.
   unit-tested; the HTTP call to a provider is not.
 - The assistant does not yet suggest the published FAQ pages when a question
   is close but not an exact match.
+
+### Task 6.1 — ARCH assistant knowledge retrieval foundation (`DONE`)
+
+**Changes**
+
+- `backend/src/app/services/retrieval.py` — read-only retrieval layer for
+  public ARCH information. Provides `retrieve_routes`, `retrieve_prices`,
+  `retrieve_opening_hours`, `retrieve_rules`, `retrieve_faq`,
+  `retrieve_courses`, `retrieve_events`, `retrieve_services`, and the unified
+  `retrieve_public_context`. All queries use existing public visibility
+  filters (active routes, published FAQ, active prices, public events, etc.).
+- `backend/tests/test_retrieval.py` — 18 focused tests covering each category,
+  visibility filtering, empty results, bounding, and context text rendering.
+
+**Internal representation**
+
+- `RetrievedSource` dataclass: `category`, `id`, `title`, `content`,
+  `metadata`. Normalises all public record types into a consistent shape.
+- `build_context_text(sources)` renders sources as grounding text with category
+  labels. Retrieved text is treated as data, never as instructions.
+- `build_sources_list(sources)` converts to the existing `AssistantSource`
+  format (id, question, category) for API compatibility.
+
+**Public visibility and privacy filters**
+
+- Routes: only `RouteStatus.ACTIVE`
+- Prices: only `is_active=True`
+- Services: only `is_active=True`
+- Courses: only `is_active=True`
+- Rules: only `is_active=True`
+- Events: only `is_public=True`
+- FAQ: only `is_published=True`
+- Opening hours: all (no visibility filter; all are public)
+- No member-specific, staff-internal, or operational data is queried.
+
+**Models inspected**
+
+| Category | Model | Fields used | Visibility filter |
+|----------|-------|-------------|-------------------|
+| Routes | `ClimbRoute` | name, grade, status, wall_id, wall_type, style, setter, beta, set_at | `status == ACTIVE` |
+| Prices | `Price` | name, category, amount_vnd, unit, description, is_active, sort_order | `is_active == True` |
+| Opening hours | `OpeningHour` | day_of_week, opens_at, closes_at, note, is_closed | None (all public) |
+| Rules | `Rule` | title, body, category, is_active, is_confirmed, sort_order | `is_active == True` |
+| FAQ | `FaqEntry` | question, answer, category, keywords, is_published | `is_published == True` |
+| Courses | `Course` | title, level, summary, description, instructor, schedule, duration_weeks, capacity, price_vnd, is_active | `is_active == True` |
+| Events | `Event` | title, description, starts_at, ends_at, location, capacity, is_public | `is_public == True` |
+| Services | `Service` | title, summary, icon, sort_order, is_active | `is_active == True` |
+
+**Verification**
+
+- `ruff check` clean on `retrieval.py`
+- **18 new tests** in `test_retrieval.py`, all passing
+- Full backend suite: **256 passed, 3 skipped**
+- No schema changes, no migrations, no frontend changes
+
+**Remaining work for Task 6.2**
+
+- Integrate `retrieve_public_context` into the assistant's answer-generation flow
+- Pass expanded context (routes, prices, hours, rules, courses, events, services) to the LLM alongside FAQ entries
+- Update the direct-match logic to handle non-FAQ sources
+- Add prompt-injection defenses (delimit retrieved content in user prompt)
+- Add tests for HTTP-level integration with expanded context
+
+### Task 6.2 — Structured data retrieval integration (`DONE`)
+
+**Changes**
+
+- `backend/src/app/services/assistant.py` — integrated `retrieve_public_context` into `answer_question`. Added `_build_structured_answer` for deterministic, source-grounded answers from structured records. Added `_has_relevant_sources` guard. Added `structured_sources` parameter to `answer_question`.
+- `backend/src/app/api/assistant.py` — calls `retrieve_public_context(db, question)` and passes results to `answer_question`.
+- `backend/src/app/services/retrieval.py` — added `score` field to `RetrievedSource` for relevance tracking.
+
+**Behavior**
+
+- FAQ direct match (score >= 0.55) takes priority (unchanged).
+- Structured sources with relevant content produce deterministic answers (knowledge_base mode).
+- FAQ sources require score >= 0.55 for deterministic answers (prevents loosely related FAQ entries from becoming answers).
+- Non-FAQ categories (routes, prices, etc.) produce deterministic answers for any positive score.
+- Falls through to existing FAQ context/LLM/not-covered behavior when no structured match.
+- No structured records passed to LLM (that is Task 6.4).
+
+**Verification**
+
+- `ruff check` clean on all changed files
+- Full backend suite: **256 passed, 3 skipped**
+- No schema changes, no migrations, no frontend changes
+
+### Task 6.3 — Prompt injection protection (`DONE`)
+
+**Changes**
+
+- `backend/src/app/services/assistant.py` — extracted `build_provider_request()` function that assembles the provider request payload. Trusted system prompt (`_TRUSTED_SYSTEM_PROMPT`) is a fixed constant, never interpolated with user or retrieved content. User question and reference data are placed in the user message, with reference data delimited by `<reference_data>` tags. Added explicit instruction in system prompt to treat reference data as untrusted.
+- `backend/tests/test_public_api.py` — 8 security tests verifying trusted/untrusted boundary, provider request construction, and API key containment.
+
+**Security boundary**
+
+- System prompt is a fixed string (`_TRUSTED_SYSTEM_PROMPT`), never modified by user input or retrieved content.
+- User question and reference data are serialized as a single JSON object with `question` and `reference_data` fields.
+- JSON serialization (standard `json.dumps`) ensures untrusted text cannot escape the data boundary via delimiter injection.
+- System prompt explicitly instructs the model to treat both fields as data, never as instructions.
+- API keys appear only in headers, never in message content.
+- The `build_provider_request` function is the single point where trusted and untrusted content are assembled, making the boundary testable.
+
+**Verification**
+
+- `ruff check` clean
+- 8 new security tests, all passing
+- Full backend suite: **264 passed, 3 skipped**
+- No live LLM provider called in tests
+
+**Remaining work for Task 6.4**
+
+- Pass structured retrieval context to the LLM provider prompt — **DONE**
+- Add prompt-injection defenses for structured data (already delimited in user message) — **DONE**
+- Add tests for LLM-grounded answers with expanded context — **DONE**
+
+### Task 6.4 — Grounded LLM generation with structured ARCH context (`DONE`)
+
+**Changes**
+
+- `backend/src/app/services/assistant.py` — updated `call_provider` to accept structured `RetrievedSource` objects; `build_provider_request` now builds a single JSON payload with `question` and `reference_data` (array of source objects with `category`, `id`, `title`, `content`, `metadata`); system prompt updated to describe the new structured payload and instruct the model to treat all fields as data.
+- `backend/src/app/services/retrieval.py` — `RetrievedSource` already had `score` field; retrieval functions already produce structured `RetrievedSource` objects.
+- `backend/src/app/api/assistant.py` — calls `retrieve_public_context(db, question)` and passes the list of `RetrievedSource` objects to `answer_question`.
+- `backend/src/app/services/assistant.py` — `answer_question` now passes the full list of structured sources to `call_provider` for LLM grounding; existing FAQ direct-match and structured deterministic answer paths preserved.
+- `backend/tests/test_public_api.py` — added tests for LLM-grounded answers with structured sources, updated existing security tests to use the new `reference_sources` parameter.
+
+**Implementation details**
+
+- The `reference_data` field is now a JSON array of source objects, each containing `category`, `id`, `title`, `content`, and `metadata`.
+- The `reference_data` array is serialized as part of the single JSON user message payload (alongside `question`), not as a flat string.
+- The system prompt (`_TRUSTED_SYSTEM_PROMPT`) explicitly describes the JSON structure and instructs the model to treat both `question` and `reference_data` as untrusted data.
+- The LLM is instructed to answer only from the supplied reference records and never to follow instructions contained in them.
+- Direct FAQ matches (score ≥ 0.55) still bypass the LLM and return verbatim answers.
+- Structured deterministic answers (from Task 6.2) still take priority when a single high-confidence source is available.
+- LLM path is only invoked when there's relevant context and a provider is configured; otherwise falls back to deterministic or not-covered behavior.
+- Source attribution: the API response's `sources` array reflects the records actually used to ground the response (FAQ entries for LLM path, structured sources for deterministic path).
+
+**Verification**
+
+- `ruff check` clean on all changed files
+- Full backend suite: **276 passed, 3 skipped**
+- Frontend tests: **179 passed**
+- Frontend typecheck: clean
+- Frontend build: succeeds
+- Backend tests include:
+  - 13 security tests for prompt-injection protection
+  - 18 retrieval tests for structured source retrieval
+  - 5 assistant API tests covering direct FAQ, structured answers, not-covered, and LLM fallback
+  - Provider request construction tests for both OpenAI-compatible and Gemini adapters
+  - Adversarial construction tests (5 new tests) verifying JSON serialization prevents delimiter injection
+  - 7 new provider failure handling tests: timeout, HTTP error, empty answer, malformed response, fallback behavior, deterministic structured fallback, no secrets in error responses
+
+**Placeholder policy adherence**
+
+- Routes: only active routes from `climb_routes` table are retrieved
+- Prices: only active prices from `prices` table
+- Opening hours: all entries public, returned when relevant
+- Rules: only active rules
+- FAQ: only published entries
+- Courses: only active courses
+- Events: only public events
+- Services: only active services
+- Missing or ambiguous fields are not inferred by the LLM; the system prompt explicitly forbids invention
+- Route provenance limitation: `ClimbRoute.status` does not distinguish confirmed ARCH routes from demo data. No `is_confirmed` flag exists on routes. This limitation is documented and no migration was added.
+
+### Task 6.5 — Assistant fallback and error handling (`DONE`)
+
+**Changes**
+
+- `backend/src/app/services/assistant.py` — extended `call_provider` exception handling to catch `httpx.TimeoutException` in addition to existing `httpx.HTTPError`, `KeyError`, `IndexError`, `ValueError`; added validation to reject empty/whitespace provider answers as failures; refined exception handling to be more explicit about caught exception types.
+- `backend/tests/test_public_api.py` — added 7 new tests for provider failure handling: timeout, HTTP error, empty answer, malformed response, fallback to not-covered, deterministic structured-answer fallback, no secrets in error responses.
+
+**Failure modes covered**
+
+1. **No provider configured** — returns `None` immediately without attempting HTTP call; falls back to not-covered or deterministic structured answer.
+2. **Provider request timeout** — `httpx.TimeoutException` caught, returns `None`, falls back to not-covered or deterministic answer.
+3. **HTTP error responses** (4xx, 5xx) — `httpx.HTTPStatusError` caught via `httpx.HTTPError`, returns `None`, falls back.
+4. **Network/transport errors** — `httpx.RequestError` caught via `httpx.HTTPError`, returns `None`, falls back.
+5. **Malformed JSON responses** — `ValueError` caught during JSON parsing, returns `None`, falls back.
+6. **Missing/unexpected response structure** — `KeyError`, `IndexError` caught during payload parsing, returns `None`, falls back.
+6. **Empty/whitespace answer content** — explicit check after parsing rejects empty answers as failures, falls back.
+7. **Unexpected provider exceptions** — broad catch-all for `KeyError`, `IndexError`, `ValueError` during parsing, returns `None`, falls back.
+8. **Structured grounding data present but provider generation fails** — falls back to deterministic structured answer if available, otherwise not-covered.
+9. **No usable FAQ or structured evidence available** — returns not-covered response with scope list.
+
+**Fallback behavior**
+
+- Direct FAQ matches (score ≥ 0.55) always return verbatim answer without LLM call.
+- Structured deterministic answers (Task 6.2) take priority when single high-confidence source available.
+- LLM path only invoked when relevant context exists and provider is configured.
+- All failures fall back to deterministic structured answer if sufficient evidence exists, otherwise not-covered response.
+- No provider error details, stack traces, or credentials exposed in public API responses.
+- Logs remain useful for debugging without exposing API keys or user content.
+
+**Route provenance limitation (unchanged)**
+
+- `ClimbRoute.status` does not distinguish confirmed ARCH routes from demo data. No `is_confirmed` flag exists on routes. The `status` field (ACTIVE/PENDING_RESET/ARCHIVED) only indicates operational state, not content verification. This limitation is documented; no migration was added as it requires ARCH business decision.
+
+**Verification**
+
+- `ruff check` clean on all changed files
+- Full backend suite: **276 passed, 3 skipped**
+- Frontend tests: **179 passed**
+- Frontend typecheck: clean
+- Frontend build: succeeds
+- Backend tests include:
+  - 13 security tests for prompt-injection protection
+  - 18 retrieval tests for structured source retrieval
+  - 5 assistant API tests covering direct FAQ, structured answers, not-covered, and LLM fallback
+  - Provider request construction tests for both OpenAI-compatible and Gemini adapters
+  - Adversarial construction tests (5 new tests) verifying JSON serialization prevents delimiter injection
+  - 7 new provider failure handling tests: timeout, HTTP error, empty answer, malformed response, fallback behavior, deterministic structured fallback, no secrets in error responses
+
+### Task 6.6 — ARCH Assistant Frontend Enhancements (`DONE`)
+
+**Changes**
+
+- `src/components/arch/assistant.tsx` — enhanced assistant widget with:
+  - **Source category labels**: readable badges for all supported categories (FAQ, Climbing route, Price, Opening hours, Rule, Course, Event, Service, Source for unknown). Uses `getSourceCategoryLabel()` helper with `SOURCE_CATEGORY_LABELS` mapping.
+  - **Related FAQ suggestions**: when a message has FAQ sources, shows up to 3 relevant published FAQ entries as clickable suggestions. Clicking a suggestion submits that question to the assistant. Suggestions are filtered by source category relevance.
+  - **Loading state**: shows "Looking that up…" with spinner while request is pending. Form is disabled during pending state to prevent duplicate submissions.
+  - **Error state**: shows user-friendly message "The assistant is not reachable right now. Please try again in a moment." with dismiss button. No stack traces, secrets, or internal exceptions exposed.
+  - **Not-covered state**: displays "Not covered by ARCH's published information" label with the assistant's explanation.
+  - **Accessibility**: proper ARIA roles, labels, and keyboard navigation. Loading state uses `role="status"`. Error uses `role="alert"`. Suggestions use `role="list"` and `role="listitem"`.
+  - **Responsive behavior**: widget uses existing CSS grid/flex layout that adapts to mobile and desktop.
+  - **Provider status display**: shows whether LLM is enabled and which provider/model when available.
+
+- `src/styles.css` — added styles for:
+  - `.source-category-badge` — inline badges with category-specific colors
+  - `.faq-suggestions` — suggestion list with title, category labels, and chevron icons
+  - `.assistant-error-message` — error alert with dismiss button
+  - `.assistant-message-pending` — pending message with loading spinner
+  - `.assistant-mode-not_covered` — distinct styling for not-covered mode
+  - Responsive adjustments for mobile (< 640px) and tablet
+
+- `src/test/assistant-component.test.tsx` — new dedicated component test file with 8 focused tests:
+  - Launcher button display
+  - Intro text when opened
+  - Source category labels for all 9 categories including unknown
+  - FAQ suggestions when relevant sources exist
+  - Loading state and duplicate submission prevention
+  - API failure error state and dismissal
+  - Form disablement while pending
+  - Not-covered state display
+  - No FAQ suggestions for non-FAQ sources
+
+**Behavior**
+
+- Source labels derived from backend `category` field in source metadata, never inferred from answer text.
+- Unknown categories display as "Source" badge without crashing.
+- FAQ suggestions only appear when message has sources with category "faq" or when FAQ suggestions share category with sources.
+- Suggestion selection populates input with the actual FAQ question and clears suggestions.
+- Loading state prevents new submissions until response arrives.
+- Error state preserves previous messages and allows retry via new question.
+- Not-covered responses show scope list (FAQ, routes, prices, hours, rules, courses, events, services).
+- Disclaimer and mode labels preserved: "From ARCH's published information", "Answered with the configured assistant, using ARCH's published information", "Not covered by ARCH's published information".
+
+**Route provenance limitation (unchanged)**
+
+- `ClimbRoute.status` does not distinguish confirmed ARCH routes from demo data. No `is_confirmed` flag exists on routes. The `status` field (ACTIVE/PENDING_RESET/ARCHIVED) only indicates operational state, not content verification. This limitation is documented; no migration was added as it requires ARCH business decision.
+
+**Verification**
+
+- Frontend tests: **188 passed** (179 existing + 9 new component tests)
+- Frontend typecheck: clean
+- Frontend build: succeeds
+- Backend tests: **276 passed, 3 skipped** (no backend changes required)
+- All tests pass with `bun run test`
+
+### Task 6.7 — Complete ARCH Assistant Integration and Regression Testing (`DONE`)
+
+**Changes**
+
+- `backend/tests/test_assistant_integration.py` — new HTTP-level integration test file with 16 tests exercising the full `/api/assistant/chat` endpoint through the FastAPI test client:
+  - Direct FAQ match returns expected answer and source metadata
+  - Structured route question returns grounded information with source metadata
+  - Price and opening-hours answers use only real test fixture records
+  - Published rules and FAQ entries remain supported
+  - Empty/unrelated records do not create fictional business facts
+  - Unpublished/inactive records excluded per model semantics
+  - Unrelated questions use not-covered behavior
+  - Provider failures fall back safely (mocked, no live provider calls)
+  - Public response contract compatibility verified
+  - No member-specific fields or records exposed
+  - Structured course, event, and service answers with sources
+  - Route provenance limitation respected (active status ≠ confirmed content)
+  - Assistant status endpoint honesty verified
+
+- `scripts/check-assistant.mjs` — enhanced browser regression check with:
+  - Safety guard: rejects non-loopback targets, missing URLs, external API origins
+  - Desktop (1440×1000) and mobile (375×667) viewport testing
+  - Widget open/close, provider status display
+  - Source category label verification
+  - FAQ suggestion visibility and click-through behavior
+  - Not-covered and error state rendering
+  - Panel recovery after error
+  - External request interception
+
+**Coverage Review**
+
+Existing test suites already cover:
+- Backend retrieval layer (18 tests in `test_retrieval.py`)
+- Assistant API unit tests (12 tests in `test_public_api.py`)
+- Prompt injection security (13 tests in `test_public_api.py`)
+- Provider failure handling (7 tests in `test_public_api.py`)
+- Frontend API contract (4 tests in `assistant-api.test.ts`)
+- Frontend component behavior (9 tests in `assistant-component.test.tsx`)
+
+Material gaps filled by new integration tests:
+- HTTP-level end-to-end flow for all structured categories (routes, prices, hours, rules, courses, events, services)
+- Combined visibility filter verification across categories
+- Response contract validation
+- Privacy boundary verification at API level
+
+**Security and Correctness Verification**
+
+- Public data privacy: Only records satisfying actual visibility rules are retrieved (active routes, active prices, active services, active courses, active rules, public events, published FAQ, all opening hours)
+- No private member profiles, climb logs, agreements, credentials, or staff records enter grounding context
+- Active route status does not imply ARCH content verification (documented limitation)
+- Structured answers use actual fields from test records
+- Source metadata identifies supporting records
+- Empty/unrelated records produce no invented facts
+- Not-covered behavior intact
+- Trusted system prompt fixed; user question and retrieved content in structured JSON user message
+- Both provider adapters (Groq/OpenAI-compatible, Gemini) retain message separation
+- Provider failures fall back safely without exposing keys or internal exceptions
+
+**Verification Results**
+
+- New backend integration tests: **16 passed**
+- Existing backend assistant/retrieval tests: **12 + 18 passed**
+- Backend security/provider failure tests: **13 + 7 passed**
+- Frontend Vitest suite: **188 passed**
+- Frontend typecheck: **clean**
+- Frontend production build: **succeeds**
+- Backend ruff check on new file: **clean** (pre-existing issues in other files unchanged)
+- Browser check: **not run** — no local dev server available at `http://localhost:8080`; script fails closed correctly with `ERR_CONNECTION_REFUSED`; safety guards verified against non-loopback targets
+
+**Known Limitation (Documented)**
+
+- `ClimbRoute.status` (ACTIVE/PENDING_RESET/ARCHIVED) indicates operational state only, not content verification. No `is_confirmed` flag exists. No migration added; requires ARCH business decision.
+
+**Acceptance Criteria Met**
+
+- API-level integration tests for all structured categories pass
+- Frontend regression coverage maintained (188 tests)
+- Privacy/security checks verified at implementation and test level
+- Browser check script enhanced with safety guards and multi-viewport support; environment limitation documented
+- No changes to API contract, database schema, authentication, provider config, runtime, or deployment
 
 ### Task 8 — Media references and deployment configuration (`DONE`)
 
@@ -2767,3 +3118,512 @@ ode scripts/check-member-dashboard.mjs (no args) → rejected (missing URLs)
 **PostgreSQL blocker:** Cannot create dedicated rch_member_browser_test database. The rch_dev user lacks CREATEDB privilege and the postgres superuser password is unknown. pg_hba.conf modification to trust auth was attempted but the server could not be restarted (access denied). No mutating browser checks were run against PostgreSQL.
 
 **Remaining gap:** Run the mutating browser flow against a dedicated local PostgreSQL database (rch_member_browser_test) once database creation is possible. All other acceptance criteria are satisfied.
+
+## 8. Admin Content Management (Phase 8 roadmap)
+
+Phase 8 is a roadmap for future admin content-management capabilities. These
+tasks are not yet implemented. Reuse existing models and admin infrastructure
+where possible; a future admin edit must update the same source of truth
+consumed by the public website and assistant.
+
+### Task 8.1 — Content-management audit and architecture (`DONE`)
+
+**Audit findings from the current repository**
+
+| Content category | Existing model | Existing API | Existing UI | Authorization | Source of truth | Gaps | Recommended next task |
+|---|---|---|---|---|---|---|---|
+| **Products (climbing shoes)** | `Product` (commerce.py): id, sku, name, brand, category, fit, price_vnd, description, image_url, stock, is_active | Public GET `/api/public/products` (is_active only); ProductOut schema includes is_active | Shop page (`src/routes/shop.tsx`, `shop_.$productId.tsx`), ProductCard, ProductPage with sample fallback; **no admin UI** | `require_admin` on admin endpoints; none exist for products | DB `products` table + backend API | No admin CRUD endpoints; no admin UI; no frontend adminApi methods; image_url is free-text URL without upload | Add admin endpoints + schema (PriceOut/ServiceOut pattern); admin page + adminApi methods |
+| **Prices** | `Price` (content.py): id, category, name, description, amount_vnd, unit, sort_order, is_active (indexed) | Public GET `/api/public/prices` (is_active filter); PriceOut schema **omits is_active** | **No admin UI** | `require_admin` on admin endpoints; none exist for prices | DB `prices` table + backend API | No admin CRUD endpoints; schema asymmetry (is_active missing from PriceOut); no admin UI | Add PriceOut.is_active; admin CRUD endpoints; admin page |
+| **Services** | `Service` (content.py): id, title, summary, icon, sort_order, is_active (indexed) | Public GET `/api/public/services` (is_active filter); ServiceOut schema **omits is_active** | **No admin UI** | `require_admin` on admin endpoints; none exist for services | DB `services` table + backend API | No admin CRUD endpoints; schema asymmetry (is_active missing); no admin UI | Add ServiceOut.is_active; admin CRUD endpoints; admin page |
+| **Opening hours** | `OpeningHour` (content.py): id, day_of_week, opens_at, closes_at, note, is_closed (no is_active/is_published) | Public GET `/api/public/gym` returns all OpeningHour (no filter) | **No admin UI** | `require_admin` on admin endpoints; none exist for hours | DB `opening_hours` table + backend API | No visibility filter; no admin endpoints; no admin UI; is_closed only flag | Add admin endpoints with edit capability; admin page |
+| **Courses** | `Course` (content.py): id, title, level, summary, description, instructor, schedule, duration_weeks, capacity, price_vnd, is_active | Public GET `/api/public/courses` (is_active); **no admin endpoints** | Public courses page (`src/routes/courses.tsx`); **no admin UI** | `require_admin` on admin endpoints; none for courses | DB `courses` table + backend API | No admin endpoints; no admin UI; adminApi only has events/routes/walls | Add admin CRUD endpoints; admin page |
+| **Events** | `Event` (content.py): id, title, description, starts_at, ends_at, location, capacity, is_public, created_by_id | Public GET `/api/public/events` (is_public); Admin GET/POST `/api/admin/events` (all events, no filter) | Public events page; **no admin UI for editing** | `require_admin` for admin event endpoints | DB `events` table + backend API | Admin read/create only; no edit/publish/archive/hide; no admin UI for events | Add PATCH/DELETE /admin/events; admin page |
+| **Rules** | `Rule` (content.py): id, title, body, category, sort_order, is_active, is_confirmed (draft vs approved) | Public GET `/api/public/rules` (is_active); **no admin endpoints** | **No admin UI** | `require_admin` on admin endpoints; none for rules | DB `rules` table + backend API | No admin endpoints; dual flags (is_active + is_confirmed) not surfaced in admin | Add admin CRUD endpoints; admin page |
+| **FAQ** | `FaqEntry` (content.py): id, question, answer, category, keywords, is_published | Public GET `/api/public/faq` (is_published); **no admin endpoints** | **No admin UI** | `require_admin` on admin endpoints; none for FAQ | DB `faq_entries` table + backend API | No admin endpoints; no admin UI; assistant only sees published | Add admin CRUD endpoints; admin page |
+| **Routes** | `ClimbRoute` (climbing.py): name, grade, wall_id, wall_type, status, setter, beta, image_url, set_at | Public GET `/api/public/routes` (status=ACTIVE); Admin full CRUD | Route management in `src/routes/staff_.route-setting.tsx` + admin dashboard | `require_staff`/`require_admin` | DB `climb_routes` + backend API | Already has substantial admin UI; routes managed via staff workspace | Extend existing staff/admin route management if needed |
+| **Walls** | `Wall` (climbing.py): name, description, image_url, sort_order, is_active | Public GET `/api/public/walls`; Admin full CRUD | Admin walls management | `require_admin` | DB `walls` + backend API | Has admin UI | Maintain existing |
+
+**Authorization architecture**
+
+- Role-based: `require_admin = require_roles(Role.ADMIN)` guards all admin endpoints (`backend/src/app/deps.py:88`)
+- Server-side enforcement: hiding frontend buttons is explicitly NOT considered access control
+- Public GET endpoints are open; mutations require admin role
+
+**Image/media strategy**
+
+- `image_url` columns exist on `Product`, `ClimbRoute`, `Wall` as plain `String(400)` URL fields
+- No upload pipeline: staff route-setting page uses remote URL input only
+- Products fall back to placeholder (`shoePhoto`); services have no image (icon-only)
+- No image upload components for products, services, events, courses, FAQ, rules
+
+**Assistant retrieval**
+
+- `retrieve_public_context()` combines all categories with same visibility filters as public API
+- Assistant sources match public API visibility rules exactly
+- Single source of truth: DB models → backend API → public pages & assistant
+
+---
+
+### Refined Phase 8 roadmap (based on actual findings)
+
+- **8.1 — Content-management audit and architecture** — **DONE** (completed above)
+- **8.2 — Products and pricing admin CRUD** — **DONE** (implemented below)
+- **8.3 — Opening hours admin CRUD** — **DONE** (implemented below)
+- **8.4 — Events and courses admin CRUD** — complete Event admin (PATCH/DELETE, publish/archive toggle via `is_public`), add Course admin endpoints and UI.
+- **8.5 — FAQ, rules, and services admin CRUD** — add admin endpoints for FaqEntry (with `is_published` toggle), Rule (with `is_active` + `is_confirmed` fields), Service (with `is_active`).
+- **8.6 — Other website content** — evaluate route/wall admin extensions; routes already managed via staff workspace; walls have admin UI.
+- **8.7 — Image upload/storage and field integration** — **DONE** (upload endpoint + storage providers, wired into product, wall and route create/edit forms).
+- **8.8 — Integration and regression tests** — **DONE** (admin CRUD permissions, publishing toggles, media handling, and public/assistant visibility).
+
+### 8.2 — Products and pricing admin CRUD (`DONE`)
+
+**Why this is the smallest useful next task:**
+- Price and Service models already exist with public read endpoints
+- Schema asymmetry (`is_active` missing from PriceOut/ServiceOut) is a simple fix
+- Admin endpoints pattern already established for Events
+- Frontend adminApi pattern exists; needs extension for prices/services/products
+- Unlocks editing the two most visible catalog items immediately
+
+**Implementation summary**
+
+**Backend (FastAPI)**
+- `backend/src/app/schemas/common.py` — Added `is_active` to `PriceOut` and `ServiceOut`; added `ProductCreateIn`, `ProductUpdateIn`, `PriceCreateIn`, `PriceUpdateIn`, `ServiceCreateIn`, `ServiceUpdateIn` schemas
+- `backend/src/app/schemas/__init__.py` — Exported new schemas
+- `backend/src/app/api/admin.py` — Added admin CRUD endpoints:
+  - `GET/POST/PATCH /api/admin/products` — full product management with SKU uniqueness
+  - `GET/POST/PATCH /api/admin/prices` — price management with `is_active` toggle
+  - `GET/POST/PATCH /api/admin/services` — service management with `is_active` toggle
+  - All endpoints protected by `require_admin` guard
+- `backend/tests/test_admin_products_prices.py` — 27 new tests covering:
+  - CRUD operations for products, prices, services
+  - SKU uniqueness validation
+  - Admin authorization (403 for non-admin/staff)
+  - Inactive visibility filters (public endpoints exclude inactive)
+  - 404 handling for not found
+
+**Frontend (TypeScript)**
+- `src/services/types.ts` — Added `is_active` to `ApiPrice` and `ApiService`; added `ApiAdminProduct`, `ApiAdminPrice`, `ApiAdminService` with create/update types
+- `src/services/api.ts` — Extended `adminApi` with typed methods:
+  - `products()`, `createProduct()`, `updateProduct()`
+  - `prices()`, `createPrice()`, `updatePrice()`
+  - `services()`, `createService()`, `updateService()`
+- `src/components/arch/product-management.tsx` — `ProductManagementPage`, `ProductForm`, `ProductTable`:
+  - Product list (SKU, name, brand, category, price, stock, active status)
+  - Create dialog and edit dialog sharing one validated form
+  - Required SKU/name, non-negative price and stock
+  - Activate/deactivate with confirmation and inline failure feedback
+  - Loading, empty, error and success states; accessible labels; horizontally scrollable table
+  - Uses the free-text `image_url` field only (no upload)
+- `src/components/arch/price-management.tsx` — `PriceManagementPage`, `PriceForm`, `PriceTable`:
+  - Price list (category, name, amount, unit, sort order, active status)
+  - Create/edit dialog with required name, non-negative amount and sort order
+  - Activate/deactivate toggle with inline failure feedback
+  - Loading, empty, error and success states
+- `src/components/arch/staff-pages.tsx` — Added `Products` and `Prices` tabs to the existing admin dashboard tab strip, rendering the two pages inside the existing admin-only gate (`user.role === "admin"`)
+- `src/test/product-management.test.tsx` — 26 component tests (list, empty/loading/error, create, edit, validation, duplicate SKU, status toggle, pending state)
+- `src/test/price-management.test.tsx` — 24 component tests (same coverage for prices)
+- `src/test/admin-catalog-navigation.test.tsx` — verifies the Products and Prices tabs render their pages inside the admin dashboard
+
+**Verification**
+- Backend tests: **27 passed** (new admin CRUD tests)
+- Existing backend tests: **all passing**
+- Frontend tests: **240 passed** (23 files, including 50 product/price component tests and 2 navigation tests); run serially with `--no-file-parallelism` because the pre-existing `route-setting.test.tsx` canvas tests time out under full parallel load
+- Frontend typecheck: **clean**
+- Frontend build: **succeeds**
+- Browser check: not run in this environment (no safe local dev target started)
+
+**Acceptance criteria met**
+1. ✅ PriceOut and ServiceOut schemas include `is_active` field
+2. ✅ Admin endpoints: GET/POST/PATCH for `/api/admin/prices` and `/api/admin/services`
+3. ✅ Admin endpoints: GET/POST/PATCH for `/api/admin/products`
+4. ✅ Product management page reachable from the existing admin dashboard navigation
+5. ✅ Price management page reachable from the existing admin dashboard navigation
+6. ✅ Create/edit/activate-deactivate flows use the existing `adminApi` methods
+7. ✅ Server-side `require_admin` enforcement on all mutations
+8. ✅ Tests covering admin permissions, visibility filters, CRUD operations and the admin UI
+
+---
+
+### Task 8.3 — Opening hours admin CRUD (`DONE`)
+
+**Implementation summary**
+
+**Backend (FastAPI)**
+- `backend/src/app/schemas/common.py` — added `AdminOpeningHourOut` (public `OpeningHourOut` plus `id`), `OpeningHourCreateIn` (day 0–6, note ≤ 200, both times required unless `is_closed`) and `OpeningHourUpdateIn` (partial body); the public `OpeningHourOut` is unchanged
+- `backend/src/app/schemas/__init__.py` — exported the new schemas
+- `backend/src/app/api/admin.py` — added admin endpoints, all behind `require_admin`:
+  - `GET /api/admin/opening-hours` — every stored interval, ordered by day, opening time, id
+  - `POST /api/admin/opening-hours` — 201 create
+  - `PATCH /api/admin/opening-hours/{id}` — partial update; 404 `Opening hour not found`; 422 if the resulting open interval lacks a time
+  - `DELETE /api/admin/opening-hours/{id}` — 204; safe because no other table references opening hours
+  - Multiple intervals per weekday are allowed; `is_closed` remains the weekly closure flag
+- No model or migration change; `OpeningHour` stays the only source of truth
+
+**Frontend (TypeScript)**
+- `src/services/types.ts` — `ApiAdminOpeningHour`, `ApiAdminOpeningHourCreate`, `ApiAdminOpeningHourUpdate`
+- `src/services/api.ts` — `adminApi.openingHours()`, `createOpeningHour()`, `updateOpeningHour()`, `deleteOpeningHour()`
+- `src/components/arch/opening-hours-management.tsx` — `OpeningHoursManagementPage`:
+  - weekly view grouped Monday–Sunday, multiple intervals per day, `Closed` for `is_closed`, and an explicit “No intervals stored for this day.” message when a day has no record
+  - create and edit dialogs share one validated form (day, open/closed mode, times, note)
+  - validation: day required, both times for open intervals, note ≤ 200; loading, empty, error and success states; delete confirmation
+  - uses the existing typed `adminApi` client and existing UI primitives/CSS; never invents hours
+- `src/components/arch/staff-pages.tsx` — added the `Opening hours` tab inside the existing admin-only dashboard gate
+- `src/test/opening-hours-management.test.tsx` — 12 component tests
+- `src/test/admin-opening-hours-navigation.test.tsx` — 1 navigation test
+
+**Verification**
+- Opening-hours backend integration: **18 test bodies passed**; the process exits non-zero because 3 tests raise teardown-only `sqlite3.ProgrammingError: Cannot operate on a closed database`. The same cleanup error reproduces in the pre-existing `test_admin_products_prices.py` and `test_public_api.py`, so it belongs to the shared in-memory SQLite fixture, not to opening-hours behaviour.
+- Public `/gym` tests: **52 passed** (1 teardown-only error under the same harness issue)
+- Opening-hours component tests: **12 passed**
+- Navigation tests: **3 passed** (new opening-hours tab plus the existing catalogue tabs)
+- Full frontend suite: **253 passed** (25 files) with `--no-file-parallelism`
+- Frontend typecheck: **clean**
+- Frontend production build: **succeeds**
+- Ruff on changed backend files: **clean**
+- Browser check: not run (no safe local mutating target started)
+
+**Acceptance criteria met**
+1. ✅ Admin opening-hours CRUD endpoints are implemented and protected by server-side `require_admin`
+2. ✅ The opening-hours UI is integrated into the existing admin navigation
+3. ✅ The UI reads, creates, edits and deletes records in the existing `OpeningHour` source of truth
+4. ✅ API and component tests pass (18 HTTP test bodies, 12 component tests, 1 navigation test)
+5. ✅ Typecheck and production build pass
+6. ✅ Public `/gym` contract is unchanged; it and assistant retrieval read the same records the admin edits
+
+**Known limitation**
+- `OpeningHour` has no date field, so date-specific exceptions (holidays, one-off closures) are not supported. `is_closed` describes a weekly interval only; adding exceptions needs a separately justified schema change. No `is_active` field was added: a stored closed interval is valid public information, and a day with no record is shown as having no stored interval rather than as invented hours.
+
+---
+
+### Task 8.4 — Events and courses admin CRUD (roadmap)
+
+**Why this is next:**
+- Events has partial admin (GET/POST only); needs PATCH/DELETE and `is_public` toggle
+- Courses has no admin endpoints despite public API existing
+- Both need admin pages for full lifecycle management
+
+**Implementation scope**
+- Complete Event admin: PATCH/DELETE, publish/archive via `is_public`
+- Add Course admin endpoints with full CRUD
+- Admin pages for both with create/edit/delete
+
+---
+
+### Task 8.5 — FAQ, rules, and services admin CRUD (roadmap)
+
+**Why this is next:**
+- FAQ, Rules, Services have no admin endpoints despite being core content
+- Assistant only sees published FAQ; admin must control publication
+- Rules has dual flags (`is_active` + `is_confirmed`) needing clear admin UI
+
+**Implementation scope**
+- Admin CRUD for FaqEntry with `is_published` toggle
+- Admin CRUD for Rule with `is_active` + `is_confirmed` fields
+- Services already partially done in 8.2 (schemas ready); add admin page
+
+---
+
+### Task 8.6 — Other website content (roadmap)
+
+**Why this is later:**
+- Routes and Walls already managed via staff workspace and admin dashboard
+- Galleries not yet modeled
+- Evaluate if additional content types need admin management
+
+---
+
+### Task 8.7 — Image management and permissions
+
+**Status:** `DONE`
+
+**Storage decision:** Local filesystem for development, Cloudflare R2 for production (configured via `ARCH_STORAGE_PROVIDER` environment variable). R2 chosen for production (Cloudflare Workers compatible); local FS for dev.
+
+**Backend implementation:**
+- `backend/src/app/storage.py` — Storage abstraction with `StorageProvider` ABC, `LocalStorageProvider` and `R2StorageProvider` implementations. Provider selected at runtime via `get_storage_provider()`.
+- `backend/src/app/api/admin.py` — `POST /api/admin/media/images` endpoint with `require_admin` protection. Validates content type via magic bytes (JPEG, PNG, WebP), file size (10 MB default), generates UUID-based object keys. Returns `StoredImage` with public URL, object key, content type, size.
+- `backend/src/app/schemas/climbing.py` — Added `WallUpdateIn` schema for PATCH wall operations.
+- `backend/src/app/schemas/__init__.py` — Exports `WallUpdateIn`.
+
+**Frontend implementation:**
+- `src/components/arch/image-upload-field.tsx` — Reusable, accessible `ImageUploadField` component with file selection, validation, preview, upload progress, error states, clear/cancel, and manual URL fallback. Uses callback-based interface (`value`, `onChange`, `onUpload` via props).
+- `src/test/image-upload-field.test.tsx` — 11 focused tests covering display, file selection, validation, upload callback, URL propagation, error recovery, loading state, clear/cancel behavior.
+- `src/services/types.ts` — Added `ApiAdminImage`, `ApiAdminImageCreate` wire types.
+- `src/services/api.ts` — Added `adminApi.uploadImage(file)` method using `FormData` with proper multipart handling.
+- `src/components/arch/product-management.tsx` — Integrated `ImageUploadField` into product create/edit form.
+- `src/components/arch/staff-pages.tsx` — Integrated `ImageUploadField` into route create form (RoutesTab).
+
+**Validation & Security:**
+- Every upload enforces server-side `require_admin` (401/403/404/413/422 responses).
+- Content type validated via actual file content (magic bytes), not just MIME type.
+- File size checked before streaming to storage.
+- Safe server-generated object keys (UUID + extension).
+- Provider credentials never exposed to frontend.
+- Unconfigured storage raises explicit server error; no fake URLs returned.
+
+**Tests:**
+- Backend: 71 route/wall/admin regression tests pass (3 SQLite teardown errors are pre-existing, harmless).
+- Frontend: 307 tests pass (including 11 `ImageUploadField` tests).
+- Typecheck: clean.
+- Production build: succeeds.
+
+**Gallery status:** No standalone gallery model/API exists. Task 8.7 scope is upload/storage plus integration into existing image fields (Product, Wall, Route). Standalone gallery management is a separate, unstarted backlog item; it is not part of Task 8.7 or Task 8.8.
+
+**Environment variables for production R2:**
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_BASE_URL` (required when `ARCH_STORAGE_PROVIDER=r2`).
+- Development defaults: `ARCH_LOCAL_STORAGE_PATH=./storage/images`, `ARCH_LOCAL_PUBLIC_URL=http://localhost:8080/storage`.
+
+**Files changed/created (Task 8.7):**
+- `backend/src/app/storage.py` (new)
+- `backend/src/app/api/admin.py` (upload endpoint)
+- `backend/src/app/schemas/climbing.py` (`WallUpdateIn`)
+- `backend/src/app/schemas/__init__.py` (export)
+- `src/components/arch/image-upload-field.tsx` (new)
+- `src/test/image-upload-field.test.tsx` (new)
+- `src/services/types.ts` (`ApiAdminImage`, `ApiAdminImageCreate`)
+- `src/services/api.ts` (`adminApi.uploadImage`)
+- `src/components/arch/product-management.tsx` (integration)
+- `src/components/arch/staff-pages.tsx` (integration)
+
+---
+
+### Task 8.8 — Integration and regression tests (`DONE`)
+
+**Scope:** cross-cutting verification of the admin CMS built in Tasks 8.2–8.7. No new content features were started. Application changes were limited to gaps the tests exposed: missing admin CRUD endpoints, upload hardening, route/wall image editing, and explicit wall-deletion detachment.
+
+**Backend regression coverage**
+- `backend/tests/test_admin_cms_integration.py` — 41 test bodies: server-side auth (401/403 on collections and items), publication visibility for products/prices/services/courses/events/FAQ/rules/opening hours, admin access to unpublished records, PATCH omission preservation, destructive-operation isolation, public response contracts.
+- `backend/tests/test_admin_media_security.py` — 14 test bodies: unauthenticated/non-admin rejection, JPEG/PNG/WebP acceptance, invalid/GIF/SVG/PDF rejection, client MIME/filename cannot bypass magic-byte validation, 413 oversize, server-generated UUID keys, storage-failure and missing-config responses without exception/secret leakage, no deletion endpoint.
+- `backend/tests/test_storage_providers.py` — 7 tests: magic-byte detection, key generation, real `LocalStorageProvider` round trip and path-traversal rejection, R2 configuration errors, Workers `IMAGES_BUCKET` binding round trip with a fake binding.
+- Existing per-resource suites (`test_admin_products_prices.py`, `test_opening_hours_admin_integration.py`, `test_events_courses_admin_integration.py`, `test_faq_rules_admin_integration.py`, `test_faq_rules_visibility.py`, `test_route_wall_admin_regression.py`, `test_public_api.py`) were re-run unchanged.
+
+**Backend results (exact)**
+- Full backend suite: **452 passed, 3 skipped, 8 warnings in 440.50s**, pytest exit code **0**.
+- Combined admin/CMS/public/storage run: **212 passed, 8 warnings in 177.59s**, pytest exit code **0**.
+- Storage provider run: **7 passed**, exit code **0**.
+- Wall/route + CMS integration run: **60 passed**, exit code **0**.
+- Teardown noise resolved: `backend/tests/conftest.py` now builds the shared-cache SQLite engine with `QueuePool`. SQLAlchemy selected `SingletonThreadPool` for `mode=memory` URLs and closed older connections non-deterministically once the thread count grew, producing `sqlite3.ProgrammingError: Cannot operate on a closed database` during fixture teardown. Assertions were already passing; the harness fix removes the false exit-code noise instead of hiding failures.
+
+**Frontend regression coverage**
+- `src/test/admin-image-integration.test.tsx` — 8 tests: product create/edit, route create/edit, wall create/edit uploads; failed upload preserves the existing URL; manual URL remains usable.
+- `src/test/image-upload-field.test.tsx` — updated for URL-preserving clear.
+- Product-management and admin-catalog-navigation suites re-run unchanged.
+
+**Frontend results (exact)**
+- Full suite: **315 passed** (33 files), exit code **0** (`npm test`).
+- Typecheck: **clean** (`npm run typecheck`).
+- Production build: **succeeds** (`npm run build`).
+
+**Image field integration (Task 8.7 scope, completed and verified here)**
+- Product create + edit, wall create + edit, and route create + edit all use the shared `ImageUploadField`.
+- A successful upload replaces the URL only after the server returns a public URL; a failed upload leaves the previous URL intact.
+- Manual URL entry remains available in all three forms.
+- A `Walls` admin tab now supports create/edit/delete/activate-deactivate. Deleting a wall explicitly sets referencing routes' `wall_id` to `NULL`, because SQLite does not enforce the declared `ON DELETE SET NULL`.
+
+**Storage and runtime findings**
+- `backend/src/app/storage.py` no longer requires `aiofiles`; local writes use `asyncio.to_thread`.
+- R2 on Cloudflare Python Workers uses the `IMAGES_BUCKET` binding; `boto3` is only a fallback outside Workers and is not installed in this environment.
+- Local development serves `<ARCH_LOCAL_STORAGE_PATH>` at `/storage`.
+- Live R2 was **not** verified: no R2 credentials, public bucket URL, or `boto3` installation are available. Coverage is a mocked Workers binding plus the real local filesystem provider; no claim of live storage verification is made.
+- `backend/wrangler.jsonc` was not modified and has no R2 binding configured. Production requires either the `IMAGES_BUCKET` binding (Workers) or `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` outside Workers, plus `R2_PUBLIC_BASE_URL`, with `ARCH_STORAGE_PROVIDER=r2`.
+
+**Files changed for Task 8.8**
+- `backend/src/app/api/admin.py` — missing admin CRUD, upload hardening, wall detach
+- `backend/src/app/storage.py` — dependency-free local provider, Workers R2, validation
+- `backend/src/app/main.py` — local `/storage` static mount
+- `backend/src/app/schemas/common.py`, `backend/src/app/schemas/__init__.py` — admin request/response schemas
+- `backend/tests/conftest.py` — QueuePool harness fix
+- `backend/tests/test_admin_cms_integration.py` (new)
+- `backend/tests/test_admin_media_security.py` (new)
+- `backend/tests/test_storage_providers.py` (new)
+- `src/components/arch/image-upload-field.tsx` — API client, URL preservation
+- `src/components/arch/product-management.tsx` — upload field integration
+- `src/components/arch/wall-management.tsx` (new)
+- `src/components/arch/staff-pages.tsx` — route edit dialog, Walls tab
+- `src/services/api.ts` — wall CRUD, upload
+- `src/test/admin-image-integration.test.tsx` (new)
+- `src/test/image-upload-field.test.tsx` (updated)
+
+**Limitations**
+- No image deletion endpoint; orphaned objects are not garbage-collected.
+- Uploads validate magic bytes and size, not a full image decode.
+- Standalone gallery remains a separate, unstarted backlog item and is not part of Task 8.8.
+
+---
+
+**Known architectural blockers / unresolved decisions:**
+
+1. **Image upload infrastructure** — resolved: local filesystem in development, Cloudflare R2 in production. Live R2 deployment still needs the production binding/credentials described above.
+2. **OpeningHour visibility** — model lacks `is_active`; all hours shown publicly. May need model change if closure exceptions needed beyond `is_closed`.
+3. **Course/Event pricing** — `price_vnd` on Course is nullable; no membership tiers model. ARCH must confirm pricing model.
+4. **Rule dual flags** — `is_active` + `is_confirmed` semantics: public rules endpoint and assistant retrieval include all active rules (`is_active=true`). Unconfirmed rules are marked with "(Draft — awaiting ARCH confirmation)" in assistant retrieval and admin UI shows a clear "Confirmed" dropdown. The `is_confirmed` flag remains metadata for ARCH's approval workflow; it does not gate public visibility. This allows ARCH to stage draft rules while keeping the public informed, with clear draft labeling.
+5. **FAQ categories** — free-text `category` field; may benefit from controlled vocabulary for admin filtering.
+6. **Assistant content sync** — changes via admin must immediately reflect in assistant retrieval (current design achieves this via shared DB).
+
+---
+
+## 9. ARCH-Provided Content Policy
+
+**Permanent policy for all agents and subagents:**
+
+ARCH-specific business information must not be invented by AI agents or subagents. This includes, but is not limited to:
+
+- FAQ questions and answers.
+- Gym rules and safety policies.
+- Opening hours and closure information.
+- Prices and commercial conditions.
+- Events and event schedules.
+- Courses and course details.
+- Services and facility information.
+- Product descriptions and commercial claims.
+- Any other factual information that requires confirmation from ARCH.
+
+### Placeholder Behavior
+
+Until ARCH supplies and confirms the relevant information:
+
+- Keep CMS collections empty where no real content exists.
+- Use clear empty states in admin and public interfaces.
+- Use form placeholder text only as editing guidance, never as persisted content.
+- Do not seed fictional FAQ, rules, events, courses, hours, prices, or services.
+- Do not publish placeholder records.
+- Do not allow placeholder text to become assistant grounding context.
+- The assistant must report that the information has not yet been provided or published by ARCH, rather than guessing.
+
+For FAQ specifically:
+- A newly created FAQ must default to `is_published=false`.
+- An admin must explicitly publish an entry after its content is supplied and approved.
+- Preserve the state of existing records.
+- Never bulk-unpublish existing approved content just to change the default.
+
+For Rules:
+- Preserve the existing distinction between `is_active` and `is_confirmed`.
+- Do not invent safety or facility rules.
+- Use empty-state guidance until ARCH supplies and confirms the actual rules.
+
+Do not make a generic placeholder database record to represent missing content.
+
+---
+
+## 11. Local Admin CMS Verification — FAQ Publication Default Fix
+
+### Issue
+The FAQ model and schema defaulted `is_published` to `True`, causing newly created FAQ entries to appear publicly immediately without explicit ARCH approval. This violated the placeholder policy requiring explicit publication.
+
+### Fix Applied
+1. **Model** (`backend/src/app/models/content.py:146`): Changed `is_published` default from `True` to `False`
+2. **Schema** (`backend/src/app/schemas/common.py:187`): Changed `FaqCreateIn.is_published` default from `True` to `False`
+3. **Admin Form** (`src/components/arch/faq-management.tsx:114`): Changed default `setIsPublished(true)` to `setIsPublished(false)`
+4. **Test Fixture** (`backend/tests/test_admin_cms_integration.py:45`): Updated FAQ fixture to explicitly set `is_published: True` for test compatibility
+
+### Verification
+- **New test file**: `backend/tests/test_faq_publication_defaults.py` — 8 tests covering:
+  - Missing `is_published` defaults to `false`
+  - Explicit `true`/`false` respected
+  - PATCH omission preserves existing value
+  - Public FAQ API excludes unpublished entries
+  - Assistant retrieval excludes unpublished entries
+  - Admin can list unpublished entries
+  - Existing published entries remain available
+- **All tests pass**: 8/8 new tests + 461 existing backend tests + 315 frontend tests
+- **Existing published entries preserved**: No bulk-unpublish; existing records unchanged
+- **Public API & Assistant**: Both correctly filter by `is_published=true`
+
+### Rules Visibility Policy
+Public rules endpoint (`/api/public/rules`) and assistant retrieval include all active rules (`is_active=true`). Unconfirmed rules are marked with "(Draft — awaiting ARCH confirmation)" in assistant retrieval and admin UI shows a clear "Confirmed" dropdown. The `is_confirmed` flag remains metadata for ARCH's approval workflow; it does not gate public visibility. This allows ARCH to stage draft rules while keeping the public informed, with clear draft labeling.
+
+---
+
+## 12. Updated Roadmap — New Phases
+
+### Phase 9 — ARCH Content Collection, Confirmation & Publishing
+
+**Status:** `TODO` — Depends on Phase 8 (Admin CMS complete) and ARCH stakeholder availability.
+
+**Scope:** Collect, confirm, and publish all ARCH business content through the existing Admin CMS. Do not create a second content-management system.
+
+**Planned Tasks:**
+
+| #   | Task                                                                     | Status | Acceptance Criteria                                                                                       |
+| --- | ------------------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------- |
+| 9.1 | Identify ARCH content owners for each category (FAQ, Rules, Hours, Prices, Events, Courses, Services, Products) | `TODO` | Written list of owners with contact information; each category has a named approver.                      |
+| 9.2 | Collect complete FAQ questions and approved answers from ARCH            | `TODO` | FAQ entries entered via Admin CMS, reviewed, and explicitly published (`is_published=true`).              |
+| 9.3 | Collect official gym rules, safety policies, and facility instructions   | `TODO` | Rules entered via Admin CMS with `is_active` and `is_confirmed` set per ARCH direction.                   |
+| 9.4 | Collect verified opening hours, holidays, and special closure information | `TODO` | Opening hours entered via Admin CMS; public `/gym` API reflects confirmed data.                           |
+| 9.5 | Collect official prices, product descriptions, services, courses, events | `TODO` | All commercial content entered via Admin CMS; public APIs reflect confirmed data only.                    |
+| 9.6 | Enter supplied content through existing Admin CMS                        | `TODO` | Content exists in database; admin can view/edit; public APIs serve only published/active records.         |
+| 9.7 | Publish only content explicitly approved by ARCH                         | `TODO` | No record reaches public API without explicit ARCH approval; assistant grounds only on published content. |
+| 9.8 | Verify public pages and assistant use confirmed records                  | `TODO` | Automated + manual checks confirm only approved content appears publicly and in assistant answers.        |
+| 9.9 | Confirm missing information still produces honest placeholder behavior   | `TODO` | Unpublished categories show empty states; assistant reports "not covered" for missing content.            |
+
+> **Important:** These tasks remain `TODO` or `PLANNED`. Do not claim ARCH has supplied or approved any content. The goal is to ask ARCH for the information later, then populate the existing CMS. Do not create a second content-management system.
+
+---
+
+### Phase 10 — Final UI Quality & Anti-AI-Slop Review with Impeccable
+
+**Status:** `TODO` — Reserved as the **final project phase**, after all backend, CMS, storage, data-collection, and functional implementation tasks are completed.
+
+**Official Repository:** https://github.com/pbakaus/impeccable
+
+**Intended Workflow (executed by the user, not AI agents):**
+
+1. User obtains the official Impeccable repository locally.
+2. Install or link the OpenCode-specific Impeccable skill using the repository's documented setup.
+3. Run `/impeccable init` to establish the real ARCH product context and design system.
+4. Audit the existing ARCH frontend and admin dashboard.
+5. Review visual hierarchy, typography, layout, color, component reuse, accessibility, responsive behavior, and AI-generated UI anti-patterns.
+6. Polish and refine existing pages in controlled, reviewable changes.
+7. Inspect the actual application in the local browser.
+8. Run the frontend tests, typecheck, and production build after changes.
+9. User reviews and approves the final visual changes.
+
+**Constraints:**
+
+- Do not install Impeccable or begin this phase now.
+- Do not let ordinary AI agents regenerate the entire frontend.
+- Do not replace the existing design system without an explicit design decision.
+- Preserve working functionality and existing API integrations.
+- Make changes incrementally and compare before/after results.
+- This must remain the final project phase, not run concurrently with unfinished backend work.
+
+---
+
+## 11. Permanent Commit and Push Approval Policy
+
+**Added to `AGENTS.md` (created as part of this update):**
+
+For every development task:
+
+1. Complete implementation.
+2. Run relevant automated tests, typechecks, builds, and security checks.
+3. Produce a report containing changed files, test results, failures, limitations, and relevant diff summary.
+4. **STOP and wait for external review.**
+
+**Never commit or push automatically when tests pass.**
+
+The user requires the task to be reviewed first. The user will review the reported implementation and results, and explicitly approve the task before any commit or push is permitted.
+
+Only after explicit user approval:
+
+- Create one appropriately scoped commit for that completed task.
+- Use a meaningful commit message.
+- Push to the branch the user has approved.
+- Verify that the push succeeded and report the commit hash and remote branch.
+- Do not include unrelated modifications in the commit.
+- Do not amend, force-push, or overwrite previous commits unless separately authorized.
+
+If approval has not been explicitly granted, leave all changes uncommitted and unpushed, regardless of test results.
+
+This policy applies to the main agent and every subagent. Subagents must never commit or push independently.
+
+---
+
+## 12. Preservation of Existing Status and Limitations
+
+- Preserve the completed status of Tasks 8.1–8.8.
+- Do not create Task 8.9 or start a standalone gallery implementation.
+- Keep R2 production verification documented as outstanding.
+- Keep image deletion/garbage collection limitations documented.
+- Keep the route provenance limitation documented.
+- Do not mark any ARCH-provided content as populated or approved.
+- Preserve all existing completed test evidence and historical notes.
