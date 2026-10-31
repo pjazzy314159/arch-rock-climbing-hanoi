@@ -1,0 +1,10 @@
+#!/usr/bin/env python
+"""Run the backend server with .env loaded."""
+from dotenv import load_dotenv
+load_dotenv(".env")
+
+import os
+import uvicorn
+
+if __name__ == "__main__":
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
