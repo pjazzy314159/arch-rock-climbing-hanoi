@@ -7,11 +7,30 @@ same result both times.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from sqlalchemy.orm import Session
 
 from app.models import ClimbRoute, Wall, WallType
 from app.seed import WALL_PHOTO, _seed_demo
+
+
+def test_the_seed_finds_the_backend_migrations() -> None:
+    """``python -m app.seed`` must resolve Alembic from the backend root.
+
+    ``app`` sits in ``backend/src/app``, so a path relative to the module
+    directory used to point at ``backend/src/migrations``, which does not
+    exist.
+    """
+    from app.config import BACKEND_ROOT
+    from app.seed import _migration_config
+
+    config = _migration_config("sqlite:///./var/unused.db")
+
+    assert Path(config.config_file_name or "") == BACKEND_ROOT / "alembic.ini"
+    assert Path(config.get_main_option("script_location") or "") == BACKEND_ROOT / "migrations"
+    assert (BACKEND_ROOT / "migrations" / "versions").is_dir()
 
 
 def test_the_demo_seed_creates_the_walls(db: Session) -> None:

@@ -17,9 +17,27 @@
 import type {
   ApiAchievement,
   ApiAdminAssignee,
+  ApiAdminCourse,
+  ApiAdminCourseCreate,
+  ApiAdminCourseUpdate,
   ApiAdminCustomerDetail,
   ApiAdminCustomerPage,
+  ApiAdminEventCreate,
+  ApiAdminEventUpdate,
+  ApiAdminImage,
   ApiAdminMember,
+  ApiAdminOpeningHour,
+  ApiAdminOpeningHourCreate,
+  ApiAdminOpeningHourUpdate,
+  ApiAdminPrice,
+  ApiAdminPriceCreate,
+  ApiAdminPriceUpdate,
+  ApiAdminProduct,
+  ApiAdminProductCreate,
+  ApiAdminProductUpdate,
+  ApiAdminService,
+  ApiAdminServiceCreate,
+  ApiAdminServiceUpdate,
   ApiAdminSummary,
   ApiAgreement,
   ApiAssistantAnswer,
@@ -31,6 +49,8 @@ import type {
   ApiDashboard,
   ApiEvent,
   ApiFaqEntry,
+  ApiFaqCreate,
+  ApiFaqUpdate,
   ApiGym,
   ApiLeaderboardEntry,
   ApiLeaderboardRules,
@@ -43,6 +63,8 @@ import type {
   ApiStaffRouteOption,
   ApiWallHold,
   ApiRule,
+  ApiRuleCreate,
+  ApiRuleUpdate,
   ApiService,
   ApiShift,
   ApiTask,
@@ -398,6 +420,20 @@ export const adminApi = {
 
   walls: () => apiRequest<ApiWall[]>("/api/admin/walls"),
 
+  createWall: (body: {
+    name: string;
+    description?: string;
+    image_url?: string | null;
+    sort_order?: number;
+    is_active?: boolean;
+  }) => apiRequest<ApiWall>("/api/admin/walls", { method: "POST", body }),
+
+  updateWall: (wallId: number, body: Record<string, unknown>) =>
+    apiRequest<ApiWall>(`/api/admin/walls/${wallId}`, { method: "PATCH", body }),
+
+  deleteWall: (wallId: number) =>
+    apiRequest<void>(`/api/admin/walls/${wallId}`, { method: "DELETE" }),
+
   createRoute: (body: {
     name: string;
     grade: string;
@@ -427,14 +463,98 @@ export const adminApi = {
 
   events: () => apiRequest<ApiEvent[]>("/api/admin/events"),
 
-  createEvent: (body: {
-    title: string;
-    starts_at: string;
-    description?: string;
-    location?: string;
-    capacity?: number | null;
-    is_public?: boolean;
-  }) => apiRequest<ApiEvent>("/api/admin/events", { method: "POST", body }),
+  createEvent: (body: ApiAdminEventCreate) =>
+    apiRequest<ApiEvent>("/api/admin/events", { method: "POST", body }),
+
+  updateEvent: (eventId: number, body: ApiAdminEventUpdate) =>
+    apiRequest<ApiEvent>(`/api/admin/events/${eventId}`, { method: "PATCH", body }),
+
+  deleteEvent: (eventId: number) =>
+    apiRequest<void>(`/api/admin/events/${eventId}`, { method: "DELETE" }),
+
+  // Courses
+  courses: () => apiRequest<ApiAdminCourse[]>("/api/admin/courses"),
+
+  createCourse: (body: ApiAdminCourseCreate) =>
+    apiRequest<ApiAdminCourse>("/api/admin/courses", { method: "POST", body }),
+
+  updateCourse: (courseId: number, body: ApiAdminCourseUpdate) =>
+    apiRequest<ApiAdminCourse>(`/api/admin/courses/${courseId}`, {
+      method: "PATCH",
+      body,
+    }),
+
+  deleteCourse: (courseId: number) =>
+    apiRequest<void>(`/api/admin/courses/${courseId}`, { method: "DELETE" }),
+
+  // Products (catalogue)
+  products: () => apiRequest<ApiAdminProduct[]>("/api/admin/products"),
+
+  createProduct: (body: ApiAdminProductCreate) =>
+    apiRequest<ApiAdminProduct>("/api/admin/products", { method: "POST", body }),
+
+  updateProduct: (productId: number, body: ApiAdminProductUpdate) =>
+    apiRequest<ApiAdminProduct>(`/api/admin/products/${productId}`, { method: "PATCH", body }),
+
+  // Prices
+  prices: () => apiRequest<ApiAdminPrice[]>("/api/admin/prices"),
+
+  createPrice: (body: ApiAdminPriceCreate) =>
+    apiRequest<ApiAdminPrice>("/api/admin/prices", { method: "POST", body }),
+
+  updatePrice: (priceId: number, body: ApiAdminPriceUpdate) =>
+    apiRequest<ApiAdminPrice>(`/api/admin/prices/${priceId}`, { method: "PATCH", body }),
+
+  // Services
+  services: () => apiRequest<ApiAdminService[]>("/api/admin/services"),
+
+  createService: (body: ApiAdminServiceCreate) =>
+    apiRequest<ApiAdminService>("/api/admin/services", { method: "POST", body }),
+
+  updateService: (serviceId: number, body: ApiAdminServiceUpdate) =>
+    apiRequest<ApiAdminService>(`/api/admin/services/${serviceId}`, { method: "PATCH", body }),
+
+  deleteService: (serviceId: number) =>
+    apiRequest<void>(`/api/admin/services/${serviceId}`, { method: "DELETE" }),
+
+  // FAQ
+  faq: () => apiRequest<ApiFaqEntry[]>("/api/admin/faq"),
+
+  createFaq: (body: ApiFaqCreate) =>
+    apiRequest<ApiFaqEntry>("/api/admin/faq", { method: "POST", body }),
+
+  updateFaq: (faqId: number, body: ApiFaqUpdate) =>
+    apiRequest<ApiFaqEntry>(`/api/admin/faq/${faqId}`, { method: "PATCH", body }),
+
+  deleteFaq: (faqId: number) =>
+    apiRequest<void>(`/api/admin/faq/${faqId}`, { method: "DELETE" }),
+
+  // Rules
+  rules: () => apiRequest<ApiRule[]>("/api/admin/rules"),
+
+  createRule: (body: ApiRuleCreate) =>
+    apiRequest<ApiRule>("/api/admin/rules", { method: "POST", body }),
+
+  updateRule: (ruleId: number, body: ApiRuleUpdate) =>
+    apiRequest<ApiRule>(`/api/admin/rules/${ruleId}`, { method: "PATCH", body }),
+
+  deleteRule: (ruleId: number) =>
+    apiRequest<void>(`/api/admin/rules/${ruleId}`, { method: "DELETE" }),
+
+  // Opening hours
+  openingHours: () => apiRequest<ApiAdminOpeningHour[]>("/api/admin/opening-hours"),
+
+  createOpeningHour: (body: ApiAdminOpeningHourCreate) =>
+    apiRequest<ApiAdminOpeningHour>("/api/admin/opening-hours", { method: "POST", body }),
+
+  updateOpeningHour: (hourId: number, body: ApiAdminOpeningHourUpdate) =>
+    apiRequest<ApiAdminOpeningHour>(`/api/admin/opening-hours/${hourId}`, {
+      method: "PATCH",
+      body,
+    }),
+
+  deleteOpeningHour: (hourId: number) =>
+    apiRequest<void>(`/api/admin/opening-hours/${hourId}`, { method: "DELETE" }),
 
   agreements: (status?: string) =>
     apiRequest<ApiAgreement[]>(`/api/admin/agreements${status ? `?status=${status}` : ""}`),
@@ -448,6 +568,40 @@ export const adminApi = {
     apiRequest<ApiContactMessage>(`/api/admin/contact/${messageId}?handled=${handled}`, {
       method: "PATCH",
     }),
+
+  // Image upload
+  uploadImage: async (file: File): Promise<ApiAdminImage> => {
+    if (!isApiConfigured) {
+      throw new ApiUnavailableError("The ARCH service is not configured for this site.");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const token = getAccessToken();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const response = await fetch(`${API_BASE_URL}/api/admin/media/images`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (response.status === 204) return {} as ApiAdminImage;
+
+    const text = await response.text();
+    const payload = parseJson(text);
+
+    if (!response.ok) {
+      throw new ApiError(
+        detailFromPayload(payload) ?? `The request failed (${response.status}).`,
+        response.status,
+      );
+    }
+
+    return payload as ApiAdminImage;
+  },
 
   votes: (routeId?: number) =>
     apiRequest<

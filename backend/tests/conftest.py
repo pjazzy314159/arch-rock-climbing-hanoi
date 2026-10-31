@@ -8,21 +8,48 @@ imported so the engine never points at a real database.
 from __future__ import annotations
 
 import os
-import tempfile
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 
-TEST_DB_PATH = Path(tempfile.gettempdir()) / "arch_backend_test.db"
-os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH.as_posix()}"
+# Use in-memory SQLite database with shared cache to avoid file locking issues on Windows
+# The 'uri=true' parameter is required for SQLite URI parameters to be parsed
+os.environ["DATABASE_URL"] = "sqlite:///file:test?mode=memory&cache=shared&uri=true"
 os.environ["ARCH_SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["ARCH_ENVIRONMENT"] = "test"
 
 from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+from sqlalchemy.pool import QueuePool  # noqa: E402
 
-from app.db import Base, SessionLocal, engine  # noqa: E402
+from app import db as app_db  # noqa: E402
+from app.db import Base  # noqa: E402
+
+# The shared-cache URL above makes SQLAlchemy pick ``SingletonThreadPool``
+# (because of ``mode=memory``). That pool assumes one connection per thread and
+# closes older connections non-deterministically once the configured thread
+# count is exceeded, which tears the SQLite connection out from under a live
+# session and produces ``Cannot operate on a closed database`` during teardown.
+# A shared-cache in-memory database supports concurrent connections, so use the
+# normal queue pool explicitly, as SQLAlchemy's documentation recommends.
+app_db._local_engine.dispose()
+engine = create_engine(
+    os.environ["DATABASE_URL"],
+    future=True,
+    connect_args={"check_same_thread": False},
+    poolclass=QueuePool,
+)
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    expire_on_commit=False,
+    future=True,
+)
+app_db._local_engine = engine
+app_db.LocalSessionLocal = SessionLocal
+app_db.engine = engine
+app_db.SessionLocal = SessionLocal
 from app.main import app  # noqa: E402
 from app.models import (  # noqa: E402
     Achievement,
@@ -59,15 +86,11 @@ def _clear_database() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _database() -> Iterator[None]:
-    if TEST_DB_PATH.exists():
-        TEST_DB_PATH.unlink()
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
     # Release the file handles before removing the database on Windows.
     engine.dispose()
-    if TEST_DB_PATH.exists():
-        TEST_DB_PATH.unlink()
 
 
 @pytest.fixture(autouse=True)

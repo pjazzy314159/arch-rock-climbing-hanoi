@@ -109,6 +109,22 @@ class EventCreateIn(BaseModel):
     is_public: bool = True
 
 
+class EventUpdateIn(BaseModel):
+    """A partial event update.
+
+    ``ends_at`` stays explicitly settable to ``None`` so an existing end time
+    can be cleared; ``exclude_unset`` keeps that distinct from "unchanged".
+    """
+
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=4000)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    location: str | None = Field(default=None, max_length=160)
+    capacity: int | None = Field(default=None, ge=1, le=10_000)
+    is_public: bool | None = None
+
+
 class AdminSummaryOut(BaseModel):
     members: int
     staff: int

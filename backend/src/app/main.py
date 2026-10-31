@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -118,3 +121,17 @@ def health(request: Request, db: Session = Depends(get_db)) -> dict:
 
 
 app.include_router(api_router)
+
+# In development the local storage provider advertises URLs under /storage.
+# Serve that directory from the same application so uploaded images are
+# actually retrievable. Production uses R2 and does not mount this.
+if os.getenv("ARCH_STORAGE_PROVIDER", "local").lower() != "r2":
+    local_storage_dir = Path(
+        os.getenv("ARCH_LOCAL_STORAGE_PATH", "./storage/images")
+    )
+    local_storage_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/storage",
+        StaticFiles(directory=str(local_storage_dir)),
+        name="storage",
+    )

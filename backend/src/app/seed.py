@@ -20,10 +20,13 @@ from __future__ import annotations
 
 import argparse
 from datetime import UTC, date, datetime, time, timedelta
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from alembic.config import Config
 
 from app.db import SessionLocal
 from app.models import (
@@ -567,6 +570,27 @@ def _seed_demo(db: Session) -> None:
         )
 
 
+def _migration_config(database_url: str) -> Config:
+    """Build an Alembic config that points at the backend's migrations.
+
+    ``app`` lives in ``backend/src/app``, so the backend root is two levels
+    above the package directory (``app.config.BACKEND_ROOT``), not two levels
+    above this module. Resolving it from the package location keeps the
+    documented ``python -m app.seed --demo`` command working from a source
+    checkout.
+    """
+    from alembic.config import Config
+
+    from app.config import BACKEND_ROOT
+
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    # configparser treats a bare percent sign as interpolation syntax. Escape
+    # percent-encoded URLs here for the same reason as migrations/env.py.
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+    return config
+
+
 def _migrate(reset: bool = False) -> None:
     """Bring the database to the latest Alembic revision.
 
@@ -574,16 +598,10 @@ def _migrate(reset: bool = False) -> None:
     recorded migration revision can never drift apart.
     """
     from alembic import command
-    from alembic.config import Config
 
     from app.config import get_settings
 
-    backend_root = Path(__file__).resolve().parent.parent
-    config = Config(str(backend_root / "alembic.ini"))
-    config.set_main_option("script_location", str(backend_root / "migrations"))
-    # configparser treats a bare percent sign as interpolation syntax. Escape
-    # percent-encoded URLs here for the same reason as migrations/env.py.
-    config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
+    config = _migration_config(get_settings().database_url)
 
     if reset:
         command.downgrade(config, "base")

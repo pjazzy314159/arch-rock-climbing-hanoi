@@ -944,6 +944,341 @@
   color: var(--color-primary);
 }
 
+/* ==========================================================================
+   Assistant — FAQ suggestions & source badges
+   ========================================================================== */
+
+.source-category-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-accent-foreground);
+}
+
+.source-question {
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.faq-suggestions {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.suggestion-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+  margin: 0 0 0.5rem;
+}
+
+.faq-suggestions ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.faq-suggestion-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.faq-suggestion-link:hover,
+.faq-suggestion-link:focus {
+  background: var(--color-accent);
+  border-color: var(--color-ring);
+  outline: none;
+}
+
+.faq-suggestion-link:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.suggestion-category {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-accent-foreground);
+}
+
+.suggestion-question {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--color-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.assistant-error-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-destructive);
+  color: var(--color-destructive-foreground);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+}
+
+.assistant-error-message button {
+  flex-shrink: 0;
+}
+
+.input-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.input-loader {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-muted-foreground);
+}
+
+.loading-text {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.88rem;
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.assistant-message-pending .assistant-question {
+  opacity: 0.6;
+}
+
+.assistant-intro {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.assistant-intro .muted-note {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.assistant-sources .source-category-badge {
+  flex-shrink: 0;
+}
+
+.assistant-sources .source-question {
+  flex: 1;
+  min-width: 0;
+}
+
+.faq-suggestions {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.faq-suggestion-link:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.faq-suggestion-link:focus {
+  outline: none;
+}
+
+.assistant-error-message:focus-within {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.assistant-form:focus-within {
+  outline: none;
+}
+
+.assistant-form input:focus {
+  outline: none;
+  border-color: var(--color-ring);
+}
+
+.assistant-form input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.assistant-form input::placeholder {
+  color: var(--color-muted-foreground);
+  opacity: 0.7;
+}
+
+.assistant-launcher:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.assistant-launcher:focus {
+  outline: none;
+}
+
+.assistant-head button:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.assistant-head button:focus {
+  outline: none;
+}
+
+.assistant-error-message button:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.assistant-error-message button:focus {
+  outline: none;
+}
+
+.assistant-footnote a:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.assistant-footnote a:focus {
+  outline: none;
+}
+
+.assistant-launcher:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.assistant-launcher:focus {
+  outline: none;
+}
+
+@media (max-width: 640px) {
+  .assistant-panel {
+    width: calc(100vw - 2rem);
+    right: 1rem;
+    bottom: 4rem;
+    max-height: calc(100vh - 6rem);
+  }
+
+  .assistant-form {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .assistant-form input {
+    width: 100%;
+  }
+
+  .assistant-form button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .faq-suggestions ul {
+    gap: 0.25rem;
+  }
+
+  .faq-suggestion-link {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .assistant-sources li {
+    flex-wrap: wrap;
+  }
+
+  .source-category-badge {
+    flex-shrink: 0;
+  }
+
+  .assistant-head h2 {
+    font-size: 1rem;
+  }
+
+  .assistant-head p {
+    font-size: 0.65rem;
+  }
+
+  .assistant-message {
+    gap: 0.3rem;
+  }
+
+  .assistant-question {
+    max-width: 85%;
+    font-size: 0.8rem;
+  }
+
+  .assistant-answer {
+    font-size: 0.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .faq-suggestions,
+  .faq-suggestion-link,
+  .loading-spinner {
+    animation: none;
+    transition: none;
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

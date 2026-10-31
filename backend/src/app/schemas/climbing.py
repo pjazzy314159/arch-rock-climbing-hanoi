@@ -31,6 +31,16 @@ class WallCreateIn(BaseModel):
     is_active: bool = True
 
 
+class WallUpdateIn(BaseModel):
+    """The body for updating a wall."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=2000)
+    image_url: str | None = Field(default=None, max_length=400)
+    sort_order: int | None = Field(default=None, ge=0, le=999)
+    is_active: bool | None = None
+
+
 class RouteOut(ORMModel):
     id: int
     name: str

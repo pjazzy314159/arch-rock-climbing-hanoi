@@ -37,6 +37,7 @@ export type ApiPrice = {
   amount_vnd: number;
   unit: string;
   sort_order: number;
+  is_active: boolean;
 };
 
 export type ApiService = {
@@ -45,6 +46,7 @@ export type ApiService = {
   summary: string;
   icon: string;
   sort_order: number;
+  is_active: boolean;
 };
 
 export type ApiCourse = {
@@ -70,6 +72,41 @@ export type ApiEvent = {
   capacity: number | null;
   is_public: boolean;
 };
+
+/** A course as returned by the admin API, including inactive records. */
+export type ApiAdminCourse = ApiCourse & {
+  is_active: boolean;
+};
+
+export type ApiAdminCourseCreate = {
+  title: string;
+  level?: string;
+  summary?: string;
+  description?: string;
+  instructor?: string;
+  schedule?: string;
+  duration_weeks?: number | null;
+  capacity?: number | null;
+  price_vnd?: number | null;
+  is_active?: boolean;
+};
+
+export type ApiAdminCourseUpdate = Partial<ApiAdminCourseCreate>;
+
+/** An event as returned by the admin API, including unpublished records. */
+export type ApiAdminEvent = ApiEvent;
+
+export type ApiAdminEventCreate = {
+  title: string;
+  description?: string;
+  starts_at: string;
+  ends_at?: string | null;
+  location?: string;
+  capacity?: number | null;
+  is_public?: boolean;
+};
+
+export type ApiAdminEventUpdate = Partial<ApiAdminEventCreate>;
 
 /** A wall the route directory can be filtered by. */
 export type ApiRouteFilterWall = {
@@ -98,7 +135,19 @@ export type ApiRule = {
   category: string;
   sort_order: number;
   is_confirmed: boolean;
+  is_active: boolean;
 };
+
+export type ApiRuleCreate = {
+  title: string;
+  body: string;
+  category?: string;
+  sort_order?: number;
+  is_active?: boolean;
+  is_confirmed?: boolean;
+};
+
+export type ApiRuleUpdate = Partial<ApiRuleCreate>;
 
 export type ApiFaqEntry = {
   id: number;
@@ -106,7 +155,18 @@ export type ApiFaqEntry = {
   answer: string;
   category: string;
   keywords: string;
+  is_published: boolean;
 };
+
+export type ApiFaqCreate = {
+  question: string;
+  answer: string;
+  category?: string;
+  keywords?: string;
+  is_published?: boolean;
+};
+
+export type ApiFaqUpdate = Partial<ApiFaqCreate>;
 
 export type ApiCatalogProduct = {
   id: number;
@@ -531,4 +591,139 @@ export type ApiPublicRouteHolds = {
   image_url: string | null;
   published: boolean;
   holds: ApiRouteHold[];
+};
+
+/** Admin product (catalogue) types. */
+export type ApiAdminProduct = {
+  id: number;
+  sku: string;
+  name: string;
+  brand: string;
+  category: string;
+  fit: string;
+  price_vnd: number;
+  description: string;
+  image_url: string | null;
+  stock: number;
+  is_active: boolean;
+};
+
+export type ApiAdminProductCreate = {
+  sku: string;
+  name: string;
+  brand?: string;
+  category?: string;
+  fit?: string;
+  price_vnd?: number;
+  description?: string;
+  image_url?: string | null;
+  stock?: number;
+  is_active?: boolean;
+};
+
+export type ApiAdminProductUpdate = {
+  sku?: string;
+  name?: string;
+  brand?: string;
+  category?: string;
+  fit?: string;
+  price_vnd?: number;
+  description?: string;
+  image_url?: string | null;
+  stock?: number;
+  is_active?: boolean;
+};
+
+/** Admin price types. */
+export type ApiAdminPrice = {
+  id: number;
+  category: string;
+  name: string;
+  description: string;
+  amount_vnd: number;
+  unit: string;
+  sort_order: number;
+  is_active: boolean;
+};
+
+export type ApiAdminPriceCreate = {
+  category: string;
+  name: string;
+  description?: string;
+  amount_vnd: number;
+  unit?: string;
+  sort_order?: number;
+  is_active?: boolean;
+};
+
+export type ApiAdminPriceUpdate = {
+  category?: string;
+  name?: string;
+  description?: string;
+  amount_vnd?: number;
+  unit?: string;
+  sort_order?: number;
+  is_active?: boolean;
+};
+
+/** Admin service types. */
+export type ApiAdminService = {
+  id: number;
+  title: string;
+  summary: string;
+  icon: string;
+  sort_order: number;
+  is_active: boolean;
+};
+
+export type ApiAdminServiceCreate = {
+  title: string;
+  summary?: string;
+  icon?: string;
+  sort_order?: number;
+  is_active?: boolean;
+};
+
+export type ApiAdminServiceUpdate = {
+  title?: string;
+  summary?: string;
+  icon?: string;
+  sort_order?: number;
+  is_active?: boolean;
+};
+
+/** Admin opening-hour types. */
+export type ApiAdminOpeningHour = {
+  id: number;
+  /** 0 = Monday … 6 = Sunday. */
+  day_of_week: number;
+  /** ISO time such as "09:00:00", or null for a closed interval. */
+  opens_at: string | null;
+  closes_at: string | null;
+  note: string;
+  is_closed: boolean;
+};
+
+export type ApiAdminOpeningHourCreate = {
+  day_of_week: number;
+  opens_at?: string | null;
+  closes_at?: string | null;
+  note?: string;
+  is_closed?: boolean;
+};
+
+export type ApiAdminOpeningHourUpdate = Partial<ApiAdminOpeningHourCreate>;
+
+/** Admin image upload types. */
+export type ApiAdminImage = {
+  url: string;
+  object_key: string;
+  content_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+};
+
+export type ApiAdminImageCreate = {
+  file: File;
 };

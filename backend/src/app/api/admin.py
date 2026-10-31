@@ -6,11 +6,12 @@ buttons in the frontend is not treated as access control.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -21,11 +22,16 @@ from app.models import (
     ContactMessage,
     Course,
     Event,
+    FaqEntry,
+    OpeningHour,
+    Price,
     Product,
     Role,
     RouteStatus,
     RouteVote,
+    Rule,
     SafetyAgreement,
+    Service,
     StaffTask,
     TaskStatus,
     User,
@@ -33,22 +39,45 @@ from app.models import (
 )
 from app.schemas import (
     AdminAssigneeOut,
+    AdminCourseOut,
     AdminCustomerDetailOut,
     AdminCustomerListOut,
+    AdminFaqOut,
     AdminMemberOut,
+    AdminOpeningHourOut,
+    AdminRuleOut,
     AdminSummaryOut,
     AgreementOut,
     AgreementUpdateIn,
     ContactMessageOut,
+    CourseCreateIn,
+    CourseUpdateIn,
     EventCreateIn,
     EventOut,
+    EventUpdateIn,
+    FaqCreateIn,
+    FaqUpdateIn,
+    OpeningHourCreateIn,
+    OpeningHourUpdateIn,
+    PriceCreateIn,
+    PriceOut,
+    PriceUpdateIn,
+    ProductCreateIn,
+    ProductOut,
+    ProductUpdateIn,
     RouteCreateIn,
     RouteOut,
     RouteSummary,
     RouteUpdateIn,
+    RuleCreateIn,
+    RuleUpdateIn,
+    ServiceCreateIn,
+    ServiceOut,
+    ServiceUpdateIn,
     TaskOut,
     WallCreateIn,
     WallOut,
+    WallUpdateIn,
 )
 from app.services.climbing import build_route_out, build_route_summary
 from app.services.customers import (
@@ -57,6 +86,16 @@ from app.services.customers import (
 from app.services.customers import (
     list_customers as query_customers,
 )
+from app.storage import (
+    ALLOWED_IMAGE_TYPES,
+    MAX_IMAGE_BYTES,
+    StoredImage,
+    detect_image_type,
+    generate_object_key,
+    get_storage_provider,
+)
+
+logger = logging.getLogger("arch.api.admin")
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -260,6 +299,146 @@ def create_wall(
     return WallOut.model_validate(wall)
 
 
+@router.patch("/walls/{wall_id}", response_model=WallOut)
+def update_wall(
+    wall_id: int,
+    payload: WallUpdateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> WallOut:
+    """Update a wall."""
+    wall = db.get(Wall, wall_id)
+    if wall is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wall not found")
+
+    changes = payload.model_dump(exclude_unset=True)
+
+    if "name" in changes:
+        name = (changes["name"] or "").strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Wall name cannot be empty",
+            )
+        if db.scalar(select(Wall).where(Wall.name == name, Wall.id != wall_id)) is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wall already exists")
+        wall.name = name
+    if "description" in changes:
+        wall.description = (changes["description"] or "").strip()
+    if "image_url" in changes:
+        wall.image_url = (changes["image_url"] or "").strip() or None
+    if changes.get("sort_order") is not None:
+        wall.sort_order = changes["sort_order"]
+    if changes.get("is_active") is not None:
+        wall.is_active = changes["is_active"]
+
+    db.commit()
+    db.refresh(wall)
+    return WallOut.model_validate(wall)
+
+
+@router.delete("/walls/{wall_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_wall(
+    wall_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Remove a wall. Routes referencing it keep a null wall_id.
+
+    The foreign key declares ``ON DELETE SET NULL``, but SQLite does not
+    enforce foreign keys unless ``PRAGMA foreign_keys`` is enabled per
+    connection. The detach step is therefore done explicitly so the
+    behaviour is identical on SQLite and PostgreSQL.
+    """
+    wall = db.get(Wall, wall_id)
+    if wall is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wall not found")
+
+    db.execute(
+        update(ClimbRoute).where(ClimbRoute.wall_id == wall_id).values(wall_id=None)
+    )
+    db.delete(wall)
+    db.commit()
+
+
+@router.delete("/routes/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_route(
+    route_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Remove a route. Votes and achievements cascade; draft hold set is orphaned."""
+    route = db.get(ClimbRoute, route_id)
+    if route is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Route not found")
+    db.delete(route)
+    db.commit()
+
+
+# --- Media uploads ---
+
+
+@router.post("/media/images", response_model=StoredImage, status_code=status.HTTP_201_CREATED)
+async def upload_image(
+    file: UploadFile = File(...),
+    user: User = Depends(require_admin),
+) -> StoredImage:
+    """Upload an image and return its public URL and metadata.
+
+    The image is stored in the configured storage provider (local filesystem or R2).
+    Only JPEG, PNG, and WebP formats are accepted, with a maximum size of 10 MB.
+    """
+    # The declared MIME type and filename are never trusted: the bytes are the
+    # only evidence used to decide whether this is an allowed image.
+    detected_type = detect_image_type(file.file)
+    if detected_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported image format. Allowed: JPEG, PNG, WebP",
+        )
+
+    # Check file size
+    file.file.seek(0, 2)  # Seek to end
+    size = file.file.tell()
+    file.file.seek(0)  # Reset to beginning
+    if size > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Maximum size: {MAX_IMAGE_BYTES // (1024 * 1024)} MB",
+        )
+    if size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File is empty",
+        )
+
+    # The object key is generated server-side from the detected type; the
+    # uploaded filename is never used as a storage path.
+    object_key = generate_object_key(detected_type)
+
+    try:
+        storage = get_storage_provider()
+    except Exception:
+        # Configuration details (bucket names, credentials) must never reach
+        # the client. The server log keeps the diagnostic.
+        logger.exception("Image storage is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Image storage is not configured",
+        ) from None
+
+    try:
+        stored = await storage.upload(file.file, detected_type, object_key)
+    except Exception:
+        logger.exception("Image upload failed for key %s", object_key)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Image upload failed",
+        ) from None
+
+    return stored
+
+
 @router.post("/routes", response_model=RouteOut, status_code=status.HTTP_201_CREATED)
 def create_route(
     payload: RouteCreateIn,
@@ -303,31 +482,36 @@ def update_route(
     if route is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Route not found")
 
-    if payload.name is not None:
-        route.name = payload.name.strip()
-    if payload.grade is not None:
-        route.grade = payload.grade.strip().upper()
-    if payload.wall_id is not None:
-        if db.get(Wall, payload.wall_id) is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wall not found")
-        route.wall_id = payload.wall_id
-    if payload.wall_type is not None:
-        route.wall_type = payload.wall_type
-    if payload.color is not None:
-        route.color = payload.color.strip()
-    if payload.style is not None:
-        route.style = payload.style.strip()
-    if payload.setter is not None:
-        route.setter = payload.setter.strip()
-    if payload.set_at is not None:
-        route.set_at = payload.set_at
-    if payload.beta is not None:
-        route.beta = payload.beta.strip() or None
-    if payload.image_url is not None:
-        route.image_url = payload.image_url.strip() or None
-    if payload.status is not None:
-        route.status = payload.status
-        route.archived_at = datetime.now(UTC) if payload.status is RouteStatus.ARCHIVED else None
+    changes = payload.model_dump(exclude_unset=True)
+
+    if "name" in changes:
+        route.name = changes["name"].strip()
+    if "grade" in changes:
+        route.grade = changes["grade"].strip().upper()
+    if "wall_id" in changes:
+        if changes["wall_id"] is not None:
+            if db.get(Wall, changes["wall_id"]) is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wall not found")
+            route.wall_id = changes["wall_id"]
+        else:
+            route.wall_id = None
+    if "wall_type" in changes:
+        route.wall_type = changes["wall_type"]
+    if "color" in changes:
+        route.color = changes["color"].strip()
+    if "style" in changes:
+        route.style = changes["style"].strip()
+    if "setter" in changes:
+        route.setter = changes["setter"].strip()
+    if "set_at" in changes:
+        route.set_at = changes["set_at"]
+    if "beta" in changes:
+        route.beta = changes["beta"].strip() or None
+    if "image_url" in changes:
+        route.image_url = changes["image_url"].strip() or None
+    if "status" in changes:
+        route.status = changes["status"]
+        route.archived_at = datetime.now(UTC) if changes["status"] is RouteStatus.ARCHIVED else None
     db.commit()
     db.refresh(route)
     return build_route_out(route)
@@ -413,6 +597,577 @@ def list_all_tasks(
     return [_task_to_out(task) for task in tasks]
 
 
+# --- Opening hours ----------------------------------------------------------
+
+
+@router.get("/opening-hours", response_model=list[AdminOpeningHourOut])
+def list_all_opening_hours(
+    user: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> list[AdminOpeningHourOut]:
+    """Every opening-hour interval, including intervals for closed days."""
+    hours = db.scalars(
+        select(OpeningHour).order_by(
+            OpeningHour.day_of_week, OpeningHour.opens_at, OpeningHour.id
+        )
+    ).all()
+    return [AdminOpeningHourOut.model_validate(hour) for hour in hours]
+
+
+@router.post(
+    "/opening-hours",
+    response_model=AdminOpeningHourOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_opening_hour(
+    payload: OpeningHourCreateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminOpeningHourOut:
+    """Add a weekly opening-hour interval."""
+    hour = OpeningHour(
+        day_of_week=payload.day_of_week,
+        opens_at=payload.opens_at,
+        closes_at=payload.closes_at,
+        note=payload.note.strip(),
+        is_closed=payload.is_closed,
+    )
+    db.add(hour)
+    db.commit()
+    db.refresh(hour)
+    return AdminOpeningHourOut.model_validate(hour)
+
+
+@router.patch("/opening-hours/{hour_id}", response_model=AdminOpeningHourOut)
+def update_opening_hour(
+    hour_id: int,
+    payload: OpeningHourUpdateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminOpeningHourOut:
+    """Update one opening-hour interval."""
+    hour = db.get(OpeningHour, hour_id)
+    if hour is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Opening hour not found"
+        )
+
+    changes = payload.model_dump(exclude_unset=True)
+    for field in ("day_of_week", "opens_at", "closes_at", "is_closed"):
+        if field in changes:
+            setattr(hour, field, changes[field])
+    if "note" in changes:
+        hour.note = (changes["note"] or "").strip()
+
+    if not hour.is_closed and (hour.opens_at is None or hour.closes_at is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="An open interval needs both an opening and a closing time",
+        )
+
+    db.commit()
+    db.refresh(hour)
+    return AdminOpeningHourOut.model_validate(hour)
+
+
+@router.delete("/opening-hours/{hour_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_opening_hour(
+    hour_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Remove an opening-hour interval."""
+    hour = db.get(OpeningHour, hour_id)
+    if hour is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Opening hour not found"
+        )
+    db.delete(hour)
+    db.commit()
+
+
+# --- Products ---------------------------------------------------------------
+
+
+@router.get("/products", response_model=list[ProductOut])
+def list_all_products(
+    user: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> list[ProductOut]:
+    """Every product, including inactive catalogue entries."""
+    products = db.scalars(select(Product).order_by(Product.id)).all()
+    return [ProductOut.model_validate(product) for product in products]
+
+
+@router.post("/products", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
+def create_product(
+    payload: ProductCreateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ProductOut:
+    """Add a product to the catalogue."""
+    sku = payload.sku.strip()
+    name = payload.name.strip()
+    if not sku:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Product SKU cannot be empty",
+        )
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Product name cannot be empty",
+        )
+    if db.scalar(select(Product).where(Product.sku == sku)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="SKU already exists"
+        )
+
+    product = Product(
+        sku=sku,
+        name=name,
+        brand=payload.brand.strip(),
+        category=payload.category.strip(),
+        fit=payload.fit.strip(),
+        price_vnd=payload.price_vnd,
+        description=payload.description.strip(),
+        image_url=(payload.image_url or "").strip() or None,
+        stock=payload.stock,
+        is_active=payload.is_active,
+    )
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    return ProductOut.model_validate(product)
+
+
+@router.patch("/products/{product_id}", response_model=ProductOut)
+def update_product(
+    product_id: int,
+    payload: ProductUpdateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ProductOut:
+    """Update a product without disturbing fields that were omitted."""
+    product = db.get(Product, product_id)
+    if product is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+        )
+
+    changes = payload.model_dump(exclude_unset=True)
+
+    if "sku" in changes:
+        sku = (changes["sku"] or "").strip()
+        if not sku:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Product SKU cannot be empty",
+            )
+        if db.scalar(
+            select(Product).where(Product.sku == sku, Product.id != product_id)
+        ) is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="SKU already exists"
+            )
+        product.sku = sku
+    if "name" in changes:
+        name = (changes["name"] or "").strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Product name cannot be empty",
+            )
+        product.name = name
+    for field in ("brand", "category", "fit", "description"):
+        if field in changes:
+            setattr(product, field, (changes[field] or "").strip())
+    if "image_url" in changes:
+        product.image_url = (changes["image_url"] or "").strip() or None
+    for field in ("price_vnd", "stock", "is_active"):
+        if field in changes:
+            setattr(product, field, changes[field])
+
+    db.commit()
+    db.refresh(product)
+    return ProductOut.model_validate(product)
+
+
+# --- Prices -----------------------------------------------------------------
+
+
+@router.get("/prices", response_model=list[PriceOut])
+def list_all_prices(
+    user: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> list[PriceOut]:
+    """Every price entry, including inactive ones."""
+    prices = db.scalars(select(Price).order_by(Price.sort_order, Price.id)).all()
+    return [PriceOut.model_validate(price) for price in prices]
+
+
+@router.post("/prices", response_model=PriceOut, status_code=status.HTTP_201_CREATED)
+def create_price(
+    payload: PriceCreateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> PriceOut:
+    """Add a price entry."""
+    name = payload.name.strip()
+    category = payload.category.strip()
+    if not name or not category:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Price name and category cannot be empty",
+        )
+    price = Price(
+        category=category,
+        name=name,
+        description=payload.description.strip(),
+        amount_vnd=payload.amount_vnd,
+        unit=payload.unit.strip(),
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+    )
+    db.add(price)
+    db.commit()
+    db.refresh(price)
+    return PriceOut.model_validate(price)
+
+
+@router.patch("/prices/{price_id}", response_model=PriceOut)
+def update_price(
+    price_id: int,
+    payload: PriceUpdateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> PriceOut:
+    """Update a price entry."""
+    price = db.get(Price, price_id)
+    if price is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Price not found"
+        )
+
+    changes = payload.model_dump(exclude_unset=True)
+    if "name" in changes:
+        name = (changes["name"] or "").strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Price name cannot be empty",
+            )
+        price.name = name
+    if "category" in changes:
+        category = (changes["category"] or "").strip()
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Price category cannot be empty",
+            )
+        price.category = category
+    for field in ("description", "unit"):
+        if field in changes:
+            setattr(price, field, (changes[field] or "").strip())
+    for field in ("amount_vnd", "sort_order", "is_active"):
+        if field in changes:
+            setattr(price, field, changes[field])
+
+    db.commit()
+    db.refresh(price)
+    return PriceOut.model_validate(price)
+
+
+# --- Services ---------------------------------------------------------------
+
+
+@router.get("/services", response_model=list[ServiceOut])
+def list_all_services(
+    user: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> list[ServiceOut]:
+    """Every service, including inactive ones."""
+    services = db.scalars(select(Service).order_by(Service.sort_order, Service.id)).all()
+    return [ServiceOut.model_validate(service) for service in services]
+
+
+@router.post("/services", response_model=ServiceOut, status_code=status.HTTP_201_CREATED)
+def create_service(
+    payload: ServiceCreateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ServiceOut:
+    """Add a service."""
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Service title cannot be empty",
+        )
+    service = Service(
+        title=title,
+        summary=payload.summary.strip(),
+        icon=payload.icon.strip() or "mountain",
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+    )
+    db.add(service)
+    db.commit()
+    db.refresh(service)
+    return ServiceOut.model_validate(service)
+
+
+@router.patch("/services/{service_id}", response_model=ServiceOut)
+def update_service(
+    service_id: int,
+    payload: ServiceUpdateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ServiceOut:
+    """Update a service."""
+    service = db.get(Service, service_id)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Service not found"
+        )
+
+    changes = payload.model_dump(exclude_unset=True)
+    if "title" in changes:
+        title = (changes["title"] or "").strip()
+        if not title:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Service title cannot be empty",
+            )
+        service.title = title
+    for field in ("summary", "icon"):
+        if field in changes:
+            setattr(service, field, (changes[field] or "").strip())
+    for field in ("sort_order", "is_active"):
+        if field in changes:
+            setattr(service, field, changes[field])
+
+    db.commit()
+    db.refresh(service)
+    return ServiceOut.model_validate(service)
+
+
+@router.delete("/services/{service_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_service(
+    service_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Remove a service."""
+    service = db.get(Service, service_id)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Service not found"
+        )
+    db.delete(service)
+    db.commit()
+
+
+# --- FAQ --------------------------------------------------------------------
+
+
+@router.get("/faq", response_model=list[AdminFaqOut])
+def list_all_faq(
+    user: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> list[AdminFaqOut]:
+    """Every FAQ entry, published or not."""
+    entries = db.scalars(select(FaqEntry).order_by(FaqEntry.id)).all()
+    return [AdminFaqOut.model_validate(entry) for entry in entries]
+
+
+@router.post("/faq", response_model=AdminFaqOut, status_code=status.HTTP_201_CREATED)
+def create_faq(
+    payload: FaqCreateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminFaqOut:
+    """Add an FAQ entry."""
+    question = payload.question.strip()
+    answer = payload.answer.strip()
+    if not question or not answer:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="FAQ question and answer cannot be empty",
+        )
+    entry = FaqEntry(
+        question=question,
+        answer=answer,
+        category=payload.category.strip() or "General",
+        keywords=payload.keywords.strip(),
+        is_published=payload.is_published,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return AdminFaqOut.model_validate(entry)
+
+
+@router.patch("/faq/{faq_id}", response_model=AdminFaqOut)
+def update_faq(
+    faq_id: int,
+    payload: FaqUpdateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminFaqOut:
+    """Update an FAQ entry."""
+    entry = db.get(FaqEntry, faq_id)
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="FAQ entry not found"
+        )
+
+    changes = payload.model_dump(exclude_unset=True)
+    for field in ("question", "answer"):
+        if field in changes:
+            value = (changes[field] or "").strip()
+            if not value:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="FAQ question and answer cannot be empty",
+                )
+            setattr(entry, field, value)
+    for field in ("category", "keywords"):
+        if field in changes:
+            setattr(entry, field, (changes[field] or "").strip())
+    if "is_published" in changes:
+        entry.is_published = changes["is_published"]
+
+    db.commit()
+    db.refresh(entry)
+    return AdminFaqOut.model_validate(entry)
+
+
+@router.delete("/faq/{faq_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_faq(
+    faq_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Remove an FAQ entry."""
+    entry = db.get(FaqEntry, faq_id)
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="FAQ entry not found"
+        )
+    db.delete(entry)
+    db.commit()
+
+
+# --- Rules ------------------------------------------------------------------
+
+
+@router.get("/rules", response_model=list[AdminRuleOut])
+def list_all_rules(
+    user: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> list[AdminRuleOut]:
+    """Every rule, including inactive rules."""
+    rules = db.scalars(select(Rule).order_by(Rule.sort_order, Rule.id)).all()
+    return [AdminRuleOut.model_validate(rule) for rule in rules]
+
+
+@router.post("/rules", response_model=AdminRuleOut, status_code=status.HTTP_201_CREATED)
+def create_rule(
+    payload: RuleCreateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminRuleOut:
+    """Add a gym rule."""
+    title = payload.title.strip()
+    body = payload.body.strip()
+    if not title or not body:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Rule title and body cannot be empty",
+        )
+    rule = Rule(
+        title=title,
+        body=body,
+        category=payload.category.strip() or "General",
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+        is_confirmed=payload.is_confirmed,
+    )
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    return AdminRuleOut.model_validate(rule)
+
+
+@router.patch("/rules/{rule_id}", response_model=AdminRuleOut)
+def update_rule(
+    rule_id: int,
+    payload: RuleUpdateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminRuleOut:
+    """Update a gym rule."""
+    rule = db.get(Rule, rule_id)
+    if rule is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found"
+        )
+
+    changes = payload.model_dump(exclude_unset=True)
+    for field in ("title", "body"):
+        if field in changes:
+            value = (changes[field] or "").strip()
+            if not value:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Rule title and body cannot be empty",
+                )
+            setattr(rule, field, value)
+    if "category" in changes:
+        rule.category = (changes["category"] or "").strip() or "General"
+    for field in ("sort_order", "is_active", "is_confirmed"):
+        if field in changes:
+            setattr(rule, field, changes[field])
+
+    db.commit()
+    db.refresh(rule)
+    return AdminRuleOut.model_validate(rule)
+
+
+@router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_rule(
+    rule_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Remove a gym rule."""
+    rule = db.get(Rule, rule_id)
+    if rule is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found"
+        )
+    db.delete(rule)
+    db.commit()
+
+
+# --- Events -----------------------------------------------------------------
+
+
+def _as_aware(value: datetime | None) -> datetime | None:
+    """Treat SQLite's naive timestamps as UTC for comparison purposes."""
+    if value is None:
+        return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
+
+
+def _validate_event_window(starts_at: datetime | None, ends_at: datetime | None) -> None:
+    if starts_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Event start is required",
+        )
+    if ends_at is not None and _as_aware(ends_at) <= _as_aware(starts_at):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Event end must be after its start",
+        )
+
+
 @router.get("/events", response_model=list[EventOut])
 def list_all_events(
     user: User = Depends(require_admin), db: Session = Depends(get_db)
@@ -429,8 +1184,16 @@ def create_event(
     db: Session = Depends(get_db),
 ) -> EventOut:
     """Create a gym event."""
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Event title cannot be empty",
+        )
+    _validate_event_window(payload.starts_at, payload.ends_at)
+
     event = Event(
-        title=payload.title.strip(),
+        title=title,
         description=payload.description.strip(),
         starts_at=payload.starts_at,
         ends_at=payload.ends_at,
@@ -445,23 +1208,160 @@ def create_event(
     return EventOut.model_validate(event)
 
 
-@router.get("/courses")
+@router.patch("/events/{event_id}", response_model=EventOut)
+def update_event(
+    event_id: int,
+    payload: EventUpdateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> EventOut:
+    """Update an event or change its public visibility."""
+    event = db.get(Event, event_id)
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+
+    changes = payload.model_dump(exclude_unset=True)
+    if "title" in changes:
+        title = (changes["title"] or "").strip()
+        if not title:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Event title cannot be empty",
+            )
+        event.title = title
+    for field in ("description", "location"):
+        if field in changes:
+            setattr(event, field, (changes[field] or "").strip())
+    if "starts_at" in changes:
+        if changes["starts_at"] is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Event start is required",
+            )
+        event.starts_at = changes["starts_at"]
+    if "ends_at" in changes:
+        event.ends_at = changes["ends_at"]
+    if "capacity" in changes:
+        event.capacity = changes["capacity"]
+    if "is_public" in changes:
+        event.is_public = changes["is_public"]
+
+    _validate_event_window(event.starts_at, event.ends_at)
+
+    db.commit()
+    db.refresh(event)
+    return EventOut.model_validate(event)
+
+
+@router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_event(
+    event_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Remove an event. Staff tasks that referenced it are kept."""
+    event = db.get(Event, event_id)
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    db.delete(event)
+    db.commit()
+
+
+# --- Courses ----------------------------------------------------------------
+
+
+@router.get("/courses", response_model=list[AdminCourseOut])
 def list_all_courses(
     user: User = Depends(require_admin), db: Session = Depends(get_db)
-) -> list[dict]:
+) -> list[AdminCourseOut]:
     """Every course, including inactive ones."""
     courses = db.scalars(select(Course).order_by(Course.id)).all()
-    return [
-        {
-            "id": course.id,
-            "title": course.title,
-            "level": course.level,
-            "summary": course.summary,
-            "instructor": course.instructor,
-            "schedule": course.schedule,
-            "price_vnd": course.price_vnd,
-            "capacity": course.capacity,
-            "is_active": course.is_active,
-        }
-        for course in courses
-    ]
+    return [AdminCourseOut.model_validate(course) for course in courses]
+
+
+@router.post("/courses", response_model=AdminCourseOut, status_code=status.HTTP_201_CREATED)
+def create_course(
+    payload: CourseCreateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminCourseOut:
+    """Add a course."""
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Course title cannot be empty",
+        )
+    course = Course(
+        title=title,
+        level=payload.level.strip() or "All levels",
+        summary=payload.summary.strip(),
+        description=payload.description.strip(),
+        instructor=payload.instructor.strip(),
+        schedule=payload.schedule.strip(),
+        duration_weeks=payload.duration_weeks,
+        capacity=payload.capacity,
+        price_vnd=payload.price_vnd,
+        is_active=payload.is_active,
+    )
+    db.add(course)
+    db.commit()
+    db.refresh(course)
+    return AdminCourseOut.model_validate(course)
+
+
+@router.patch("/courses/{course_id}", response_model=AdminCourseOut)
+def update_course(
+    course_id: int,
+    payload: CourseUpdateIn,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminCourseOut:
+    """Update a course, including its active state."""
+    course = db.get(Course, course_id)
+    if course is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Course not found"
+        )
+
+    changes = payload.model_dump(exclude_unset=True)
+    if "title" in changes:
+        title = (changes["title"] or "").strip()
+        if not title:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Course title cannot be empty",
+            )
+        course.title = title
+    for field in ("level", "summary", "description", "instructor", "schedule"):
+        if field in changes:
+            setattr(course, field, (changes[field] or "").strip())
+    # Nullable numerics must stay null when explicitly cleared.
+    for field in ("duration_weeks", "capacity", "price_vnd", "is_active"):
+        if field in changes:
+            setattr(course, field, changes[field])
+
+
+    db.commit()
+    db.refresh(course)
+    return AdminCourseOut.model_validate(course)
+
+
+@router.delete("/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_course(
+    course_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Remove a course."""
+    course = db.get(Course, course_id)
+    if course is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Course not found"
+        )
+    db.delete(course)
+    db.commit()

@@ -40,6 +40,16 @@ import type {
 import { CustomersDirectoryPanel } from "./customer-pages";
 import { EmptyNotice } from "./data-state";
 import { PageHeading, TextLink } from "./shared";
+import { ProductManagementPage } from "./product-management";
+import { PriceManagementPage } from "./price-management";
+import { OpeningHoursManagementPage } from "./opening-hours-management";
+import { CoursesManagementPage } from "./courses-management";
+import { EventsManagementPage } from "./events-management";
+import { FaqManagementPage } from "./faq-management";
+import { RulesManagementPage } from "./rules-management";
+import { ServicesManagementPage } from "./services-management";
+import { ImageUploadField } from "./image-upload-field";
+import { WallManagementPage } from "./wall-management";
 
 /* -------------------------------------------------------------------------- */
 /* Shared pieces                                                              */
@@ -578,7 +588,7 @@ export function StaffTasksPage() {
 /* Administration                                                             */
 /* -------------------------------------------------------------------------- */
 
-type AdminTab = "Customers" | "Routes" | "Tasks" | "Shifts" | "Events" | "Messages";
+type AdminTab = "Customers" | "Routes" | "Walls" | "Tasks" | "Shifts" | "Events" | "Courses" | "FAQ" | "Rules" | "Services" | "Messages" | "Products" | "Prices" | "Opening hours";
 
 function MessagesTab() {
   const queryClient = useQueryClient();
@@ -650,17 +660,179 @@ function MessagesTab() {
   );
 }
 
+interface RouteEditDialogProps {
+  route: ApiRouteSummary;
+  walls: { id: number; name: string }[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => Promise<void> | void;
+}
+
+function RouteEditDialog({ route, walls, open, onOpenChange, onSaved }: RouteEditDialogProps) {
+  const [name, setName] = useState(route.name);
+  const [grade, setGrade] = useState(route.grade);
+  const [wallId, setWallId] = useState(route.wall_id ? String(route.wall_id) : "");
+  const [wallType, setWallType] = useState<WallType>(route.wall_type);
+  const [setter, setSetter] = useState(route.setter);
+  const [imageUrl, setImageUrl] = useState(route.image_url ?? "");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+
+    const nextName = name.trim();
+    const nextGrade = grade.trim().toUpperCase();
+    if (!nextName || !nextGrade) {
+      setError("Name and grade are required.");
+      return;
+    }
+
+    const body: Record<string, unknown> = {};
+    if (nextName !== route.name) body["name"] = nextName;
+    if (nextGrade !== route.grade) body["grade"] = nextGrade;
+    const nextWallId = wallId ? Number(wallId) : null;
+    if (nextWallId !== route.wall_id) body["wall_id"] = nextWallId;
+    if (wallType !== route.wall_type) body["wall_type"] = wallType;
+    if (setter.trim() !== route.setter) body["setter"] = setter.trim();
+    if (imageUrl.trim() !== (route.image_url ?? "")) body["image_url"] = imageUrl.trim();
+
+    if (Object.keys(body).length === 0) {
+      setError("No changes to save.");
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+    try {
+      await adminApi.updateRoute(route.id, body);
+      await onSaved();
+      onOpenChange(false);
+    } catch (caught) {
+      setError(errorMessage(caught, "The route could not be updated."));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Edit route</DialogTitle>
+          <DialogDescription>
+            Only changed fields are sent to the API. Uploading a new picture replaces the route
+            image only after the upload succeeds.
+          </DialogDescription>
+        </DialogHeader>
+        <form className="profile-form" onSubmit={save}>
+          <div className="form-row">
+            <label>
+              Name
+              <input
+                required
+                value={name}
+                minLength={2}
+                onChange={(event) => setName(event.target.value)}
+                disabled={pending}
+              />
+            </label>
+            <label>
+              Grade
+              <input
+                required
+                value={grade}
+                onChange={(event) => setGrade(event.target.value)}
+                disabled={pending}
+              />
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Wall
+              <select
+                value={wallId}
+                onChange={(event) => setWallId(event.target.value)}
+                disabled={pending}
+              >
+                <option value="">Not set yet</option>
+                {walls.map((wall) => (
+                  <option key={wall.id} value={wall.id}>
+                    {wall.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Wall type
+              <select
+                value={wallType}
+                onChange={(event) => setWallType(event.target.value as WallType)}
+                disabled={pending}
+              >
+                {WALL_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {WALL_TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label>
+            Setter
+            <input
+              value={setter}
+              onChange={(event) => setSetter(event.target.value)}
+              disabled={pending}
+            />
+          </label>
+
+          <ImageUploadField
+            value={imageUrl}
+            onChange={setImageUrl}
+            label="Route image"
+            placeholder="https://…"
+            accept="image/jpeg,image/png,image/webp"
+            maxSize={10 * 1024 * 1024}
+            disabled={pending}
+            onError={setError}
+          />
+
+          {error && (
+            <p className="feedback error" role="alert">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={pending}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
   const queryClient = useQueryClient();
   const hydrated = useHydrated();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [grade, setGrade] = useState("");
   const [wallId, setWallId] = useState("");
   const [wallType, setWallType] = useState<WallType>("vertical");
   const [setter, setSetter] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [editingRoute, setEditingRoute] = useState<ApiRouteSummary | null>(null);
 
   const walls = useQuery({ queryKey: ["admin", "walls"], queryFn: () => adminApi.walls() });
 
@@ -668,6 +840,7 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
     event.preventDefault();
     setPending(true);
     setError(null);
+    setSuccess(null);
     try {
       await adminApi.createRoute({
         name: name.trim(),
@@ -683,6 +856,7 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
       setImageUrl("");
       await queryClient.invalidateQueries({ queryKey: ["admin", "routes"] });
       await queryClient.invalidateQueries({ queryKey: ["arch", "routes"] });
+      setSuccess("Route created.");
     } catch (caught) {
       setError(errorMessage(caught, "The route could not be created."));
     } finally {
@@ -735,16 +909,26 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
                   </span>
                 </td>
                 <td>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!hydrated || pending}
-                    onClick={() =>
-                      setStatus(route.id, route.status === "active" ? "archived" : "active")
-                    }
-                  >
-                    {route.status === "active" ? "Archive" : "Activate"}
-                  </Button>
+                  <div className="row-actions">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!hydrated || pending}
+                      onClick={() => setEditingRoute(route)}
+                    >
+                      <PenLine size={14} /> Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!hydrated || pending}
+                      onClick={() =>
+                        setStatus(route.id, route.status === "active" ? "archived" : "active")
+                      }
+                    >
+                      {route.status === "active" ? "Archive" : "Activate"}
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -813,22 +997,30 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
               <input value={setter} onChange={(event) => setSetter(event.target.value)} />
             </label>
           </div>
-          <label>
-            Picture <span className="label-hint">optional</span>
-            <input
-              type="url"
-              value={imageUrl}
-              placeholder="https://…"
-              onChange={(event) => setImageUrl(event.target.value)}
-            />
-          </label>
+          <ImageUploadField
+            value={imageUrl}
+            onChange={setImageUrl}
+            label="Upload Image"
+            placeholder="https://…"
+            accept="image/jpeg,image/png,image/webp"
+            maxSize={10 * 1024 * 1024}
+            disabled={pending}
+            onError={setError}
+            onSuccess={() => setSuccess("Image uploaded successfully.")}
+          />
+
           <p className="auth-note">
-            A link to a picture that is already published somewhere. The picture itself is never
-            uploaded into the database.
+            Upload a picture, or paste a link to one that is already published elsewhere. Only the
+            resulting URL is stored with the route.
           </p>
           {error && (
             <p className="feedback error" role="alert">
               {error}
+            </p>
+          )}
+          {success && (
+            <p className="feedback success" role="status">
+              {success}
             </p>
           )}
           <Button type="submit" disabled={!hydrated || pending}>
@@ -836,6 +1028,23 @@ function RoutesTab({ routes }: { routes: ApiRouteSummary[] }) {
           </Button>
         </form>
       </section>
+
+      {editingRoute && (
+        <RouteEditDialog
+          key={editingRoute.id}
+          route={editingRoute}
+          walls={walls.data ?? []}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditingRoute(null);
+          }}
+          onSaved={async () => {
+            await queryClient.invalidateQueries({ queryKey: ["admin", "routes"] });
+            await queryClient.invalidateQueries({ queryKey: ["arch", "routes"] });
+            setSuccess("Route updated.");
+          }}
+        />
+      )}
     </>
   );
 }
@@ -1412,105 +1621,6 @@ function AdminShiftsTab() {
   );
 }
 
-function EventsTab() {
-  const queryClient = useQueryClient();
-  const hydrated = useHydrated();
-  const events = useQuery({ queryKey: ["admin", "events"], queryFn: () => adminApi.events() });
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [startsAt, setStartsAt] = useState("");
-  const [location, setLocation] = useState("");
-
-  async function createEvent(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    try {
-      await adminApi.createEvent({
-        title: title.trim(),
-        starts_at: new Date(startsAt).toISOString(),
-        location: location.trim(),
-      });
-      setTitle("");
-      setStartsAt("");
-      setLocation("");
-      await queryClient.invalidateQueries({ queryKey: ["admin", "events"] });
-      await queryClient.invalidateQueries({ queryKey: ["arch", "events"] });
-    } catch (caught) {
-      setError(errorMessage(caught, "The event could not be created."));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <>
-      <div className="event-list">
-        {(events.data ?? []).map((event) => (
-          <article className="event-row" key={event.id}>
-            <div className="event-date">
-              <CalendarDays size={20} />
-              <span>{event.starts_at.slice(0, 16).replace("T", " ")}</span>
-            </div>
-            <div className="event-detail">
-              <h2>{event.title}</h2>
-              {event.description && <p>{event.description}</p>}
-              <div className="event-meta">
-                {event.location && <span>{event.location}</span>}
-                <span>{event.is_public ? "Public" : "Staff only"}</span>
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      <section className="content-block">
-        <div className="content-block-head">
-          <Plus size={22} />
-          <div>
-            <h2>Publish an event</h2>
-            <p>Public events appear in the calendar on the site.</p>
-          </div>
-        </div>
-        <form className="profile-form" onSubmit={createEvent}>
-          <div className="form-row">
-            <label>
-              Title
-              <input
-                required
-                value={title}
-                minLength={3}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </label>
-            <label>
-              Starts
-              <input
-                required
-                type="datetime-local"
-                value={startsAt}
-                onChange={(event) => setStartsAt(event.target.value)}
-              />
-            </label>
-          </div>
-          <label>
-            Location
-            <input value={location} onChange={(event) => setLocation(event.target.value)} />
-          </label>
-          {error && (
-            <p className="feedback error" role="alert">
-              {error}
-            </p>
-          )}
-          <Button type="submit" disabled={!hydrated || pending}>
-            {pending ? "Publishing…" : "Publish event"}
-          </Button>
-        </form>
-      </section>
-    </>
-  );
-}
 
 /** The operations workspace for administrators. */
 export function AdminDashboardPage() {
@@ -1596,7 +1706,7 @@ export function AdminDashboardPage() {
 
           <div className="admin-toolbar">
             <div className="category-tabs">
-              {(["Customers", "Routes", "Tasks", "Shifts", "Events", "Messages"] as AdminTab[]).map(
+              {(["Customers", "Routes", "Walls", "Tasks", "Shifts", "Events", "Courses", "FAQ", "Rules", "Services", "Messages", "Products", "Prices", "Opening hours"] as AdminTab[]).map(
                 (option) => (
                   <Button
                     key={option}
@@ -1612,6 +1722,7 @@ export function AdminDashboardPage() {
 
           {tab === "Customers" && <CustomersDirectoryPanel />}
           {tab === "Routes" && <RoutesTab routes={routes.data ?? []} />}
+          {tab === "Walls" && <WallManagementPage />}
           {tab === "Tasks" &&
             (tasks.isPending ? (
               <div className="loading-block">
@@ -1628,8 +1739,15 @@ export function AdminDashboardPage() {
               <TasksTab tasks={tasks.data ?? []} />
             ))}
           {tab === "Shifts" && <AdminShiftsTab />}
-          {tab === "Events" && <EventsTab />}
+          {tab === "Events" && <EventsManagementPage />}
+          {tab === "Courses" && <CoursesManagementPage />}
+          {tab === "FAQ" && <FaqManagementPage />}
+          {tab === "Rules" && <RulesManagementPage />}
+          {tab === "Services" && <ServicesManagementPage />}
           {tab === "Messages" && <MessagesTab />}
+          {tab === "Products" && <ProductManagementPage />}
+          {tab === "Prices" && <PriceManagementPage />}
+          {tab === "Opening hours" && <OpeningHoursManagementPage />}
         </>
       )}
       <p className="muted-note">
