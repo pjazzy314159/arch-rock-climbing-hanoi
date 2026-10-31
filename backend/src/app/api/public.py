@@ -66,16 +66,22 @@ def get_gym(db: Session = Depends(get_db)) -> GymOut:
         return GymOut(
             name="ARCH Rock Climbing Hanoi",
             tagline="Rock climbing. Real connection.",
-            opening_hours=[OpeningHourOut.model_validate(h) for h in hours],
+            opening_hours=[],
         )
 
     payload = GymOut.model_validate(info)
     payload.opening_hours = [OpeningHourOut.model_validate(h) for h in hours]
-    # The gym record only becomes real once ARCH supplies verified details.
-    payload.is_placeholder = (
-        not any([payload.address, payload.phone, payload.email, payload.opening_note])
-        and not payload.opening_hours
-    )
+
+    # A placeholder note or placeholder hour rows must never make the profile
+    # look verified. Verification requires at least one real contact field
+    # supplied for the gym; the seed does not write any of them.
+    payload.is_placeholder = not any([payload.address, payload.phone, payload.email])
+    if payload.is_placeholder:
+        # Seeded/legacy sample metrics and hours are not official ARCH facts.
+        # Do not expose them while the profile is still a placeholder.
+        payload.surface_area_m2 = None
+        payload.route_count = None
+        payload.opening_hours = []
     return payload
 
 

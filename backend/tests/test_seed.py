@@ -79,12 +79,11 @@ def test_the_demo_seed_is_idempotent(db: Session) -> None:
     assert db.query(ClimbRoute).count() == 6
 
 
-def test_the_demo_seed_fills_in_a_wall_the_migration_already_created(db: Session) -> None:
-    """The migration creates the walls, without a photograph.
-
-    The seed still has to bring such a wall up to date rather than skip it.
+def test_the_demo_seed_does_not_overwrite_existing_walls(db: Session) -> None:
+    """The demo seed must not overwrite existing walls that may be ARCH content
+    or user-edited. It only creates missing walls.
     """
-    existing = Wall(name="The Slab", description="", sort_order=99)
+    existing = Wall(name="The Slab", description="ARCH-custom description", sort_order=5)
     db.add(existing)
     db.commit()
 
@@ -92,9 +91,12 @@ def test_the_demo_seed_fills_in_a_wall_the_migration_already_created(db: Session
     db.commit()
 
     db.refresh(existing)
-    assert existing.description == "Low-angle wall for balance and technique."
-    assert existing.sort_order == 2
-    assert existing.image_url == WALL_PHOTO
+    # The demo seed must not overwrite the existing wall's description or sort order.
+    assert existing.description == "ARCH-custom description"
+    assert existing.sort_order == 5
+    # If the existing wall had no image_url, the demo seed could set it,
+    # but it must not overwrite an existing one.
+    assert existing.image_url is None
 
 
 def test_the_demo_seed_keeps_a_photograph_that_is_already_published(db: Session) -> None:

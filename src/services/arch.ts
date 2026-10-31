@@ -696,6 +696,7 @@ export function toOpeningHour(hour: ApiOpeningHour): OpeningHour {
 }
 
 export function toGymProfile(gym: ApiGym): GymProfile {
+  const isPlaceholder = gym.is_placeholder;
   return {
     name: gym.name,
     tagline: gym.tagline,
@@ -705,11 +706,11 @@ export function toGymProfile(gym: ApiGym): GymProfile {
     instagram: gym.instagram,
     mapUrl: gym.map_url,
     about: gym.about,
-    surfaceAreaM2: gym.surface_area_m2,
-    routeCount: gym.route_count,
+    surfaceAreaM2: isPlaceholder ? null : gym.surface_area_m2,
+    routeCount: isPlaceholder ? null : gym.route_count,
     openingNote: gym.opening_note,
-    openingHours: (gym.opening_hours ?? []).map(toOpeningHour),
-    isPlaceholder: gym.is_placeholder,
+    openingHours: isPlaceholder ? [] : (gym.opening_hours ?? []).map(toOpeningHour),
+    isPlaceholder,
   };
 }
 

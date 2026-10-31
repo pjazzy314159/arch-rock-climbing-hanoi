@@ -1,25 +1,26 @@
 """Seed the ARCH database.
 
-Two levels of data are available:
+The seed command is a local development tool, not a production content path.
 
 ``python -m app.seed``
-    Seeds only what the site needs to be structurally complete and what does
-    **not** invent business facts: the gym record, the facility descriptions
-    that already existed in the Lovable concept site, and a set of *draft*
-    rules that are clearly flagged as awaiting ARCH's approval.
+    Applies the Alembic migrations and creates **no business content**. ARCH
+    content is entered through the Admin CMS after it has been supplied and
+    approved. An empty database is the correct starting state.
 
 ``python -m app.seed --demo``
-    Additionally loads clearly-labelled sample data (routes, products, demo
-    accounts, climbs and votes) so the local development environment has
-    something to show. Demo data is sample data, not ARCH information.
+    Optionally loads clearly-labelled sample fixtures for local development
+    (routes, products, demo accounts, climbs and votes). Demo data is sample
+    data, not ARCH information, and is only allowed against recognised local
+    databases.
 
-Both levels are idempotent: running them twice does not duplicate rows.
+Both operations are guarded before Alembic runs. ``--reset`` additionally
+requires ``--confirm-reset``.
 """
 
 from __future__ import annotations
 
 import argparse
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
@@ -35,17 +36,12 @@ from app.models import (
     ClimbRoute,
     Course,
     Event,
-    FaqEntry,
-    GymInfo,
-    OpeningHour,
     Product,
     ResultType,
     Role,
     RouteStatus,
     RouteVote,
-    Rule,
     SafetyAgreement,
-    Service,
     StaffTask,
     User,
     VoteValue,
@@ -59,275 +55,28 @@ from app.security import hash_password
 #: media store and are referenced the same way.
 WALL_PHOTO = "/walls/placeholder-gym.jpg"
 
-# --- Content that is safe to publish ----------------------------------------
-
-GYM = {
-    "name": "ARCH Rock Climbing Hanoi",
-    "tagline": "Rock climbing. Real connection.",
-    "about": (
-        "ARCH is an indoor bouldering gym in Hanoi built for climbing and for the "
-        "people who make it worth showing up for."
-    ),
-    "surface_area_m2": 600,
-    "route_count": 64,
-    "opening_note": "Opening hours are to be confirmed by ARCH.",
-}
-
-# The facility descriptions below are the ones the concept site already
-# published. They describe what the space offers, not a business commitment.
-SERVICES = [
-    (
-        "Bouldering walls",
-        "Bouldering only — no ropes and no harness needed to get started.",
-        "mountain",
-        1,
-    ),
-    (
-        "All levels welcome",
-        "Routes from a first session to a serious project, V0 to V8.",
-        "users",
-        2,
-    ),
-    (
-        "Shoe rental",
-        "Climbing shoes available to hire at reception while you find your fit.",
-        "footprints",
-        3,
-    ),
-    (
-        "Training zone",
-        "A dedicated training area with boards, bands and pull-up bars.",
-        "dumbbell",
-        4,
-    ),
-    ("Changing rooms", "Changing rooms and lockers are available on site.", "shirt", 5),
-    (
-        "Community sessions",
-        "Open sessions and events for first-timers and regulars alike.",
-        "sparkles",
-        6,
-    ),
-]
-
-# Draft rules: generic gym-safety guidance that still needs ARCH's approval.
-# `is_confirmed` stays False so the site labels them as drafts.
-DRAFT_RULES = [
-    (
-        "Warm up before you set out",
-        "Take a few minutes on the easier problems and stretch first.",
-        "Safety",
-        1,
-    ),
-    (
-        "Climb within your ability",
-        "Use the crash pads, keep three points of contact and never climb above your level.",
-        "Safety",
-        2,
-    ),
-    (
-        "Report damaged holds",
-        "Tell a member of staff if a hold, bolt or mat looks damaged.",
-        "Safety",
-        3,
-    ),
-    (
-        "Leave the mats as you found them",
-        "Move holds only when a member of staff asks you to.",
-        "Wall",
-        4,
-    ),
-    (
-        "Share the wall",
-        "Leave room for other climbers and avoid hogging a problem.",
-        "Community",
-        5,
-    ),
-    (
-        "Shoes off outside the climbing area",
-        "Please keep climbing shoes off the rest of the building.",
-        "Facility",
-        6,
-    ),
-]
-
-FAQ_ENTRIES = [
-    (
-        "What does ARCH offer?",
-        "ARCH is an indoor bouldering gym in Hanoi. Bouldering means you climb a "
-        "short, powerful problem close to the ground, using only the mats — no "
-        "ropes and no harness are needed.",
-        "About the gym",
-        "bouldering indoor gym what is arch climbing",
-    ),
-    (
-        "Do I need climbing experience to visit?",
-        "No. Complete beginners are welcome. A member of staff will show you how "
-        "the mats, the padding and the grading work, and you can hire shoes at "
-        "reception.",
-        "Visiting",
-        "beginner first time experience needed novice",
-    ),
-    (
-        "What should I wear and bring?",
-        "Comfortable clothes you can move in, a water bottle and flat footwear "
-        "for the walk in. Climbing shoes can be hired at reception if you do not "
-        "have your own.",
-        "Visiting",
-        "wear clothes bring equipment shoes rental",
-    ),
-    (
-        "How are routes graded?",
-        "Routes use the V-scale, from V0 for the easiest problems to V8 and above "
-        "for the hardest. The grade is set by the route setter and is shown on "
-        "each route.",
-        "Climbing",
-        "grade v scale difficulty v0 v8 how hard",
-    ),
-    (
-        "How do I record my climbs?",
-        "Signed-in members can log climbs in their logbook, and can vote on whether "
-        "a route felt easier, exactly as set, or harder than its official grade.",
-        "Climbing",
-        "logbook record climbs log send project vote",
-    ),
-    (
-        "How does route voting work?",
-        "Every member can cast one difficulty vote per route: easier, as set, or "
-        "harder. The community feedback is shown alongside the official grade; it "
-        "never replaces it.",
-        "Climbing",
-        "vote voting difficulty perceived grade community",
-    ),
-    (
-        "When is the gym open?",
-        "Opening hours are being confirmed by ARCH and will be published here as "
-        "soon as they are finalised. The team at reception can also tell you when "
-        "we are open.",
-        "Visiting",
-        "opening hours open time when close schedule",
-    ),
-    (
-        "How much does it cost?",
-        "The price list is being confirmed by ARCH. Once it is finalised it will "
-        "be published on the prices section of this site.",
-        "Prices",
-        "price cost membership pass day pass how much",
-    ),
-    (
-        "Do you run courses?",
-        "Yes — ARCH runs introductory and progressing courses. The current course "
-        "schedule is being confirmed and will be listed on the courses section of "
-        "this site.",
-        "Courses",
-        "course class coaching learn beginner training",
-    ),
-    (
-        "What events do you run?",
-        "ARCH runs community sessions and competitions. The published event "
-        "calendar is being confirmed and will appear on the events section of "
-        "this site.",
-        "Events",
-        "event competition session tournament calendar",
-    ),
-    (
-        "Is there a safety agreement?",
-        "Yes. Every member signs a safety agreement before climbing. The exact "
-        "process is being finalised by ARCH, and the front desk will talk you "
-        "through it on your first visit.",
-        "Membership",
-        "safety agreement waiver sign form liability",
-    ),
-    (
-        "How do I contact ARCH?",
-        "Use the contact form on this site, or speak to the team at reception "
-        "during opening hours. The direct contact details are being confirmed and "
-        "will be published here shortly.",
-        "Contact",
-        "contact email phone address reach get in touch",
-    ),
-]
-
-
-def _seed_gym(db: Session) -> None:
-    if db.get(GymInfo, 1) is None:
-        db.add(GymInfo(id=1, **GYM))
-    else:
-        info = db.get(GymInfo, 1)
-        for key, value in GYM.items():
-            setattr(info, key, value)
-
-
-def _seed_services(db: Session) -> None:
-    if db.scalar(select(Service).limit(1)) is not None:
-        return
-    for title, summary, icon, order in SERVICES:
-        db.add(Service(title=title, summary=summary, icon=icon, sort_order=order))
-
-
-def _seed_rules(db: Session) -> None:
-    if db.scalar(select(Rule).limit(1)) is not None:
-        return
-    for title, body, category, order in DRAFT_RULES:
-        db.add(
-            Rule(
-                title=title,
-                body=body,
-                category=category,
-                sort_order=order,
-                is_active=True,
-                is_confirmed=False,
-            )
-        )
-
-
-def _seed_faq(db: Session) -> None:
-    if db.scalar(select(FaqEntry).limit(1)) is not None:
-        return
-    for question, answer, category, keywords in FAQ_ENTRIES:
-        db.add(
-            FaqEntry(
-                question=question,
-                answer=answer,
-                category=category,
-                keywords=keywords,
-                is_published=True,
-            )
-        )
-
-
-def _seed_opening_hours(db: Session) -> None:
-    """Placeholder hours.
-
-    The rows exist so the schedule can be edited, but every day is marked
-    closed and the note says the hours are being confirmed, so the site never
-    publishes unconfirmed opening times.
-    """
-    if db.scalar(select(OpeningHour).limit(1)) is not None:
-        return
-    for day in range(7):
-        db.add(
-            OpeningHour(
-                day_of_week=day,
-                opens_at=time(9, 0),
-                closes_at=time(21, 0),
-                note="To be confirmed by ARCH",
-                is_closed=True,
-            )
-        )
-
 
 def _seed_demo(db: Session) -> None:
-    """Load clearly-labelled sample data for local development.
+    """Load clearly-labelled sample fixtures for local development.
 
     The demo accounts use well-known development passwords, so this refuses to
-    run against a production environment.
+    run outside a local development/test environment and against any database
+    that is not a recognised local target. The CLI performs the same checks
+    before Alembic runs; this inner check also protects direct callers.
     """
     from app.config import get_settings, is_production
+    from app.seed_safety import validate_database_target
 
-    if is_production(get_settings().environment):
+    settings = get_settings()
+    if is_production(settings.environment):
         raise RuntimeError(
             "Refusing to seed demo accounts with development passwords in a production environment."
         )
+
+    bind = db.get_bind()
+    if bind is None:
+        raise RuntimeError("Refusing to seed demo data: the database target cannot be verified.")
+    validate_database_target(str(bind.url))
 
     # A wall carries a reference to the photograph it is set against, not the
     # photograph itself. ARCH has not published a photograph of each wall yet,
@@ -342,6 +91,9 @@ def _seed_demo(db: Session) -> None:
     for name, description, order, image_url in demo_walls:
         wall = db.scalar(select(Wall).where(Wall.name == name))
         if wall is None:
+            # Only create a missing demo wall. An existing wall may be ARCH
+            # content or may have been edited by a user, so it is never
+            # overwritten by the fixture loader.
             wall = Wall(
                 name=name,
                 description=description,
@@ -349,14 +101,6 @@ def _seed_demo(db: Session) -> None:
                 image_url=image_url,
             )
             db.add(wall)
-        else:
-            # The wall already exists, most likely because the migration
-            # created it. It still gets the description, the ordering and the
-            # photograph it should have.
-            wall.description = description
-            wall.sort_order = order
-            if not wall.image_url:
-                wall.image_url = image_url
         walls[name] = wall
     db.flush()
     for wall in db.scalars(select(Wall)).all():
@@ -609,32 +353,51 @@ def _migrate(reset: bool = False) -> None:
     command.upgrade(config, "head")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Seed the ARCH database")
     parser.add_argument(
         "--demo",
         action="store_true",
-        help="Also load clearly-labelled sample routes, products and accounts",
+        help="Also load clearly-labelled local sample routes, products and accounts",
     )
     parser.add_argument(
         "--reset",
         action="store_true",
-        help="Roll the schema back to an empty database before seeding",
+        help="Roll the local schema back to an empty database before migrating",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--confirm-reset",
+        action="store_true",
+        help="Required with --reset; confirms destruction of the local database",
+    )
+    args = parser.parse_args(argv)
 
+    from app.config import get_settings
+    from app.seed_safety import SeedSafetyError, validate_seed_invocation
+
+    settings = get_settings()
+    try:
+        validate_seed_invocation(
+            environment=settings.environment,
+            database_url=settings.database_url,
+            reset=args.reset,
+            confirm_reset=args.confirm_reset,
+        )
+    except SeedSafetyError as exc:
+        parser.exit(2, f"error: {exc}\n")
+
+    # The guard above must complete before this point. No migration, downgrade,
+    # or content write may happen before the target has been validated.
     _migrate(reset=args.reset)
     print("Database is at the latest migration.")
 
+    if not args.demo:
+        print("No business content was seeded. Use the Admin CMS for ARCH content.")
+        return
+
     session: Session = SessionLocal()
     try:
-        _seed_gym(session)
-        _seed_services(session)
-        _seed_rules(session)
-        _seed_faq(session)
-        _seed_opening_hours(session)
-        if args.demo:
-            _seed_demo(session)
+        _seed_demo(session)
         session.commit()
     except Exception:
         session.rollback()
@@ -642,7 +405,7 @@ def main() -> None:
     finally:
         session.close()
 
-    print("Seeded content." + (" (including sample demo data)" if args.demo else ""))
+    print("Loaded local sample demo fixtures.")
 
 
 if __name__ == "__main__":

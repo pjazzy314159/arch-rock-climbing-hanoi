@@ -83,12 +83,14 @@ SQLite recovery fallback are documented in
 [POSTGRESQL_COMPATIBILITY.md](POSTGRESQL_COMPATIBILITY.md). Do not point local
 development at the production role.
 
-Load the content the site needs. This only loads what does not invent business
-facts; prices and courses stay empty until ARCH publishes them, and the rules
-are marked as drafts.
+Create ARCH business content through the Admin CMS. The `python -m app.seed`
+command is a **local development tool only**; it applies the schema
+migrations and does not insert any business content. Running it against a
+production database will be refused.
 
 ```bash
-uv run python -m app.seed
+# Migrations only (local development, CI, or production setup)
+uv run alembic upgrade head
 ```
 
 ---

@@ -103,11 +103,14 @@ export function VisitPage() {
           <div>
             <h2>Opening hours</h2>
             <p>
-              {gym.data.openingNote || "The hours below are the current published opening times."}
+              {gym.data.openingNote ||
+                (gym.data.isPlaceholder
+                  ? "Opening hours are being confirmed by ARCH."
+                  : "Current published opening hours.")}
             </p>
           </div>
         </div>
-        {gym.data.openingHours.length > 0 ? (
+        {!gym.data.isPlaceholder && gym.data.openingHours.length > 0 ? (
           <OpeningHoursTable hours={gym.data.openingHours} />
         ) : (
           <EmptyNotice
@@ -199,15 +202,15 @@ export function VisitPage() {
           </p>
           <p>
             <Users />{" "}
-            {gym.data.surfaceAreaM2
+            {!gym.data.isPlaceholder && gym.data.surfaceAreaM2
               ? `${gym.data.surfaceAreaM2} m² of climbing space`
-              : "Bouldering only — no ropes required"}
+              : "Climbing area to be confirmed by ARCH"}
           </p>
           <p>
             <Ticket />{" "}
-            {gym.data.routeCount
+            {!gym.data.isPlaceholder && gym.data.routeCount
               ? `${gym.data.routeCount} routes on the wall`
-              : "Routes for every level"}
+              : "Route count to be confirmed by ARCH"}
           </p>
           <small>
             {gym.data.isPlaceholder

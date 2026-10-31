@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { routeQuery } from "@/services/arch";
+import { gymQuery, routeQuery } from "@/services/arch";
 import { SampleDataBanner } from "./data-state";
 import { RouteCard, TextLink } from "./shared";
 import gymPhoto from "@/assets/arch-gym.jpg";
@@ -19,6 +19,7 @@ import panoramaPhoto from "@/assets/arch-overall.jpg";
 import shoePhoto from "@/assets/climbing-shoes.jpg";
 export function Home() {
   const { data: routes } = useSuspenseQuery(routeQuery);
+  const { data: gym } = useSuspenseQuery(gymQuery);
   return (
     <>
       <section className="home-hero">
@@ -73,14 +74,18 @@ export function Home() {
         <div>
           <Mountain />
           <strong>
-            600<span>m²</span>
+            {!gym.data.isPlaceholder && gym.data.surfaceAreaM2
+              ? `${gym.data.surfaceAreaM2}<span>m²</span>`
+              : "Area to be confirmed"}
           </strong>
           <span>Space to move</span>
         </div>
         <div>
           <Footprints />
           <strong>
-            64<span>+</span>
+            {!gym.data.isPlaceholder && gym.data.routeCount
+              ? `${gym.data.routeCount}<span>+</span>`
+              : "Routes to be confirmed"}
           </strong>
           <span>Routes to discover</span>
         </div>

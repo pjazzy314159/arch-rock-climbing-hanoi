@@ -96,7 +96,15 @@ def test_admin_update_persistence(client: TestClient, admin) -> None:
     assert found["note"] == "Updated note"
 
 
-def test_public_gym_reflects_admin_edits(client: TestClient, admin) -> None:
+def test_public_gym_reflects_admin_edits(client: TestClient, admin, db: Session) -> None:
+    from app.models import GymInfo
+    gym_info = db.get(GymInfo, 1)
+    if gym_info is None:
+        gym_info = GymInfo(id=1)
+        db.add(gym_info)
+    gym_info.email = "info@arch.vn"
+    db.commit()
+
     ac = admin_client(client)
     create_resp = ac.post(
         "/api/admin/opening-hours",
@@ -123,7 +131,15 @@ def test_public_gym_reflects_admin_edits(client: TestClient, admin) -> None:
         assert "id" not in h
 
 
-def test_closed_day_persistence_and_public_rendering(client: TestClient, admin) -> None:
+def test_closed_day_persistence_and_public_rendering(client: TestClient, admin, db: Session) -> None:
+    from app.models import GymInfo
+    gym_info = db.get(GymInfo, 1)
+    if gym_info is None:
+        gym_info = GymInfo(id=1)
+        db.add(gym_info)
+    gym_info.email = "info@arch.vn"
+    db.commit()
+
     ac = admin_client(client)
     resp = ac.post(
         "/api/admin/opening-hours",
@@ -251,7 +267,15 @@ def test_staff_customer_403_for_get(client: TestClient, staff, customer) -> None
         client.headers.clear()
 
 
-def test_multiple_intervals_same_day_persist(client: TestClient, admin) -> None:
+def test_multiple_intervals_same_day_persist(client: TestClient, admin, db: Session) -> None:
+    from app.models import GymInfo
+    gym_info = db.get(GymInfo, 1)
+    if gym_info is None:
+        gym_info = GymInfo(id=1)
+        db.add(gym_info)
+    gym_info.email = "info@arch.vn"
+    db.commit()
+
     ac = admin_client(client)
     r1 = ac.post(
         "/api/admin/opening-hours",

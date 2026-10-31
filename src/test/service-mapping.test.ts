@@ -143,7 +143,7 @@ describe("product mapping", () => {
 });
 
 describe("gym mapping", () => {
-  const apiGym = {
+  const apiGymPlaceholder = {
     name: "ARCH Rock Climbing Hanoi",
     tagline: "Rock climbing. Real connection.",
     address: "",
@@ -167,19 +167,38 @@ describe("gym mapping", () => {
     is_placeholder: true,
   };
 
-  it("maps the opening hours", () => {
-    const gym = toGymProfile(apiGym);
-    expect(gym.openingHours).toHaveLength(1);
-    expect(gym.openingHours[0]).toMatchObject({ dayOfWeek: 0, isClosed: true });
+  it("marks the record as a placeholder when no contact details are provided", () => {
+    expect(toGymProfile(apiGymPlaceholder).isPlaceholder).toBe(true);
   });
 
-  it("marks the record as a placeholder while it is unconfirmed", () => {
-    expect(toGymProfile(apiGym).isPlaceholder).toBe(true);
+  it("clears opening hours when the record is a placeholder", () => {
+    const gym = toGymProfile(apiGymPlaceholder);
+    expect(gym.openingHours).toEqual([]);
+  });
+
+  it("clears sample metrics when the record is a placeholder", () => {
+    const gym = toGymProfile(apiGymPlaceholder);
+    expect(gym.surfaceAreaM2).toBeNull();
+    expect(gym.routeCount).toBeNull();
   });
 
   it("handles a gym with no opening hours", () => {
-    const gym = toGymProfile({ ...apiGym, opening_hours: [] });
+    const gym = toGymProfile({ ...apiGymPlaceholder, opening_hours: [] });
     expect(gym.openingHours).toEqual([]);
+  });
+
+  it("is not a placeholder when the API returns verified status", () => {
+    const verifiedGym = { ...apiGymPlaceholder, is_placeholder: false, email: "info@arch.vn" };
+    expect(toGymProfile(verifiedGym).isPlaceholder).toBe(false);
+  });
+
+  it("preserves metrics and hours when verified", () => {
+    const verifiedGym = { ...apiGymPlaceholder, is_placeholder: false, email: "info@arch.vn" };
+    const gym = toGymProfile(verifiedGym);
+    expect(gym.isPlaceholder).toBe(false);
+    expect(gym.surfaceAreaM2).toBe(600);
+    expect(gym.routeCount).toBe(64);
+    expect(gym.openingHours).toHaveLength(1);
   });
 });
 

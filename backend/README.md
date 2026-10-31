@@ -37,10 +37,8 @@ uv run alembic upgrade head
 uv run alembic current
 uv run alembic check
 
-# Load the content the site needs (no invented business facts)
-uv run python -m app.seed
-
-# ...or also load clearly-labelled sample data for local development
+# Optional: load clearly-labelled sample fixtures for local development
+# (requires a recognised local database; refused in production)
 uv run python -m app.seed --demo
 
 # Start the API on http://localhost:8000
@@ -48,8 +46,12 @@ uv run uvicorn app.main:app --reload --port 8000
 ```
 
 `python -m app.seed` runs the migrations itself, so it is safe to call on a
-fresh database. Use `--reset` only on a database whose data you intend to
-destroy: it rolls the schema back to an empty database first.
+fresh local database. Use `--reset` (with `--confirm-reset`) only on a local
+database whose data you intend to destroy.
+
+The seed command is a local development tool; it refuses to run against
+production environments or unrecognised databases. Production content is
+created through the Admin CMS only.
 
 SQLite is an intentional fallback for isolated tests and recovery. Set
 `DATABASE_URL=sqlite:///./arch_dev.db` explicitly if you want it. The API
@@ -58,20 +60,22 @@ never switches to SQLite when a configured PostgreSQL connection fails.
 Interactive API documentation is served at <http://localhost:8000/docs> and the
 OpenAPI schema at <http://localhost:8000/openapi.json>.
 
-### Development accounts
+### Development sample fixtures
 
-`python -m app.seed --demo` creates these accounts. They are **development
-only** and the seed refuses to create them when `ARCH_ENVIRONMENT` is a
-production environment.
+`python -m app.seed --demo` creates sample fixtures for local development
+only. The command is guarded: it refuses to run in a production environment
+and refuses to run against unrecognised databases (remote hosts, unexpected
+database names, or ambiguous SQLite paths).
+
+The fixtures include demo accounts with well-known passwords, sample routes,
+products, climbs, votes and a staff task. Everything is clearly labelled as
+sample data and must never reach a shared or production database.
 
 | Role | Email | Password |
 | --- | --- | --- |
 | Administrator | `admin@example.com` | `admin-demo-password` |
 | Staff | `staff@example.com` | `staff-demo-password` |
 | Customer | `alex@example.com` | `customer-demo-password` |
-
-The seed also loads sample routes, products, climbs, votes and a staff task.
-Everything it loads is labelled as sample data.
 
 ## Configuration
 

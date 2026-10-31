@@ -212,8 +212,18 @@ def test_faq_and_rule_publication_flags(client: TestClient, admin) -> None:
     ]
 
 
-def test_opening_hours_publish_and_unpublish(client: TestClient, admin) -> None:
+def test_opening_hours_publish_and_unpublish(client: TestClient, admin, db: Session) -> None:
     ac = admin_client(client)
+
+    # First make the gym verified by setting a contact detail directly in the DB
+    from app.models import GymInfo
+    gym_info = db.get(GymInfo, 1)
+    if gym_info is None:
+        gym_info = GymInfo(id=1)
+        db.add(gym_info)
+    gym_info.email = "info@arch.vn"
+    db.commit()
+
     hour = _create(ac, "/api/admin/opening-hours", {**OPENING_HOUR, "day_of_week": 5})
 
     gym = public_client(client).get("/api/public/gym").json()

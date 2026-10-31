@@ -55,15 +55,22 @@ export function GymPage() {
         height={1024}
         alt="Industrial bouldering gym with colorful holds and community seating"
       />
-      <div className="info-grid">
-        {services.data.map((service) => (
-          <div key={service.title}>
-            <ServiceIcon name={service.icon} />
-            <h3>{service.title}</h3>
-            <p>{service.summary}</p>
-          </div>
-        ))}
-      </div>
+      {services.data.length > 0 ? (
+        <div className="info-grid">
+          {services.data.map((service) => (
+            <div key={service.title}>
+              <ServiceIcon name={service.icon} />
+              <h3>{service.title}</h3>
+              <p>{service.summary}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyNotice
+          title="Facilities are being confirmed."
+          description="ARCH has not published the gym services or facility details yet."
+        />
+      )}
       <section className="split-band">
         <div>
           <span className="eyebrow">YOUR FIRST SESSION</span>
