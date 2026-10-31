@@ -55,7 +55,7 @@ function FaqForm({ faq, submitLabel, onSaved, open, onOpenChange }: FaqFormProps
   const [answer, setAnswer] = useState(faq?.answer ?? "");
   const [category, setCategory] = useState(faq?.category ?? "General");
   const [keywords, setKeywords] = useState(faq?.keywords ?? "");
-  const [isPublished, setIsPublished] = useState(faq?.is_published ?? true);
+  const [isPublished, setIsPublished] = useState(faq?.is_published ?? false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
