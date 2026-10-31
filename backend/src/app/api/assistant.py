@@ -17,6 +17,7 @@ from app.deps import get_optional_user
 from app.models import FaqEntry, User
 from app.schemas import AssistantAnswer, AssistantQuestion
 from app.services.assistant import answer_question
+from app.services.retrieval import retrieve_public_context
 
 router = APIRouter(prefix="/api/assistant", tags=["assistant"])
 
@@ -38,7 +39,10 @@ async def chat(
         select(FaqEntry).where(FaqEntry.is_published.is_(True)).order_by(FaqEntry.id)
     ).all()
 
-    result = await answer_question(settings, payload.question, list(entries))
+    # Phase 6.2: retrieve relevant public ARCH information for structured answers.
+    structured_sources = retrieve_public_context(db, payload.question)
+
+    result = await answer_question(settings, payload.question, list(entries), structured_sources)
     answer = AssistantAnswer(**result, conversation_id=payload.conversation_id)
     answer.disclaimer = (
         "Answers are based on approved ARCH information only. "
