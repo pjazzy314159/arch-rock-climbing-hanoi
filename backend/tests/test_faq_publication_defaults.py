@@ -164,8 +164,8 @@ class TestFAQPublicationDefaults:
         faq_id = create_resp.json()["id"]
 
         # Check assistant retrieval (uses retrieve_faq which filters by is_published)
-        from app.services.retrieval import retrieve_faq
         from app.db import SessionLocal
+        from app.services.retrieval import retrieve_faq
 
         db_session = SessionLocal()
         try:
@@ -232,8 +232,8 @@ class TestFAQPublicationDefaults:
         assert faq_id in ids, "Published FAQ should appear in public API"
 
         # Assistant retrieval should include it
-        from app.services.retrieval import retrieve_faq
         from app.db import SessionLocal
+        from app.services.retrieval import retrieve_faq
 
         db_session = SessionLocal()
         try:
