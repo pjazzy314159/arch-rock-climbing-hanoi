@@ -229,11 +229,14 @@ The base seed (`python -m app.seed`) is not ARCH-approved content. It currently 
   present, so these seeded claims are presented as ARCH-published details.
 
 The `--demo` seed additionally creates sample products, courses, events, routes, walls, and
-accounts; it refuses to run in a production environment.
+accounts; it refuses only when `ARCH_ENVIRONMENT` is a production name, not when `DATABASE_URL`
+points at a production database.
 
 Action: determine what the target environment actually contains, treat every seeded record as
 unapproved, and replace or remove it before launch. Do not treat a seeded row as ARCH-supplied
-content, and do not run the base seed as a way to "fill" the site.
+content, and do not run the base seed as a way to "fill" the site. The full execution-path,
+exposure and remediation audit is in
+[`SEED_DATA_SAFETY_AUDIT.md`](SEED_DATA_SAFETY_AUDIT.md).
 
 ---
 

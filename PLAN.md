@@ -3546,6 +3546,7 @@ Public rules endpoint (`/api/public/rules`) and assistant retrieval include all 
 | #   | Task                                                                     | Status | Acceptance Criteria                                                                                       |
 | --- | ------------------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------- |
 | 9.1 | Identify ARCH content owners for each category (FAQ, Rules, Hours, Prices, Events, Courses, Services, Products) | `DONE` | Written list of owners with contact information; each category has a named approver.                      |
+| 9.1a | Audit seed data safety and stop sample content reaching production      | `TODO` | Base seed refuses production without explicit approval; no seeded FAQ, services, hours or gym claims are public; repeat runs never overwrite ARCH-owned data; cleanup is documented and reversible. |
 | 9.2 | Collect complete FAQ questions and approved answers from ARCH            | `TODO` | FAQ entries entered via Admin CMS, reviewed, and explicitly published (`is_published=true`).              |
 | 9.3 | Collect official gym rules, safety policies, and facility instructions   | `TODO` | Rules entered via Admin CMS with `is_active` and `is_confirmed` set per ARCH direction.                   |
 | 9.4 | Collect verified opening hours, holidays, and special closure information | `TODO` | Opening hours entered via Admin CMS; public `/gym` API reflects confirmed data.                           |
@@ -3561,7 +3562,13 @@ Public rules endpoint (`/api/public/rules`) and assistant retrieval include all 
 > No content owners have been named yet and no ARCH content has been collected, entered, or
 > approved.
 
-> **Important:** Tasks 9.2–9.9 remain `TODO` or `PLANNED`. Do not claim ARCH has supplied or approved any content. The goal is to ask ARCH for the information later, then populate the existing CMS. Do not create a second content-management system.
+> **Task 9.1a audit complete, remediation `TODO`:** every seed execution path, the production
+> seed risk, public/Assistant exposure, and the gym `is_placeholder` defect are documented in
+> [`docs/SEED_DATA_SAFETY_AUDIT.md`](docs/SEED_DATA_SAFETY_AUDIT.md). No seed behaviour, database
+> records, or public output were changed. The base seed still publishes sample FAQ, services, hours
+> and gym claims and can still overwrite gym details in production.
+
+> **Important:** Tasks 9.1a and 9.2–9.9 remain `TODO` or `PLANNED`. Do not claim ARCH has supplied or approved any content. The goal is to ask ARCH for the information later, then populate the existing CMS. Do not create a second content-management system.
 
 ---
 
